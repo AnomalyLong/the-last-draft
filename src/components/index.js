@@ -5,3 +5,4 @@ export { Player } from './Player.jsx';
 export { HUD } from './HUD.jsx';
 export { Shadow } from './Shadow.jsx';
 export { PowerBar } from './PowerBar.jsx';
+export { ScorePopup } from './ScorePopup.jsx';

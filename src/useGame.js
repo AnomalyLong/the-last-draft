@@ -16,6 +16,7 @@ export function useGame() {
   // ─── Game State ────────────────────────────────────────────────────────────
   const [homeScore, setHomeScore] = useState(0);
   const [awayScore, setAwayScore] = useState(0);
+  const [scorePopup, setScorePopup] = useState(null);
   const [quarter, setQuarter] = useState(1);   // 1–4
   const [time, setTime] = useState(720);        // seconds (12-minute quarters)
 
@@ -212,14 +213,14 @@ export function useGame() {
               setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isShooting: false } : p));
               if (pg.team === 'home') setHomeScore(s => s + 2);
               else setAwayScore(s => s + 2);
-              addLog('swish! +2');
+              addLog('swish! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
               onComplete();
             } else {
               // Manual shoot: restore ball to shooter.
               setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: true, isShooting: false } : p));
               if (pg.team === 'home') setHomeScore(s => s + 2);
               else setAwayScore(s => s + 2);
-              addLog('swish! +2');
+              addLog('swish! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
             }
           }, 400);
         }
@@ -274,7 +275,7 @@ export function useGame() {
       setTimeout(() => {
         if (isHome) setHomeScore(s => s + 2);
         else setAwayScore(s => s + 2);
-        addLog('DUNK! +2');
+        addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
       }, 4 * 80);
       setTimeout(() => {
         setShot({ cx: basketCx, cy: basketCy });
@@ -619,7 +620,7 @@ export function useGame() {
           setTimeout(() => {
             if (isHome) setHomeScore(s => s + 2);
             else setAwayScore(s => s + 2);
-            addLog('DUNK! +2');
+            addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
           }, 4 * 80);
           // Ball leaves hand at frame 8 (index 7 = first null offset) — start drop
           setTimeout(() => {
@@ -750,5 +751,5 @@ export function useGame() {
 
   const possession = carrier.team; // 'home' | 'away'
 
-  return { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time };
+  return { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup };
 }

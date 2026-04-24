@@ -1,10 +1,10 @@
 import React from 'react';
 import { W, TOTAL_H, BOT_BAR, ZOOM_W, JERSEY_HOME, JERSEY_AWAY } from './constants.js';
-import { Court, Ball, ShotBall, Player, HUD, Shadow, PowerBar } from './components/index.js';
+import { Court, Ball, ShotBall, Player, HUD, Shadow, PowerBar, ScorePopup } from './components/index.js';
 import { useGame } from './useGame.js';
 
 export default function App() {
-  const { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time } = useGame();
+  const { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup } = useGame();
 
   return (
     <div data-testid="game-root" style={{ background: '#111', lineHeight: 0, height: '100vh' }}>
@@ -66,6 +66,8 @@ export default function App() {
         })}
 
         {shot && <ShotBall data-testid="shot-ball" shot={shot} scale={1} />}
+
+        {scorePopup && <ScorePopup text={scorePopup} cameraX={cameraX} />}
 
         <g transform={`translate(${cameraX}, 0)`}>
           <HUD
