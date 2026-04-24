@@ -1,10 +1,10 @@
 import React from 'react';
 import { W, TOTAL_H, BOT_BAR, ZOOM_W, JERSEY_HOME, JERSEY_AWAY } from './constants.js';
-import { Court, Ball, ShotBall, Player, HUD } from './components/index.js';
+import { Court, Ball, ShotBall, Player, HUD, Shadow, PowerBar } from './components/index.js';
 import { useGame } from './useGame.js';
 
 export default function App() {
-  const { players, shot, logs, handleCommand, cameraX, homeScore, awayScore, quarter, time } = useGame();
+  const { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time } = useGame();
 
   return (
     <div data-testid="game-root" style={{ background: '#111', lineHeight: 0, height: '100vh' }}>
@@ -33,27 +33,35 @@ export default function App() {
           const labelColor = p.team === 'home' ? '#1a4fa0' : '#c02020';
           const jerseyColor = p.team === 'home' ? JERSEY_HOME : JERSEY_AWAY;
           return (
-            <g key={p.id}
-              data-testid={`player-${p.id}`}
-              data-team={p.team}
-              data-role={p.role}
-              data-has-ball={p.hasBall}
-              data-is-moving={p.isMoving}
-            >
-              {flipH
-                ? <g transform={`scale(-1,1) translate(${-p.cx * 2}, 0)`}>
-                    <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
-                      hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} facingRight={p.facingRight} />
-                  </g>
-                : <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
-                    hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} facingRight={p.facingRight} />
-              }
-              {p.hasBall && <Ball data-testid="dribble-ball" cx={p.cx - 10} cy={p.cy + 1} scale={1} />}
-              <text data-testid={`player-${p.id}-role`} x={p.cx} y={p.cy - 14} textAnchor="middle" fontSize={6}
-                fontFamily="monospace" fill={labelColor} fontWeight="bold">
-                {p.role}
-              </text>
-            </g>
+            <React.Fragment key={p.id}>
+              <Shadow cx={p.cx} cy={p.cy} hasBall={p.hasBall} />
+              {p.isShooting && <PowerBar cx={p.cx} cy={p.cy} />}
+              <g
+                data-testid={`player-${p.id}`}
+                data-team={p.team}
+                data-role={p.role}
+                data-has-ball={p.hasBall}
+                data-is-moving={p.isMoving}
+              >
+                {flipH
+                  ? <g transform={`scale(-1,1) translate(${-p.cx * 2}, 0)`}>
+                      <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
+                        hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} facingRight={p.facingRight} />
+                    </g>
+                  : <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
+                      hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} facingRight={p.facingRight} />
+                }
+                {p.hasBall && !p.isDunking && <Ball data-testid="dribble-ball"
+                  cx={p.isMoving
+                    ? (p.facingRight ? p.cx + 10 : p.cx - 10)
+                    : (p.facingRight ? p.cx - 6 : p.cx + 6)}
+                  cy={p.cy + 1} scale={1} />}
+                <text data-testid={`player-${p.id}-role`} x={p.cx} y={p.cy - 14} textAnchor="middle" fontSize={6}
+                  fontFamily="monospace" fill={labelColor} fontWeight="bold">
+                  {p.role}
+                </text>
+              </g>
+            </React.Fragment>
           );
         })}
 
@@ -68,6 +76,7 @@ export default function App() {
             logs={logs}
             onCommand={handleCommand}
             players={players}
+            possession={possession}
           />
         </g>
       </svg>

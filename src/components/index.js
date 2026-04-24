@@ -3,3 +3,5 @@ export { Ball } from './Ball.jsx';
 export { ShotBall } from './ShotBall.jsx';
 export { Player } from './Player.jsx';
 export { HUD } from './HUD.jsx';
+export { Shadow } from './Shadow.jsx';
+export { PowerBar } from './PowerBar.jsx';
