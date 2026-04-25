@@ -5,6 +5,22 @@ import { SHOOT_CHAR_FRAMES } from './sprites/index.js';
 // Total time (ms) for the shoot character animation — ball launches at the midpoint
 const SHOOT_DURATION = SHOOT_CHAR_FRAMES.length * 80; // 560ms
 
+// ─── Level-up ability pool ─────────────────────────────────────────────────
+const LEVEL_UP_ABILITIES = [
+  { id: 1, name: 'FIRE DUNK',   desc: '+2 ON DUNKS',   rarity: 3 },
+  { id: 2, name: 'IRON BLOCK',  desc: 'BLOCK BONUS',   rarity: 2 },
+  { id: 3, name: 'HOT HAND',    desc: 'STREAK BONUS',  rarity: 2 },
+  { id: 4, name: 'ANKLE BREAK', desc: 'BREAK DEFENSE', rarity: 1 },
+  { id: 5, name: 'CLUTCH GENE', desc: 'LATE GAME +',   rarity: 2 },
+  { id: 6, name: 'SPEED BURST', desc: 'SPD BURST',     rarity: 1 },
+  { id: 7, name: 'GLASS CLEAN', desc: 'REBND BONUS',   rarity: 1 },
+  { id: 8, name: 'LOCKDOWN',    desc: 'DEF LOCKOUT',   rarity: 1 },
+];
+
+function pickLevelUpChoices() {
+  return [...LEVEL_UP_ABILITIES].sort(() => Math.random() - 0.5).slice(0, 3);
+}
+
 export function useGame() {
   const [players, setPlayers] = useState(() => INITIAL_PLAYERS.map(p => ({ ...p })));
   const [shot, setShot] = useState(null);
@@ -19,6 +35,7 @@ export function useGame() {
   const [scorePopup, setScorePopup] = useState(null);
   const [quarter, setQuarter] = useState(1);   // 1–4
   const [time, setTime] = useState(720);        // seconds (12-minute quarters)
+  const [levelUpState, setLevelUpState] = useState(null); // { player, abilities } | null
 
   // playersRef mirrors players state so animation closures can read the
   // latest positions without capturing a stale closure value.
@@ -707,6 +724,11 @@ export function useGame() {
         addLog('testDunk         — ball carrier drives to basket and dunks');
         addLog('testGamePlay     — start continuous game loop');
         addLog('stopGamePlay     — stop the game loop');
+        addLog('testLevelUp      — trigger level-up sequence for ball carrier');
+      } else if (op === 'testLevelUp') {
+        const carrier = playersRef.current.find(p => p.hasBall) || playersRef.current[0];
+        setLevelUpState({ player: { ...carrier }, abilities: pickLevelUpChoices() });
+        addLog(`${carrier.role} leveling up!`);
       } else {
         addLog(`unknown: "${op}" — type help`, 'err');
       }
@@ -751,5 +773,12 @@ export function useGame() {
 
   const possession = carrier.team; // 'home' | 'away'
 
-  return { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup };
+  const onPickLevelUp = (ability) => {
+    const p = levelUpState?.player;
+    if (ability && p) addLog(`${p.role} gained: ${ability.name}!`);
+    else addLog('level-up skipped');
+    setLevelUpState(null);
+  };
+
+  return { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp };
 }

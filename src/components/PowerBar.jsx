@@ -4,7 +4,7 @@ const BAR_W = 8;
 const BAR_H = 36;
 const SEGMENTS = 4;
 
-export function PowerBar({ cx, cy }) {
+export function PowerBar({ cx, cy, team = 'home' }) {
   const [fill, setFill] = React.useState(0);
   const rafRef = React.useRef(null);
 
@@ -20,7 +20,7 @@ export function PowerBar({ cx, cy }) {
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
-  const x = cx - 22;
+  const x = team === 'away' ? cx + 14 : cx - 22;
   const y = cy - BAR_H / 2 - 8;
   const fillH = Math.round(fill * BAR_H);
 

@@ -1,5 +1,16 @@
 import { JERSEY_BASE } from '../constants.js';
 
+// Head portrait — rows y=1..6 of frame 0, normalised to (0,0), 5×6 pixels
+// Rendered at scale=4 → 20×24px
+export const HEAD_PORTRAIT = [
+  [1,0,'#3E2525'],[2,0,'#3E2525'],
+  [1,1,'#D9A066'],[2,1,'#D9A066'],
+  [1,2,'#B17F4C'],[2,2,'#B17F4C'],
+  [2,3,'#B17F4C'],
+  [0,4,'#D9A066'],[1,4,JERSEY_BASE],[2,4,'#D9A066'],[3,4,JERSEY_BASE],[4,4,'#D9A066'],
+  [0,5,'#D9A066'],[1,5,JERSEY_BASE],[2,5,'#D9A066'],[3,5,JERSEY_BASE],[4,5,'#D9A066'],
+];
+
 // Idle animation frames (11×16, 5 frames)
 export const IDLE_FRAMES = [
   [

@@ -1,0 +1,42 @@
+[
+  {
+    "name": "WOLVES",
+    "players": [
+      { "pos": "PG", "name": "DRAKE",  "spd": 84, "dex": 78, "jmp": 70, "acc": 79, "ovr": 80 },
+      { "pos": "SG", "name": "COLE",   "spd": 80, "dex": 83, "jmp": 72, "acc": 86, "ovr": 82 },
+      { "pos": "SF", "name": "BURNS",  "spd": 77, "dex": 74, "jmp": 80, "acc": 74, "ovr": 76 },
+      { "pos": "PF", "name": "NASH",   "spd": 69, "dex": 65, "jmp": 84, "acc": 68, "ovr": 74 },
+      { "pos": "C",  "name": "ODOM",   "spd": 60, "dex": 57, "jmp": 89, "acc": 63, "ovr": 77 }
+    ]
+  },
+  {
+    "name": "HAWKS",
+    "players": [
+      { "pos": "PG", "name": "FROST",  "spd": 88, "dex": 80, "jmp": 74, "acc": 76, "ovr": 82 },
+      { "pos": "SG", "name": "VANCE",  "spd": 82, "dex": 77, "jmp": 69, "acc": 88, "ovr": 81 },
+      { "pos": "SF", "name": "REYES",  "spd": 79, "dex": 80, "jmp": 82, "acc": 77, "ovr": 80 },
+      { "pos": "PF", "name": "PRICE",  "spd": 72, "dex": 70, "jmp": 86, "acc": 65, "ovr": 76 },
+      { "pos": "C",  "name": "BOWEN",  "spd": 58, "dex": 54, "jmp": 92, "acc": 66, "ovr": 80 }
+    ]
+  },
+  {
+    "name": "BULLS",
+    "players": [
+      { "pos": "PG", "name": "QUINN",  "spd": 86, "dex": 82, "jmp": 68, "acc": 82, "ovr": 83 },
+      { "pos": "SG", "name": "TATUM",  "spd": 78, "dex": 79, "jmp": 76, "acc": 90, "ovr": 83 },
+      { "pos": "SF", "name": "PORTER", "spd": 81, "dex": 76, "jmp": 78, "acc": 75, "ovr": 78 },
+      { "pos": "PF", "name": "HOLT",   "spd": 70, "dex": 68, "jmp": 83, "acc": 70, "ovr": 76 },
+      { "pos": "C",  "name": "PIERCE", "spd": 62, "dex": 59, "jmp": 90, "acc": 69, "ovr": 78 }
+    ]
+  },
+  {
+    "name": "KINGS",
+    "players": [
+      { "pos": "PG", "name": "LEON",   "spd": 82, "dex": 76, "jmp": 65, "acc": 80, "ovr": 78 },
+      { "pos": "SG", "name": "WEST",   "spd": 76, "dex": 80, "jmp": 74, "acc": 84, "ovr": 79 },
+      { "pos": "SF", "name": "DIAZ",   "spd": 83, "dex": 77, "jmp": 76, "acc": 72, "ovr": 78 },
+      { "pos": "PF", "name": "MACK",   "spd": 68, "dex": 66, "jmp": 81, "acc": 67, "ovr": 73 },
+      { "pos": "C",  "name": "CROSS",  "spd": 56, "dex": 52, "jmp": 87, "acc": 61, "ovr": 74 }
+    ]
+  }
+]

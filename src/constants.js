@@ -33,17 +33,17 @@ const g = gridToSvg;
 
 export const INITIAL_PLAYERS = [
   // Home team — offense, attacking right basket
-  { id: 1,  role: "PG", team: "home", hasBall: true,  isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  ...g(62, 25) },
-  { id: 2,  role: "SG", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  ...g(70, 12) },
-  { id: 3,  role: "SF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  ...g(70, 38) },
-  { id: 4,  role: "PF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  ...g(80, 18) },
-  { id: 5,  role: "C",  team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  ...g(82, 25) },
+  { id: 1,  role: "PG", team: "home", hasBall: true,  isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  level: 1, xp: 0, xpMax: 100, ...g(62, 25) },
+  { id: 2,  role: "SG", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  level: 1, xp: 0, xpMax: 100, ...g(70, 12) },
+  { id: 3,  role: "SF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  level: 1, xp: 0, xpMax: 100, ...g(70, 38) },
+  { id: 4,  role: "PF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  level: 1, xp: 0, xpMax: 100, ...g(80, 18) },
+  { id: 5,  role: "C",  team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  level: 1, xp: 0, xpMax: 100, ...g(82, 25) },
   // Away team — defense, guarding right basket
-  { id: 6,  role: "PG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, ...g(68, 25) },
-  { id: 7,  role: "SG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, ...g(73, 11) },
-  { id: 8,  role: "SF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, ...g(73, 39) },
-  { id: 9,  role: "PF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, ...g(82, 17) },
-  { id: 10, role: "C",  team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, ...g(84, 24) },
+  { id: 6,  role: "PG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, level: 1, xp: 0, xpMax: 100, ...g(68, 25) },
+  { id: 7,  role: "SG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, level: 1, xp: 0, xpMax: 100, ...g(73, 11) },
+  { id: 8,  role: "SF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, level: 1, xp: 0, xpMax: 100, ...g(73, 39) },
+  { id: 9,  role: "PF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, level: 1, xp: 0, xpMax: 100, ...g(82, 17) },
+  { id: 10, role: "C",  team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, level: 1, xp: 0, xpMax: 100, ...g(84, 24) },
 ];
 
 // ─── Player Speed ────────────────────────────────────────────────────────────
