@@ -1,9 +1,10 @@
 import React from 'react';
 import { ZOOM_W, TOTAL_H, JERSEY_BASE } from '../constants.js';
 import { PixelTextC, PixelText } from './PixelText.jsx';
-import { IDLE_FRAMES } from '../sprites/index.js';
-import { BballChar } from './BballChar.jsx';
-import typingSound from '../sound/typing1.ogg';
+import { IDLE_FRAMES, RUN_FRAMES } from '../sprites/index.js';
+import { BballTip } from './BballTip.jsx';
+import { playSlide, playCursor, playSelect, playCancel, playFlip, playMenuMove3, playMenuSelect2 } from '../sound/ui.js';
+import { playRare, playRare2, playRare3 } from '../sound/basketball.js';
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
@@ -80,21 +81,21 @@ const STAT_DEFS = [
 ];
 
 const PLAYERS = [
-  { id:  1, pos: 'PG', name: 'RIVERS', ovr: 87, spd: 88, dex: 82, jmp: 75, acc: 82, round: 1 },
-  { id:  2, pos: 'SG', name: 'BANKS',  ovr: 84, spd: 79, dex: 74, jmp: 72, acc: 91, round: 1 },
-  { id:  3, pos: 'SF', name: 'WELLS',  ovr: 82, spd: 84, dex: 78, jmp: 80, acc: 78, round: 1 },
-  { id:  4, pos: 'PF', name: 'STONE',  ovr: 79, spd: 71, dex: 68, jmp: 82, acc: 68, round: 1 },
-  { id:  5, pos: 'C',  name: 'GRANT',  ovr: 91, spd: 65, dex: 60, jmp: 88, acc: 72, round: 1 },
-  { id:  6, pos: 'PG', name: 'HAYES',  ovr: 76, spd: 86, dex: 76, jmp: 68, acc: 74, round: 2 },
-  { id:  7, pos: 'SG', name: 'CROSS',  ovr: 83, spd: 81, dex: 80, jmp: 74, acc: 88, round: 2 },
-  { id:  8, pos: 'SF', name: 'FORD',   ovr: 80, spd: 77, dex: 74, jmp: 78, acc: 75, round: 2 },
-  { id:  9, pos: 'PF', name: 'MASON',  ovr: 77, spd: 69, dex: 72, jmp: 84, acc: 70, round: 2 },
-  { id: 10, pos: 'C',  name: 'KING',   ovr: 82, spd: 62, dex: 58, jmp: 91, acc: 68, round: 2 },
-  { id: 11, pos: 'PG', name: 'SHAW',   ovr: 73, spd: 82, dex: 70, jmp: 64, acc: 71, round: 3 },
-  { id: 12, pos: 'SG', name: 'BELL',   ovr: 75, spd: 76, dex: 78, jmp: 70, acc: 80, round: 3 },
-  { id: 13, pos: 'SF', name: 'JAMES',  ovr: 78, spd: 80, dex: 75, jmp: 76, acc: 72, round: 3 },
-  { id: 14, pos: 'PF', name: 'WADE',   ovr: 74, spd: 68, dex: 65, jmp: 80, acc: 66, round: 3 },
-  { id: 15, pos: 'C',  name: 'HILL',   ovr: 76, spd: 60, dex: 55, jmp: 86, acc: 62, round: 3 },
+  { id:  1, pos: 'PG', name: 'RIVERS', ovr: 72, spd: 78, dex: 75, jmp: 62, acc: 72, round: 1 },
+  { id:  2, pos: 'SG', name: 'BANKS',  ovr: 69, spd: 69, dex: 67, jmp: 59, acc: 81, round: 1 },
+  { id:  3, pos: 'SF', name: 'WELLS',  ovr: 70, spd: 74, dex: 71, jmp: 67, acc: 68, round: 1 },
+  { id:  4, pos: 'PF', name: 'STONE',  ovr: 62, spd: 61, dex: 61, jmp: 69, acc: 58, round: 1 },
+  { id:  5, pos: 'C',  name: 'GRANT',  ovr: 61, spd: 55, dex: 53, jmp: 75, acc: 62, round: 1 },
+  { id:  6, pos: 'PG', name: 'HAYES',  ovr: 66, spd: 76, dex: 69, jmp: 55, acc: 64, round: 2 },
+  { id:  7, pos: 'SG', name: 'CROSS',  ovr: 71, spd: 71, dex: 73, jmp: 61, acc: 78, round: 2 },
+  { id:  8, pos: 'SF', name: 'FORD',   ovr: 66, spd: 67, dex: 67, jmp: 65, acc: 65, round: 2 },
+  { id:  9, pos: 'PF', name: 'MASON',  ovr: 64, spd: 59, dex: 65, jmp: 71, acc: 60, round: 2 },
+  { id: 10, pos: 'C',  name: 'KING',   ovr: 60, spd: 52, dex: 51, jmp: 78, acc: 58, round: 2 },
+  { id: 11, pos: 'PG', name: 'SHAW',   ovr: 62, spd: 72, dex: 63, jmp: 51, acc: 61, round: 3 },
+  { id: 12, pos: 'SG', name: 'BELL',   ovr: 66, spd: 66, dex: 71, jmp: 57, acc: 70, round: 3 },
+  { id: 13, pos: 'SF', name: 'JAMES',  ovr: 66, spd: 70, dex: 68, jmp: 63, acc: 62, round: 3 },
+  { id: 14, pos: 'PF', name: 'WADE',   ovr: 60, spd: 58, dex: 58, jmp: 67, acc: 56, round: 3 },
+  { id: 15, pos: 'C',  name: 'HILL',   ovr: 56, spd: 50, dex: 48, jmp: 73, acc: 52, round: 3 },
 ];
 
 const ROUND_COLORS = { 1: '#e8c060', 2: '#30c0e0', 3: '#b0b8c8' };
@@ -144,6 +145,41 @@ function MiniPlayer({ x, y, scale = 2, jerseyColor, phase = 0 }) {
           width={scale} height={scale}
           fill={col === JERSEY_BASE ? jerseyColor : col} />
       ))}
+    </g>
+  );
+}
+
+// ─── Running ghost (drag handle) ──────────────────────────────────────────────
+
+function RunningGhost({ player, cx, cy }) {
+  const [tick, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 80);
+    return () => clearInterval(id);
+  }, []);
+
+  const SCALE = 3;
+  const frame = RUN_FRAMES[tick % RUN_FRAMES.length];
+  const jerseyColor = POS_COLORS[player.pos];
+  // cursor at chest level (jersey body rows ~8 of sprite, scale 3 = 24px from oy)
+  const ox = cx - 7 * SCALE;
+  const oy = cy - 24;
+  const feetY = oy + 18 * SCALE;
+
+  return (
+    <g shapeRendering="crispEdges" style={{ pointerEvents: 'none' }}>
+      {/* Sprite */}
+      {frame.map(([px, py, col], i) => (
+        <rect key={i}
+          x={ox + px * SCALE} y={oy + py * SCALE}
+          width={SCALE} height={SCALE}
+          fill={col === JERSEY_BASE ? jerseyColor : col} />
+      ))}
+      {/* Ground shadow at feet */}
+      <ellipse cx={cx} cy={feetY + 3} rx={20} ry={5} fill="rgba(0,0,0,0.30)" />
+      {/* Name tag below feet */}
+      <PixelTextC text={player.name} cx={cx} y={feetY + 10}
+        scale={1} fill="#e8c060" outline="#000" />
     </g>
   );
 }
@@ -255,7 +291,7 @@ function PlayerCard({ player, x, y, phase, onClick, autoHighlight = false }) {
 
   return (
     <g onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}
-      onMouseEnter={() => onClick && setHover(true)}
+      onMouseEnter={() => { if (onClick) { setHover(true); playMenuMove3(); } }}
       onMouseLeave={() => setHover(false)}>
 
       {ability && (
@@ -369,8 +405,9 @@ function DraftButton({ x, y, w, h = 26, label, color, disabled = false, onClick 
   const active = !disabled && hover;
   const by = y + (active ? SHADOW_DROP : 0);
   const textY = by + Math.floor((h - 7) / 2);
+  const handleClick = disabled ? undefined : () => { playCursor(); onClick?.(); };
   return (
-    <g onClick={disabled ? undefined : onClick}
+    <g onClick={handleClick}
       style={{ cursor: disabled ? 'default' : 'pointer' }}
       onMouseEnter={() => !disabled && setHover(true)}
       onMouseLeave={() => setHover(false)}>
@@ -393,17 +430,17 @@ function DraftButton({ x, y, w, h = 26, label, color, disabled = false, onClick 
 
 // ─── Dialogue ─────────────────────────────────────────────────────────────────
 
-const CHAR_SCALE = 0.09;
-const CHAR_W     = Math.round(512 * CHAR_SCALE);  // 46
-const CHAR_H     = Math.round(512 * CHAR_SCALE);  // 46
+const CHAR_SCALE = 0.30;
+const CHAR_W     = Math.round(150 * CHAR_SCALE);  // 45
+const CHAR_H     = Math.round(150 * CHAR_SCALE);  // 45
 const CHAR_X     = MP_X + 8;                     // 110 — character x
 const CHAR_Y     = TOTAL_H - CHAR_H - 4;         // 300 — feet near screen bottom
 
 // Box: starts 15px into the character so the left edge is hidden behind it
 const DLG_H  = 19;  // 9px glyph height + 5px padding each side
-const DLG_X  = CHAR_X + 15;                      // 125 — tucked behind character
+const DLG_X  = CHAR_X + 22;                      // 132 — tucked behind character
 const DLG_W  = ZOOM_W - DLG_X - 4;              // 279
-const DLG_Y  = CHAR_Y + 18;
+const DLG_Y  = CHAR_Y + 13;
 
 const TEXT_X = CHAR_X + CHAR_W + 6;              // 149
 const TEXT_Y = DLG_Y + Math.floor((DLG_H - 7) / 2);
@@ -417,102 +454,10 @@ const IDLE_LINES = [
 
 function getDlgLine(state, tick) {
   if (state === 'auto')    return "Grabbing the best available...";
-  if (state === 'picking') return "Choose your player — trust your gut!";
+  if (state === 'assign')  return "Assign each player to a position!";
+  if (state === 'picking') return "Choose your player. Trust your gut!";
   if (state === 'done')    return "Squad locked in! Hit start, let's run it!";
   return IDLE_LINES[Math.floor(tick / 220) % IDLE_LINES.length];
-}
-
-const _ta = [new Audio(typingSound), new Audio(typingSound)];
-_ta.forEach(a => { a.volume = 0.5; });
-let _taActive = false;
-let _taChainTimer = null;
-
-function _chainPlay(idx) {
-  if (!_taActive) return;
-  const a = _ta[idx];
-  a.currentTime = 0;
-  a.play().catch(() => {});
-
-  function schedule() {
-    const delay = Math.max(0, (a.duration - 0.02) * 1000);
-    _taChainTimer = setTimeout(() => _chainPlay(1 - idx), delay);
-  }
-
-  if (a.duration) { schedule(); }
-  else { a.addEventListener('loadedmetadata', schedule, { once: true }); }
-}
-
-const _typingAudio = {
-  play()  {
-    _taActive = true;
-    clearTimeout(_taChainTimer);
-    _chainPlay(0);
-    return Promise.resolve();
-  },
-  pause() {
-    _taActive = false;
-    clearTimeout(_taChainTimer);
-    _ta.forEach(a => { a.pause(); a.currentTime = 0; });
-  },
-};
-
-function DraftDialogue({ dlgState, bannerTick }) {
-  const fullLine = getDlgLine(dlgState, bannerTick);
-  const [displayed, setDisplayed] = React.useState('');
-  const charIdxRef = React.useRef(0);
-
-  // Stop audio on unmount
-  React.useEffect(() => () => _typingAudio.pause(), []);
-
-  // Reset typewriter when the line changes
-  React.useEffect(() => {
-    setDisplayed('');
-    charIdxRef.current = 0;
-    _typingAudio.play().catch(() => {});
-  }, [fullLine]);
-
-  // Advance one character at a time; stop sound when done
-  React.useEffect(() => {
-    if (charIdxRef.current >= fullLine.length) {
-      _typingAudio.pause();
-      return;
-    }
-    const t = setTimeout(() => {
-      const idx = charIdxRef.current;
-      charIdxRef.current = idx + 1;
-      setDisplayed(fullLine.slice(0, idx + 1));
-    }, 38);
-    return () => clearTimeout(t);
-  }, [displayed, fullLine]);
-
-  const rx = 3;
-  const x  = DLG_X, y = DLG_Y, w = DLG_W, h = DLG_H;
-  // 3-sided border path: top → right → bottom (no left side)
-  const borderPath = [
-    `M ${x},${y}`,
-    `L ${x + w - rx},${y}`,
-    `Q ${x + w},${y} ${x + w},${y + rx}`,
-    `L ${x + w},${y + h - rx}`,
-    `Q ${x + w},${y + h} ${x + w - rx},${y + h}`,
-    `L ${x},${y + h}`,
-  ].join(' ');
-
-  return (
-    <g>
-      {/* ── Box fill ── */}
-      <rect x={DLG_X} y={DLG_Y} width={DLG_W} height={DLG_H} rx={rx}
-        fill="#0c1018" shapeRendering="crispEdges" />
-      {/* ── 3-sided border: top, right, bottom — no left ── */}
-      <path d={borderPath} fill="none" stroke="#ffffff" strokeWidth={1.5} />
-
-      {/* ── Typewriter text ── */}
-      <PixelText text={displayed} x={TEXT_X} y={TEXT_Y}
-        scale={1} fill="#ffffff" outline={null} />
-
-      {/* ── BballChar rendered on top of box ── */}
-      <BballChar x={CHAR_X} y={CHAR_Y} scale={CHAR_SCALE} />
-    </g>
-  );
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -525,7 +470,18 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
   const [autoDrafting, setAutoDrafting] = React.useState(false);
   const [autoPickId,  setAutoPickId]  = React.useState(null);
   const [bannerTick,  setBannerTick]  = React.useState(0);
-  const animRef         = React.useRef(null);
+  const [phase,        setPhase]        = React.useState('draft');
+  const [assignments,  setAssignments]  = React.useState({});
+  const [selectedId,   setSelectedId]   = React.useState(null);
+  const [dragId,    setDragId]    = React.useState(null);
+  const [dragPos,   setDragPos]   = React.useState({ x: 0, y: 0 });
+  const [dropTarget, setDropTarget] = React.useState(null);
+  const [hoverId,   setHoverId]   = React.useState(null);
+  const animRef           = React.useRef(null);
+  const bgRef             = React.useRef(null);
+  const slotBoundsRef     = React.useRef([]);
+  const assignRef         = React.useRef(null);
+  const dropTargetRef     = React.useRef(null);
   const autoTimeoutsRef = React.useRef([]);
 
   React.useEffect(() => {
@@ -540,8 +496,37 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
     };
   }, []);
 
+  // Mouse drag — coordinate-based hit testing (no handlers on slot elements)
+  React.useEffect(() => {
+    if (!dragId) return;
+    const hitSlot = (svgPos) =>
+      slotBoundsRef.current.find(s =>
+        svgPos.x >= s.x && svgPos.x <= s.x + s.w &&
+        svgPos.y >= s.y && svgPos.y <= s.y + s.h
+      )?.pos ?? null;
+    const onMouseMove = (e) => {
+      const pos = toSvgCoords(e.clientX, e.clientY);
+      setDragPos(pos);
+      const hit = hitSlot(pos);
+      dropTargetRef.current = hit;
+      setDropTarget(hit);
+    };
+    const onMouseUp = () => {
+      if (dropTargetRef.current) assignRef.current?.(dragId, dropTargetRef.current);
+      dropTargetRef.current = null;
+      setDragId(null);
+      setDropTarget(null);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup',   onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup',   onMouseUp);
+    };
+  }, [dragId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const pool     = PLAYERS.filter(p => !roster.find(r => r.id === p.id));
-  const canStart = roster.length === ROSTER_SIZE;
+  const canStart = phase === 'assign' && POS_ORDER.every(pos => assignments[pos]);
 
   const roll = () => {
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
@@ -551,13 +536,31 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
     }));
     setRolled(enriched);
     setAnimDone(false);
+    playSlide();
 
     if (animRef.current) clearInterval(animRef.current);
     let tick = 0;
     setAnimTick(0);
+    const flipSoundPlayed  = [false, false, false];
+    const raritySoundPlayed = [false, false, false];
     animRef.current = setInterval(() => {
       tick += 1;
       setAnimTick(tick);
+      for (let i = 0; i < 3; i++) {
+        const flipMidTick   = FLIP_START + i * FLIP_STAGGER + FLIP_DUR / 2;
+        const rareSoundTick = flipMidTick + 4; // 64ms after front face appears
+        if (tick >= flipMidTick && !flipSoundPlayed[i]) {
+          flipSoundPlayed[i] = true;
+          playFlip();
+        }
+        if (tick >= rareSoundTick && !raritySoundPlayed[i]) {
+          raritySoundPlayed[i] = true;
+          const rarity = enriched[i]?.ability?.rarity;
+          if (rarity === 3) playRare3();
+          else if (rarity === 2) playRare2();
+          else if (rarity === 1) playRare();
+        }
+      }
       if (tick >= ANIM_TOTAL) {
         clearInterval(animRef.current);
         animRef.current = null;
@@ -568,15 +571,19 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
 
   const pick = (player) => {
     if (animRef.current) { clearInterval(animRef.current); animRef.current = null; }
-    setRoster(prev => [...prev, player]);
+    playSelect();
+    const next = [...roster, player];
+    setRoster(next);
     setRolled(null);
     setAnimDone(true);
+    if (next.length === ROSTER_SIZE) setPhase('assign');
   };
 
   const runNextAutoPick = (currentRoster) => {
     if (currentRoster.length >= ROSTER_SIZE) {
       setAutoDrafting(false);
       setRolled(null);
+      setPhase('assign');
       return;
     }
     const currentPool = PLAYERS.filter(p => !currentRoster.find(r => r.id === p.id));
@@ -611,17 +618,105 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
     runNextAutoPick([...roster]);
   };
 
+  const assignPlayerToSlot = (playerId, pos) => {
+    if (!playerId || !pos) return;
+    playMenuSelect2();
+    setAssignments(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(k => { if (next[k]?.id === playerId) delete next[k]; });
+      next[pos] = roster.find(r => r.id === playerId);
+      return next;
+    });
+  };
+  assignRef.current = assignPlayerToSlot;
+
+  const toSvgCoords = (clientX, clientY) => {
+    const el = bgRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const svg = el.ownerSVGElement;
+    if (!svg) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = clientX; pt.y = clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    const r = pt.matrixTransform(ctm.inverse());
+    return { x: r.x, y: r.y };
+  };
+
+  const startDrag = (e, playerId) => {
+    e.preventDefault();
+    const src = 'touches' in e ? e.touches[0] : e;
+    const pos = toSvgCoords(src.clientX, src.clientY);
+    setDragId(playerId);
+    setDragPos(pos);
+    setHoverId(null);
+
+    // Touch: attach move/end listeners immediately so we don't miss events
+    // during the async gap between setState and useEffect.
+    if ('touches' in e) {
+      const hitSlot = (svgPos) =>
+        slotBoundsRef.current.find(s =>
+          svgPos.x >= s.x && svgPos.x <= s.x + s.w &&
+          svgPos.y >= s.y && svgPos.y <= s.y + s.h
+        )?.pos ?? null;
+
+      const onTouchMove = (ev) => {
+        ev.preventDefault();
+        const t = ev.touches[0];
+        const p = toSvgCoords(t.clientX, t.clientY);
+        setDragPos(p);
+        const hit = hitSlot(p);
+        dropTargetRef.current = hit;
+        setDropTarget(hit);
+      };
+
+      const cleanup = () => {
+        window.removeEventListener('touchmove',   onTouchMove);
+        window.removeEventListener('touchend',    onTouchEnd);
+        window.removeEventListener('touchcancel', onTouchEnd);
+      };
+
+      const onTouchEnd = (ev) => {
+        const t = ev.changedTouches[0];
+        const p = toSvgCoords(t.clientX, t.clientY);
+        const slot = hitSlot(p);
+        if (slot) assignRef.current?.(playerId, slot);
+        dropTargetRef.current = null;
+        setDragId(null);
+        setDropTarget(null);
+        cleanup();
+      };
+
+      window.addEventListener('touchmove',   onTouchMove, { passive: false });
+      window.addEventListener('touchend',    onTouchEnd);
+      window.addEventListener('touchcancel', onTouchEnd);
+    }
+  };
+
+  const resetDraft = () => {
+    playCancel();
+    setRoster([]);
+    setRolled(null);
+    setAnimDone(true);
+    setPhase('draft');
+    setAssignments({});
+    setSelectedId(null);
+    setDragId(null);
+    setDropTarget(null);
+    setHoverId(null);
+  };
+
   const panelCX = MP_X + MP_W / 2;
   const panelCY = MP_Y + MP_H / 2 - 50;
 
   const dlgState = autoDrafting ? 'auto'
+    : phase === 'assign'    ? (canStart ? 'done' : 'assign')
     : (rolled && animDone)  ? 'picking'
-    : canStart               ? 'done'
     : 'idle';
 
   return (
-    <g>
-      <rect x={0} y={0} width={ZOOM_W} height={TOTAL_H} fill="#1c2e4a" />
+    <g style={{ touchAction: 'none' }}>
+      <rect ref={bgRef} x={0} y={0} width={ZOOM_W} height={TOTAL_H} fill="#1c2e4a" />
 
       {/* ── LEFT PANEL ───────────────────────────────────── */}
       <rect x={LP_X} y={2} width={LP_W} height={LP_H} rx={3}
@@ -671,32 +766,34 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
 
       <PixelTextC text={homeTeamName.slice(0, 8)} cx={CX_LP} y={48} scale={1} fill="#40d0f0" outline={null} />
       <rect x={8} y={60} width={LP_W - 12} height={1} fill="#3a5080" shapeRendering="crispEdges" />
-      <PixelTextC text="ROSTER" cx={CX_LP} y={65} scale={1} fill="#1eb8d8" outline={null} />
+      <PixelTextC text={phase === 'assign' ? 'ROSTER' : 'PICKS'} cx={CX_LP} y={65} scale={1} fill="#1eb8d8" outline={null} />
 
-      {/* Roster slots */}
+      {/* Pick / roster slots */}
       {Array.from({ length: ROSTER_SIZE }, (_, i) => {
-        const slotY   = 76 + i * 22;
-        const player  = roster[i] ?? null;
-        const slotPos = POS_ORDER[i];
+        const slotY      = 76 + i * 22;
+        const slotPos    = POS_ORDER[i];
+        const player     = phase === 'assign' ? (assignments[slotPos] ?? null) : (roster[i] ?? null);
+        const badgeLabel = phase === 'assign' ? slotPos : String(i + 1);
+        const badgeFill  = phase === 'assign'
+          ? (player ? POS_COLORS[slotPos] : '#1e3a60')
+          : (player ? '#243870' : '#1e3060');
+        const badgeText  = phase === 'assign'
+          ? (player ? '#fff' : POS_COLORS[slotPos])
+          : (player ? '#a0c8e0' : '#2a4870');
         return (
           <g key={i}>
             <rect x={8} y={slotY} width={LP_W - 12} height={16} rx={2}
               fill={player ? '#1a3428' : '#1a2e50'} shapeRendering="crispEdges" />
+            <rect x={10} y={slotY + 3} width={17} height={10} rx={1}
+              fill={badgeFill} shapeRendering="crispEdges" />
+            <PixelTextC text={badgeLabel} cx={18} y={slotY + 5}
+              scale={1} fill={badgeText} outline={null} />
             {player ? (
-              <>
-                <rect x={10} y={slotY + 3} width={16} height={10} rx={1}
-                  fill={POS_COLORS[slotPos]} shapeRendering="crispEdges" />
-                <PixelTextC text={slotPos}     cx={18}         y={slotY + 5} scale={1} fill="#fff"    outline={null} />
-                <PixelTextC text={player.name} cx={CX_LP + 12} y={slotY + 5} scale={1}
-                  fill={player.ability ? RARITY_COLORS[player.ability.rarity] : '#40c870'} outline={null} />
-              </>
+              <PixelText text={player.name} x={30} y={slotY + 5} scale={1}
+                fill={player.ability ? RARITY_COLORS[player.ability.rarity] : '#40c870'} outline={null} />
             ) : (
-              <>
-                <rect x={10} y={slotY + 3} width={16} height={10} rx={1}
-                  fill="#1e3a60" shapeRendering="crispEdges" />
-                <PixelTextC text={slotPos} cx={18}    y={slotY + 5} scale={1} fill={POS_COLORS[slotPos]} outline={null} />
-                <PixelTextC text="EMPTY"   cx={CX_LP + 12} y={slotY + 5} scale={1} fill="#3a5878" outline={null} />
-              </>
+              <PixelText text="EMPTY" x={30} y={slotY + 5}
+                scale={1} fill="#2a4060" outline={null} />
             )}
           </g>
         );
@@ -704,31 +801,37 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
 
       <rect x={8} y={190} width={LP_W - 12} height={1} fill="#3a5080" shapeRendering="crispEdges" />
       <PixelTextC
-        text={`${roster.length}/${ROSTER_SIZE} PICKS`}
+        text={phase === 'assign'
+          ? `${Object.keys(assignments).length}/${ROSTER_SIZE} PLACED`
+          : `${roster.length}/${ROSTER_SIZE} PICKS`}
         cx={CX_LP} y={195} scale={1}
         fill={canStart ? '#40c870' : '#1eb8d8'} outline={null} />
 
       <DraftButton x={6} y={204} w={LP_W - 8} label="START GAME"
-        color="#1a7a38" disabled={!canStart} onClick={() => onStart(roster)} />
-      <DraftButton x={6} y={240} w={LP_W - 8} label="BACK"
-        color="#385090" onClick={onBack} />
+        color="#1a7a38" disabled={!canStart}
+        onClick={() => canStart && onStart(POS_ORDER.map(pos => ({ ...assignments[pos], role: pos })))} />
+      <DraftButton x={6} y={240} w={LP_W - 8}
+        label={phase === 'assign' ? 'REDRAFT' : 'BACK'}
+        color="#385090"
+        onClick={() => { phase === 'assign' ? resetDraft() : (playCancel(), onBack()); }} />
 
       {/* ── MAIN PANEL ───────────────────────────────────── */}
       <rect x={MP_X} y={MP_Y} width={MP_W} height={MP_H} rx={4}
         fill="#1e3050" shapeRendering="crispEdges" />
 
-      <PixelTextC text="AVAILABLE PLAYERS" cx={panelCX} y={MP_Y + 10}
-        scale={1} fill="#1eb8d8" outline={null} />
+      <PixelTextC
+        text={phase === 'assign' ? 'ASSIGN POSITIONS' : 'AVAILABLE PLAYERS'}
+        cx={panelCX} y={MP_Y + 10} scale={1} fill="#1eb8d8" outline={null} />
       <rect x={MP_X + 8} y={MP_Y + 22} width={MP_W - 16} height={1}
         fill="#2e4870" shapeRendering="crispEdges" />
 
-      {/* Roll prompt */}
-      {!rolled && !canStart && !autoDrafting && (
+      {/* Draft phase: roll prompt */}
+      {phase === 'draft' && !rolled && !autoDrafting && (
         <g>
           <PixelTextC
-            text={`DRAFTING ${POS_ORDER[roster.length]}`}
+            text={`PICK ${roster.length + 1} OF ${ROSTER_SIZE}`}
             cx={panelCX} y={panelCY - 24}
-            scale={1} fill={POS_COLORS[POS_ORDER[roster.length]]} outline={null} />
+            scale={1} fill="#1eb8d8" outline={null} />
           <PixelTextC
             text={`${pool.length} PLAYERS IN POOL`}
             cx={panelCX} y={panelCY - 12}
@@ -750,13 +853,172 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
         </g>
       )}
 
-      {canStart && (
-        <PixelTextC text="ROSTER COMPLETE" cx={panelCX} y={panelCY}
-          scale={1} fill="#40c870" outline={null} />
-      )}
+      {/* Assign phase UI */}
+      {phase === 'assign' && (() => {
+        const SLW = 54, SLH = 72, SLG = 5;
+        const CSCALE = 0.6;
+        const slotsY = MP_Y + 30;
+        const cardsY = slotsY + SLH + 40;
+        const draggedPlayer = roster.find(r => r.id === dragId) ?? null;
+        slotBoundsRef.current = POS_ORDER.map((pos, i) => ({
+          pos, x: GRID_X + i * (SLW + SLG), y: slotsY, w: SLW, h: SLH,
+        }));
+        return (
+          <g>
+            {/* Instruction */}
+            <PixelTextC
+              text={dragId ? `PLACING ${draggedPlayer?.name ?? ''}` : 'DRAG A PLAYER TO A POSITION'}
+              cx={panelCX} y={slotsY + SLH + 12} scale={1}
+              fill={dragId ? '#e8c060' : '#3a6080'} outline={null} />
 
-      {/* Player cards */}
-      {rolled && rolled.map((player, i) => {
+            {/* Position drop slots */}
+            {POS_ORDER.map((pos, i) => {
+              const sx       = GRID_X + i * (SLW + SLG);
+              const assigned = assignments[pos] ?? null;
+              const posColor = POS_COLORS[pos];
+              const isOver   = dropTarget === pos && !!dragId;
+              return (
+                <g key={pos}
+                  style={{ cursor: dragId ? 'copy' : 'default', pointerEvents: 'none' }}>
+                  {/* Shadow */}
+                  <rect x={sx + 2} y={slotsY + 3} width={SLW} height={SLH} rx={3}
+                    fill="rgba(0,0,0,0.45)" shapeRendering="crispEdges" />
+                  {/* Body */}
+                  <rect x={sx} y={slotsY} width={SLW} height={SLH} rx={3}
+                    fill={isOver ? '#1a3a28' : (assigned ? '#1a3020' : '#162038')} shapeRendering="crispEdges" />
+                  {/* Border — glows when dragging over */}
+                  <rect x={sx} y={slotsY} width={SLW} height={SLH} rx={3}
+                    fill="none"
+                    stroke={isOver ? '#40ffaa' : (assigned ? posColor : '#2a4070')}
+                    strokeWidth={isOver ? 2 : 1} />
+                  {isOver && (
+                    <rect x={sx} y={slotsY} width={SLW} height={SLH} rx={3}
+                      fill="#40ffaa" opacity={0.07} shapeRendering="crispEdges" />
+                  )}
+                  {/* Pos header */}
+                  <rect x={sx} y={slotsY} width={SLW} height={14} rx={3}
+                    fill={posColor} shapeRendering="crispEdges" />
+                  <rect x={sx} y={slotsY + 8} width={SLW} height={6}
+                    fill={posColor} shapeRendering="crispEdges" />
+                  <PixelTextC text={pos} cx={sx + SLW / 2} y={slotsY + 4}
+                    scale={1} fill="#fff" outline={null} />
+                  {assigned ? (
+                    <>
+                      <PixelTextC text={assigned.name} cx={sx + SLW / 2} y={slotsY + 23}
+                        scale={1} fill="#40c870" outline={null} />
+                      <PixelTextC text="OVR" cx={sx + SLW / 2} y={slotsY + 35}
+                        scale={1} fill="#3a6080" outline={null} />
+                      <PixelTextC text={String(assigned.ovr)} cx={sx + SLW / 2} y={slotsY + 47}
+                        scale={1} fill="#e8c060" outline={null} />
+                    </>
+                  ) : (
+                    isOver ? (
+                      <>
+                        <PixelTextC text="DROP" cx={sx + SLW / 2} y={slotsY + 30}
+                          scale={1} fill="#40ffaa" outline={null} />
+                        <PixelTextC text="HERE" cx={sx + SLW / 2} y={slotsY + 41}
+                          scale={1} fill="#40ffaa" outline={null} />
+                      </>
+                    ) : (
+                      <PixelTextC text="EMPTY" cx={sx + SLW / 2} y={slotsY + 37}
+                        scale={1} fill="#2a4060" outline={null} />
+                    )
+                  )}
+                </g>
+              );
+            })}
+
+            {/* Player cards tray — full PlayerCard at 0.6 scale */}
+            {roster.map((player, i) => {
+              const sx          = GRID_X + i * (SLW + SLG);
+              const assignedPos = POS_ORDER.find(pos => assignments[pos]?.id === player.id) ?? null;
+              const isBeingDragged = dragId === player.id;
+              const isHovered = hoverId === player.id && !isBeingDragged && !dragId;
+              return (
+                <g key={player.id}>
+                  <g
+                    transform={`translate(${sx}, ${cardsY}) scale(${CSCALE})`}
+                    style={{ cursor: 'grab' }}
+                    onMouseDown={(e) => startDrag(e, player.id)}
+                    onTouchStart={(e) => startDrag(e, player.id)}
+                    onMouseEnter={() => { setHoverId(player.id); playMenuMove3(); }}
+                    onMouseLeave={() => setHoverId(null)}>
+                    <PlayerCard
+                      player={player}
+                      x={0} y={0}
+                      phase={i * 2}
+                      onClick={undefined}
+                    />
+                  </g>
+                  {/* Hover highlight */}
+                  {isHovered && (
+                    <rect
+                      x={sx} y={cardsY}
+                      width={CARD_W * CSCALE} height={CARD_H * CSCALE}
+                      rx={3} fill="white" opacity={0.08}
+                      shapeRendering="crispEdges"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+                  {/* Dim overlay when this card is being dragged */}
+                  {isBeingDragged && (
+                    <rect
+                      x={sx} y={cardsY}
+                      width={CARD_W * CSCALE} height={CARD_H * CSCALE}
+                      rx={3} fill="rgba(0,0,0,0.55)"
+                      shapeRendering="crispEdges"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+                  {/* Assigned position badge */}
+                  {assignedPos && !isBeingDragged && (
+                    <rect
+                      x={sx} y={cardsY + CARD_H * CSCALE - 12}
+                      width={CARD_W * CSCALE} height={12}
+                      rx={3} fill={POS_COLORS[assignedPos]}
+                      opacity={0.88} shapeRendering="crispEdges"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  )}
+                  {assignedPos && !isBeingDragged && (
+                    <g style={{ pointerEvents: 'none' }}>
+                      <PixelTextC
+                        text={assignedPos}
+                        cx={sx + (CARD_W * CSCALE) / 2}
+                        y={cardsY + CARD_H * CSCALE - 10}
+                        scale={1} fill="#fff" outline={null}
+                      />
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* Bottom-center START GAME button */}
+            {canStart && !dragId && (
+              <DraftButton
+                x={panelCX - 70} y={MP_Y + MP_H - 62}
+                w={140} h={30}
+                label="START GAME"
+                color="#1a7a38"
+                onClick={() => onStart(POS_ORDER.map(pos => ({ ...assignments[pos], role: pos })))}
+              />
+            )}
+
+            {/* Drag ghost — animated running character */}
+            {dragId && draggedPlayer && (
+              <RunningGhost
+                player={draggedPlayer}
+                cx={dragPos.x}
+                cy={dragPos.y}
+              />
+            )}
+          </g>
+        );
+      })()}
+
+      {/* Player cards (draft phase only) */}
+      {phase === 'draft' && rolled && rolled.map((player, i) => {
         const cardX  = GRID_X + i * (CARD_W + CARD_GAP);
         const cardCX = cardX + CARD_W / 2;
 
@@ -787,7 +1049,12 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
       })}
 
       {/* ── DIALOGUE BAR ─────────────────────────────────── */}
-      <DraftDialogue dlgState={dlgState} bannerTick={bannerTick} />
+      <BballTip
+        text={getDlgLine(dlgState, bannerTick)}
+        charX={CHAR_X} charY={CHAR_Y} scale={CHAR_SCALE}
+        dlgX={DLG_X} dlgY={DLG_Y} dlgW={DLG_W} dlgH={DLG_H}
+        textX={TEXT_X} textY={TEXT_Y}
+      />
     </g>
   );
 }

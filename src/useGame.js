@@ -1,6 +1,23 @@
 import { useRef, useState, useEffect } from 'react';
-import { gridToSvg, svgToGrid, INITIAL_PLAYERS, SHOOT_TARGET_LEFT, SHOOT_TARGET_RIGHT, W, ZOOM_W, PLAYER_SPEED_FT_S, C_BOOST_SECS, BASKET_RIGHT_GX, BASKET_LEFT_GX, BASKET_GY, OFFENSE_RADIUS_FT, SHOOT_JUMP_OFFSETS } from './constants.js';
+import { gridToSvg, svgToGrid, INITIAL_PLAYERS, SHOOT_TARGET_LEFT, SHOOT_TARGET_RIGHT, W, ZOOM_W, PLAYER_SPEED_FT_S, C_BOOST_SECS, BASKET_RIGHT_GX, BASKET_LEFT_GX, BASKET_GY, OFFENSE_RADIUS_FT, SHOOT_JUMP_OFFSETS, QUARTER_END_ALPHA, XP_FOR_LEVEL, MAX_LEVEL } from './constants.js';
 import { SHOOT_CHAR_FRAMES } from './sprites/index.js';
+import { playShot, playMiss, playDunk, playJumpball, playPass, playLeap, playQuarter, playSwish, playLevelUp, bounceBall, bgMusic } from './sound/basketball.js';
+
+// ─── Half-court formation positions ─────────────────────────────────────────
+// Mirrors the positions used by triggerThrowInHome / triggerThrowInAway.
+// Used by setupOffense to spread players out before re-starting the loop.
+const HOME_FORMATION = [
+  { id: 1, gx: 62, gy: 25 }, { id: 2, gx: 70, gy: 12 }, { id: 3, gx: 70, gy: 38 },
+  { id: 4, gx: 80, gy: 18 }, { id: 5, gx: 82, gy: 25 },
+  { id: 6, gx: 68, gy: 25 }, { id: 7, gx: 73, gy: 11 }, { id: 8, gx: 73, gy: 39 },
+  { id: 9, gx: 82, gy: 17 }, { id: 10, gx: 84, gy: 24 },
+];
+const AWAY_FORMATION = [
+  { id: 1, gx: 26, gy: 25 }, { id: 2, gx: 21, gy: 12 }, { id: 3, gx: 21, gy: 38 },
+  { id: 4, gx: 12, gy: 18 }, { id: 5, gx: 10, gy: 25 },
+  { id: 6, gx: 32, gy: 25 }, { id: 7, gx: 24, gy: 12 }, { id: 8, gx: 24, gy: 38 },
+  { id: 9, gx: 14, gy: 18 }, { id: 10, gx: 12, gy: 25 },
+];
 
 // Total time (ms) for the shoot character animation — ball launches at the midpoint
 const SHOOT_DURATION = SHOOT_CHAR_FRAMES.length * 80; // 560ms
@@ -21,7 +38,23 @@ function pickLevelUpChoices() {
   return [...LEVEL_UP_ABILITIES].sort(() => Math.random() - 0.5).slice(0, 3);
 }
 
-export function useGame() {
+// Returns updated player fields after applying XP gain. Handles level-up carry-over.
+// Stops at MAX_LEVEL. Returns { level, xp, xpMax, didLevelUp }.
+function applyXp(player, amount) {
+  if (player.level >= MAX_LEVEL) return { level: player.level, xp: player.xp, xpMax: player.xpMax, didLevelUp: false };
+  let { level, xp, xpMax } = player;
+  xp += amount;
+  let didLevelUp = false;
+  while (xp >= xpMax && level < MAX_LEVEL) {
+    xp -= xpMax;
+    level += 1;
+    xpMax = XP_FOR_LEVEL(level);
+    didLevelUp = true;
+  }
+  return { level, xp, xpMax, didLevelUp };
+}
+
+export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
   const [players, setPlayers] = useState(() => INITIAL_PLAYERS.map(p => ({ ...p })));
   const [shot, setShot] = useState(null);
   const [logs, setLogs] = useState([
@@ -36,15 +69,96 @@ export function useGame() {
   const [quarter, setQuarter] = useState(1);   // 1–4
   const [time, setTime] = useState(720);        // seconds (12-minute quarters)
   const [levelUpState, setLevelUpState] = useState(null); // { player, abilities } | null
+  const [xpFlyup, setXpFlyup] = useState(null);
+  const xpFlyupIdRef = useRef(0);
+
+  // Awards XP to a player by id. Home level-ups pause for player choice;
+  // away level-ups apply silently and immediately.
+  // flyToCx/flyToCy: scorer's position captured at shot/dunk start — avoids reading
+  // stale playersRef after throw-in setPlayers calls have already been batched.
+  const awardXp = (playerId, amount, flyToCx = null, flyToCy = null) => {
+    const cur = playersRef.current.find(p => p.id === playerId);
+    if (cur) {
+      const { level, didLevelUp } = applyXp(cur, amount);
+      if (didLevelUp) {
+        if (cur.team === 'home') {
+          gamePausedRef.current = true;
+          wanderActiveRef.current = false;
+          setTimeout(() => {
+            const fresh = playersRef.current.find(p => p.id === playerId);
+            stopTimer();
+            playLevelUp();
+            setLevelUpState({ player: { ...cur, level, cx: fresh?.cx ?? cur.cx, cy: fresh?.cy ?? cur.cy }, abilities: pickLevelUpChoices() });
+          }, 600);
+        } else {
+          setTimeout(() => {
+            playLevelUp();
+            addLog(`${cur.role} (away) → Lv.${level}!`);
+          }, 400);
+        }
+      }
+      const basket = cur.team === 'home' ? SHOOT_TARGET_RIGHT : SHOOT_TARGET_LEFT;
+      const id = ++xpFlyupIdRef.current;
+      setXpFlyup({ id, fromCx: basket.cx, fromCy: basket.cy, toCx: flyToCx ?? cur.cx, toCy: flyToCy ?? cur.cy, amount });
+      setTimeout(() => setXpFlyup(prev => prev?.id === id ? null : prev), 1100);
+    }
+    setPlayers(prev => prev.map(p => {
+      if (p.id !== playerId) return p;
+      const { level, xp, xpMax } = applyXp(p, amount);
+      return { ...p, level, xp, xpMax };
+    }));
+  };
+
+  const [quarterAnnouncement, setQuarterAnnouncement] = useState(null);
+  const [playerAlpha, setPlayerAlpha] = useState(1);
+
+  const timerIntervalRef = useRef(null);
+  const timerSpeedRef    = useRef(1);
+
+  const startTimer = (speed = 1) => {
+    timerSpeedRef.current = speed;
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    // Tick every (1000/speed)ms and decrement by 1 each tick
+    timerIntervalRef.current = setInterval(() => {
+      setTime(prev => {
+        if (prev <= 1) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, Math.round(1000 / speed));
+  };
+
+  const stopTimer = () => {
+    clearInterval(timerIntervalRef.current);
+    timerIntervalRef.current = null;
+  };
+
+  // Tracks who tipped the opening jump ball.
+  // Q2 + Q3: opposite team  |  Q4: jump ball winner
+  const [jumpBallWinner, setJumpBallWinner] = useState(null); // 'home' | 'away' | null
+  const jumpBallWinnerRef = useRef(null);
 
   // playersRef mirrors players state so animation closures can read the
   // latest positions without capturing a stale closure value.
   const playersRef = useRef(players);
   useEffect(() => { playersRef.current = players; }, [players]);
 
+  useEffect(() => {
+    const carrier = players.find(p => p.hasBall);
+    if (carrier?.isMoving) bounceBall.start();
+    else bounceBall.stop();
+  }, [players]);
+
   // Only the PG (id=1) stores its rAF handle so incoming move commands can
   // cancel an in-progress animation. Other players run fire-and-forget rAF.
   const animRef = useRef(null);
+
+  // Roster data — kept in a ref so animation closures always read latest values.
+  const rosterRef = useRef({ home: homeRoster, away: awayRoster });
+  useEffect(() => { rosterRef.current = { home: homeRoster, away: awayRoster }; }, [homeRoster, awayRoster]);
 
   // Cap the log buffer at 30 entries to avoid unbounded growth.
   const addLog = (text, type = 'out') =>
@@ -85,6 +199,10 @@ export function useGame() {
     const startTime = performance.now();
 
     const animate = (now) => {
+      if (gamePausedRef.current) {
+        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isMoving: false } : p));
+        return;
+      }
       const elapsed = now - startTime;
       let cx, cy, done;
 
@@ -119,6 +237,54 @@ export function useGame() {
   // ─── Reusable Game Actions ─────────────────────────────────────────────────
   // These are called by both manual commands and the testGamePlay loop.
 
+  // Drifts all non-shooting players 2–4 grid-ft toward the attacking basket at
+  // half speed so the court feels alive while the ball is in the air.
+  const driftTowardBasket = (shooterTeam) => {
+    const basketGx = shooterTeam === 'home' ? BASKET_RIGHT_GX : BASKET_LEFT_GX;
+    playersRef.current
+      .filter(p => !p.isShooting && !p.isDunking && !p.isBlocking)
+      .forEach(p => {
+        const { x: gx, y: gy } = svgToGrid(p.cx, p.cy);
+        const dx = basketGx - gx;
+        const dy = BASKET_GY - gy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 4) return; // already close — don't crowd the paint
+        const step = 2 + Math.random() * 2; // 2–4 ft drift
+        const s = step / dist;
+        const newGx = Math.max(1, Math.min(93, Math.round(gx + dx * s)));
+        const newGy = Math.max(2, Math.min(48, Math.round(gy + dy * s)));
+        smoothMoveTo(newGx, newGy, p.id, p.facingRight, 0.2); // slow drift ~1s
+      });
+  };
+
+  // Slowly walks all players off court to their bench sides after the quarter ends,
+  // fading them and the ball to QUARTER_END_ALPHA over 1500ms.
+  const walkOffCourt = () => {
+    playersRef.current.forEach(p => {
+      const isHome = p.team === 'home';
+      const exitGx = isHome ? 100 : -6;
+      const { y: gy } = svgToGrid(p.cx, p.cy);
+      smoothMoveTo(exitGx, gy, p.id, isHome, 0.35);
+    });
+    const fadeDur = 1500;
+    const fadeStart = performance.now();
+    const fadeAnim = (now) => {
+      const t = Math.min((now - fadeStart) / fadeDur, 1);
+      setPlayerAlpha(1 + (QUARTER_END_ALPHA - 1) * t);
+      if (t < 1) requestAnimationFrame(fadeAnim);
+    };
+    requestAnimationFrame(fadeAnim);
+  };
+
+  useEffect(() => {
+    if (time !== 0 || !gameLoopActiveRef.current || gamePausedRef.current) return;
+    gameLoopActiveRef.current = false;
+    wanderActiveRef.current = false;
+    playQuarter();
+    setQuarterAnnouncement('FIRST QUARTER TIME!');
+    setTimeout(walkOffCourt, 1200);
+  }, [time]);
+
   // Passes from the current ball carrier to a random teammate.
   const triggerPass = (onComplete = null) => {
     const passer = playersRef.current.find(p => p.hasBall);
@@ -135,7 +301,7 @@ export function useGame() {
     // without waiting for the useEffect to sync after React's next render.
     playersRef.current = playersRef.current.map(p => p.id === passer.id ? { ...p, hasBall: false } : p);
     setPlayers(prev => prev.map(p => p.id === passer.id ? { ...p, hasBall: false } : p));
-    setShot({ cx: startCx, cy: startCy });
+    playPass(); setShot({ cx: startCx, cy: startCy });
 
     const startTime = performance.now();
     const animate = (now) => {
@@ -150,7 +316,7 @@ export function useGame() {
         playersRef.current = playersRef.current.map(p => p.id === receiver.id ? { ...p, hasBall: true } : p);
         setPlayers(prev => prev.map(p => p.id === receiver.id ? { ...p, hasBall: true } : p));
         addLog(`${passer.role} → ${receiver.role}`);
-        if (onComplete) onComplete();
+        if (onComplete && gameLoopActiveRef.current && !gamePausedRef.current) onComplete();
       }
     };
     requestAnimationFrame(animate);
@@ -202,6 +368,7 @@ export function useGame() {
       }, 100);
     }
 
+    playLeap();
     setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: false, isShooting: true } : p));
 
     // Frame 5 begins at 320ms — ball appears in the extended hand position.
@@ -209,12 +376,16 @@ export function useGame() {
     // Arc starts from the elevated position at frame index 7 (jump offset 8px).
     const handCx = pg.facingRight ? startCx + 8 : startCx - 8;
     const handCy = startCy - 22;
+
     setTimeout(() => setShot({ cx: handCx, cy: handCy - SHOOT_JUMP_OFFSETS[4] }), 320); // frame 5:  -11
     setTimeout(() => setShot({ cx: handCx, cy: handCy - SHOOT_JUMP_OFFSETS[5] }), 400); // frame 5b: -12
     setTimeout(() => setShot({ cx: handCx, cy: handCy - SHOOT_JUMP_OFFSETS[6] }), 480); // frame 5c: -14
     const arcStartCy = handCy - SHOOT_JUMP_OFFSETS[6]; // launch from peak (frame 5c): -14
 
     setTimeout(() => {
+      playShot();
+      setTimeout(playSwish, 700); // 700ms into 800ms arc — ball enters net before landing
+      driftTowardBasket(pg.team);
       const startTime = performance.now();
       const animate = (now) => {
         const t = Math.min((now - startTime) / duration, 1);
@@ -230,6 +401,7 @@ export function useGame() {
               setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isShooting: false } : p));
               if (pg.team === 'home') setHomeScore(s => s + 2);
               else setAwayScore(s => s + 2);
+              awardXp(pg.id, 10, pg.cx, pg.cy);
               addLog('swish! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
               onComplete();
             } else {
@@ -237,6 +409,7 @@ export function useGame() {
               setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: true, isShooting: false } : p));
               if (pg.team === 'home') setHomeScore(s => s + 2);
               else setAwayScore(s => s + 2);
+              awardXp(pg.id, 10, pg.cx, pg.cy);
               addLog('swish! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
             }
           }, 400);
@@ -247,20 +420,136 @@ export function useGame() {
     addLog('shooting...');
   };
 
-  // The counterpart defender got beaten — after a 1s delay they give chase,
-  // following the dunker's path toward the basket so it looks like they got
-  // blown past and are scrambling to recover.
-  const guardDunk = (dunkerId, isHome) => {
-    const defender = playersRef.current.find(p => p.team !== (isHome ? 'home' : 'away') && p.role === playersRef.current.find(p2 => p2.id === dunkerId)?.role);
-    if (!defender) return;
-    const launchGx = isHome ? 83 : 11;
-    const nearBasketGx = isHome ? BASKET_RIGHT_GX - 3 : BASKET_LEFT_GX + 3;
-    const defFacingRight = !isHome;
+  // Like triggerShoot but the ball rims out and bounces to a random spot within
+  // 15ft of the basket. The nearest player (either team) grabs the rebound.
+  const triggerShootFail = (onComplete = null) => {
+    wanderActiveRef.current = false;
+    const pg = playersRef.current.find(p => p.hasBall);
+    if (!pg) return;
+    const isHome = pg.team === 'home';
+    const startCx = pg.cx, startCy = pg.cy;
+    const { cx: targetCx, cy: targetCy } = isHome ? SHOOT_TARGET_RIGHT : SHOOT_TARGET_LEFT;
+    const basketGx = isHome ? BASKET_RIGHT_GX : BASKET_LEFT_GX;
+    const duration = 800;
+
+    // Blocker (same as triggerShoot)
+    const opponents = playersRef.current.filter(p => p.team !== pg.team);
+    const blocker = opponents.reduce((closest, p) => {
+      const d = Math.hypot(p.cx - startCx, p.cy - startCy);
+      return !closest || d < Math.hypot(closest.cx - startCx, closest.cy - startCy) ? p : closest;
+    }, null);
+    if (blocker) {
+      setTimeout(() => {
+        setPlayers(prev => prev.map(p => p.id === blocker.id ? { ...p, isBlocking: true } : p));
+        setTimeout(() => {
+          setPlayers(prev => prev.map(p => p.id === blocker.id ? { ...p, isBlocking: false } : p));
+        }, 12 * 80);
+      }, 100);
+    }
+
+    playLeap();
+    setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: false, isShooting: true } : p));
+
+    const handCx = pg.facingRight ? startCx + 8 : startCx - 8;
+    const handCy = startCy - 22;
+
+    setTimeout(() => setShot({ cx: handCx, cy: handCy - SHOOT_JUMP_OFFSETS[4] }), 320);
+    setTimeout(() => setShot({ cx: handCx, cy: handCy - SHOOT_JUMP_OFFSETS[5] }), 400);
+    setTimeout(() => setShot({ cx: handCx, cy: handCy - SHOOT_JUMP_OFFSETS[6] }), 480);
+    const arcStartCy = handCy - SHOOT_JUMP_OFFSETS[6];
+
+    // Random rebound spot: 5–15 grid-ft from the basket, clamped to court bounds
+    const angle = Math.random() * 2 * Math.PI;
+    const dist  = 5 + Math.random() * 10;
+    const rebGx = Math.round(Math.max(2, Math.min(92, basketGx + Math.cos(angle) * dist)));
+    const rebGy = Math.round(Math.max(2, Math.min(48, BASKET_GY + Math.sin(angle) * dist)));
+    const { cx: rebCx, cy: rebCy } = gridToSvg(rebGx, rebGy);
+
+    // Pre-compute rebounder (closest non-shooter) and chaser (closest opponent of rebounder)
+    const nonShooters = playersRef.current.filter(p => p.id !== pg.id);
+    const closestTo = (arr) => arr.reduce((best, p) => {
+      const d = Math.hypot(p.cx - rebCx, p.cy - rebCy);
+      return !best || d < Math.hypot(best.cx - rebCx, best.cy - rebCy) ? p : best;
+    }, null);
+    const rebounder = closestTo(nonShooters);
+    const chaser    = rebounder ? closestTo(nonShooters.filter(p => p.team !== rebounder.team)) : null;
+
     setTimeout(() => {
-      smoothMoveTo(launchGx, 25, defender.id, defFacingRight, 1, () => {
-        smoothMoveTo(nearBasketGx, 25, defender.id, defFacingRight, 1);
+      playShot();
+      driftTowardBasket(pg.team);
+      const startTime = performance.now();
+      const animateShot = (now) => {
+        const t = Math.min((now - startTime) / duration, 1);
+        const cx = handCx + (targetCx - handCx) * t;
+        const cy = arcStartCy + (targetCy - arcStartCy) * t - 40 * Math.sin(t * Math.PI);
+        setShot({ cx, cy });
+        if (t < 1) {
+          requestAnimationFrame(animateShot);
+        } else {
+          // Ball hits rim
+          playMiss();
+          setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isShooting: false } : p));
+
+          // bounceActive guards against the rAF loop overriding setShot(null)
+          // if the rebounder arrives before the 480ms bounce animation finishes.
+          let bounceActive = true;
+
+          if (rebounder) {
+            smoothMoveTo(rebGx, rebGy, rebounder.id, null, 1, () => {
+              bounceActive = false;          // stop any remaining bounce frames
+              shotRef.current = null;        // sync camera immediately
+              setShot(null);
+              playersRef.current = playersRef.current.map(p => p.id === rebounder.id ? { ...p, hasBall: true } : p);
+              setPlayers(prev => prev.map(p => p.id === rebounder.id ? { ...p, hasBall: true } : p));
+              addLog(`${rebounder.role} (${rebounder.team}) grabs the board!`);
+              if (onComplete) onComplete();
+            });
+          }
+          if (chaser) smoothMoveTo(rebGx, rebGy, chaser.id);
+
+          // Bounce arc to rebound spot — stops early if rebounder arrives first
+          const bounceDur = 480;
+          const bounceStart = performance.now();
+          const animateBounce = (now2) => {
+            if (!bounceActive) return;
+            const t2 = Math.min((now2 - bounceStart) / bounceDur, 1);
+            const cx2 = targetCx + (rebCx - targetCx) * t2;
+            const cy2 = targetCy + (rebCy - targetCy) * t2 - 18 * Math.sin(t2 * Math.PI);
+            setShot({ cx: cx2, cy: cy2 });
+            if (t2 < 1) requestAnimationFrame(animateBounce);
+          };
+          requestAnimationFrame(animateBounce);
+        }
+      };
+      requestAnimationFrame(animateShot);
+    }, 560);
+    addLog('shot... no good!');
+  };
+
+  // All defenders scramble to cut off the dunker's path to the basket.
+  // Called as soon as the dunker begins their run — before the jump animation.
+  const reactDunk = (dunkerId, isHome) => {
+    const dunker = playersRef.current.find(p => p.id === dunkerId);
+    if (!dunker) return;
+    const basketGx = isHome ? BASKET_RIGHT_GX : BASKET_LEFT_GX;
+    const defFacingRight = !isHome;
+    const { x: dunkerGx, y: dunkerGy } = svgToGrid(dunker.cx, dunker.cy);
+
+    playersRef.current
+      .filter(p => p.team !== dunker.team)
+      .forEach(p => {
+        // Each defender rushes to a spot 35–65% of the way between the dunker and basket
+        const t = 0.35 + Math.random() * 0.3;
+        const gx = Math.round(dunkerGx + (basketGx - dunkerGx) * t);
+        const gy = Math.round(dunkerGy + (BASKET_GY - dunkerGy) * t + (Math.random() * 10 - 5));
+        smoothMoveTo(
+          Math.max(1, Math.min(93, gx)),
+          Math.max(2, Math.min(48, gy)),
+          p.id,
+          defFacingRight,
+          1
+        );
       });
-    }, 100);
   };
 
   const triggerDunk = (onComplete = null) => {
@@ -270,14 +559,16 @@ export function useGame() {
     const isHome = dunker.team === 'home';
     const launchGx = isHome ? 83 : 11;
     const { cx: basketCx, cy: basketCy } = isHome ? SHOOT_TARGET_RIGHT : SHOOT_TARGET_LEFT;
-    guardDunk(dunker.id, isHome);
+    reactDunk(dunker.id, isHome);
 
-    smoothMoveTo(launchGx, 25, dunker.id, isHome, 1, () => {
+    const DF = Math.round(80 / 1.5); // dunk frame duration at 1.5× speed ≈ 53ms
+    smoothMoveTo(launchGx, 25, dunker.id, isHome, 2, () => {
       const launcher = playersRef.current.find(p => p.id === dunker.id);
       const startCx = launcher.cx, startCy = launcher.cy;
       setPlayers(prev => prev.map(p => p.id === dunker.id ? { ...p, isDunking: true, hasBall: true } : p));
+      driftTowardBasket(dunker.team);
       setTimeout(() => {
-        const jumpDur = 8 * 80;
+        const jumpDur = 8 * DF;
         const jumpStart = performance.now();
         const jumpAnim = (now) => {
           const t = Math.min((now - jumpStart) / jumpDur, 1);
@@ -288,26 +579,28 @@ export function useGame() {
           else setPlayers(prev => prev.map(p => p.id === dunker.id ? { ...p, cx: basketCx, cy: startCy, isDunking: false, hasBall: false } : p));
         };
         requestAnimationFrame(jumpAnim);
-      }, 80);
+      }, DF);
       setTimeout(() => {
         if (isHome) setHomeScore(s => s + 2);
         else setAwayScore(s => s + 2);
-        addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
-      }, 4 * 80);
+        awardXp(dunker.id, 15, startCx, startCy);
+        playDunk(); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+      }, 4 * DF);
       setTimeout(() => {
         setShot({ cx: basketCx, cy: basketCy });
         const dropStart = performance.now();
+        const dropDur = Math.round(400 / 1.5);
         const dropAnim = (now) => {
-          const t = Math.min((now - dropStart) / 400, 1);
+          const t = Math.min((now - dropStart) / dropDur, 1);
           setShot({ cx: basketCx, cy: basketCy + 18 * t });
           if (t < 1) requestAnimationFrame(dropAnim);
           else {
             setShot(null);
-            setTimeout(() => { if (onComplete) onComplete(); }, 400);
+            setTimeout(() => { if (onComplete) onComplete(); }, Math.round(400 / 1.5));
           }
         };
         requestAnimationFrame(dropAnim);
-      }, 7 * 80);
+      }, 7 * DF);
     });
     addLog('driving to the basket...');
   };
@@ -332,7 +625,7 @@ export function useGame() {
     setTimeout(() => {
       const startCx = 660, startCy = 216;
       setPlayers(prev => prev.map(p => p.id === 10 ? { ...p, hasBall: false } : p));
-      setShot({ cx: startCx, cy: startCy });
+      playPass(); setShot({ cx: startCx, cy: startCy });
       const endCx = 562, endCy = 216;
       const duration = 300;
       const startTime = performance.now();
@@ -376,7 +669,7 @@ export function useGame() {
     setTimeout(() => {
       const startCx = 20, startCy = 216;
       setPlayers(prev => prev.map(p => p.id === 5 ? { ...p, hasBall: false } : p));
-      setShot({ cx: startCx, cy: startCy });
+      playPass(); setShot({ cx: startCx, cy: startCy });
       const endCx = 118, endCy = 216;
       const duration = 300;
       const startTime = performance.now();
@@ -400,13 +693,226 @@ export function useGame() {
     }, 200);
   };
 
+  // ─── Roster Helpers ────────────────────────────────────────────────────────
+
+  // Returns the shooter's ACC stat (0–100). Falls back to 70 if roster is missing.
+  const getShooterAcc = (gamePlayer) => {
+    const roster = gamePlayer.team === 'home' ? rosterRef.current.home : rosterRef.current.away;
+    const rp = roster.find(r => (r.role ?? r.pos) === gamePlayer.role);
+    return rp ? rp.acc : 70;
+  };
+
+  // Quick outlet pass from the current ball-carrier to their team's PG, then
+  // calls onComplete so the caller can start the appropriate loop half.
+  const triggerReboundTransition = (possTeam, onComplete = null) => {
+    const carrier = playersRef.current.find(p => p.hasBall);
+    const pg      = playersRef.current.find(p => p.team === possTeam && p.role === 'PG');
+    if (!carrier || !pg || carrier.id === pg.id) { onComplete?.(); return; }
+
+    const startCx = carrier.cx, startCy = carrier.cy;
+    const endCx   = pg.cx,      endCy   = pg.cy;
+    const duration = 350;
+
+    playersRef.current = playersRef.current.map(p => p.id === carrier.id ? { ...p, hasBall: false } : p);
+    setPlayers(prev => prev.map(p => p.id === carrier.id ? { ...p, hasBall: false } : p));
+    playPass(); setShot({ cx: startCx, cy: startCy });
+
+    const startTime = performance.now();
+    const animate = (now) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      const cx = startCx + (endCx - startCx) * t;
+      const cy = startCy + (endCy - startCy) * t - 12 * Math.sin(t * Math.PI);
+      setShot({ cx, cy });
+      if (t < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        shotRef.current = null;
+        setShot(null);
+        playersRef.current = playersRef.current.map(p => p.id === pg.id ? { ...p, hasBall: true } : p);
+        setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: true } : p));
+        addLog(`outlet → PG`);
+        onComplete?.();
+      }
+    };
+    requestAnimationFrame(animate);
+  };
+
+  // Moves all players to proper half-court formation for `possTeam`, then fires
+  // onComplete when the possessing PG reaches their spot (signals team is ready).
+  const setupOffense = (possTeam, onComplete = null) => {
+    const formation = possTeam === 'home' ? HOME_FORMATION : AWAY_FORMATION;
+    const pg = playersRef.current.find(p => p.team === possTeam && p.role === 'PG');
+    formation.forEach(({ id, gx, gy }) => {
+      const facingRight = id <= 5; // home always faces right, away always faces left
+      const isPG = pg && id === pg.id;
+      smoothMoveTo(gx, gy, id, facingRight, 1, isPG ? onComplete : null);
+    });
+  };
+
+  // ─── Jump Ball ─────────────────────────────────────────────────────────────
+
+  // Players positioned around the center circle: Centers face each other,
+  // others face toward center. Home players right of circle, away players left.
+  const JUMP_BALL_FORMATION = [
+    { id: 1,  gx: 41, gy: 20, facingRight: true  }, // Home PG  — left half, faces right
+    { id: 2,  gx: 41, gy: 30, facingRight: true  }, // Home SG  — left half, faces right
+    { id: 3,  gx: 34, gy: 25, facingRight: true  }, // Home SF  — far left
+    { id: 4,  gx: 38, gy: 16, facingRight: true  }, // Home PF  — left-top
+    { id: 5,  gx: 46, gy: 25, facingRight: true  }, // Home C   — jumper, left of circle
+    { id: 6,  gx: 53, gy: 20, facingRight: false }, // Away PG  — right half, faces left
+    { id: 7,  gx: 53, gy: 30, facingRight: false }, // Away SG  — right half, faces left
+    { id: 8,  gx: 60, gy: 25, facingRight: false }, // Away SF  — far right
+    { id: 9,  gx: 56, gy: 16, facingRight: false }, // Away PF  — right-top
+    { id: 10, gx: 48, gy: 25, facingRight: false }, // Away C   — jumper, right of circle
+  ];
+
+  // Moves all 10 players to jump ball positions, then tips off:
+  // referee tosses the ball at center, Centers jump, ball deflects left or right,
+  // and the closest player to the landing spot gets possession.
+  // onComplete receives the winning team name.
+  const triggerJumpBall = (onComplete = null) => {
+    wanderActiveRef.current = false;
+
+    const homeCId = JUMP_BALL_FORMATION.find(f => f.id === 5).id; // 5
+    const awayCId = JUMP_BALL_FORMATION.find(f => f.id === 10).id; // 10
+
+    // Clear any ball
+    playersRef.current = playersRef.current.map(p => ({ ...p, hasBall: false }));
+    setPlayers(prev => prev.map(p => ({ ...p, hasBall: false })));
+    addLog('jump ball!');
+
+    // Move every player to their formation spot; once all 10 arrive, tip off
+    let arrived = 0;
+    const onArrived = () => {
+      arrived++;
+      if (arrived < JUMP_BALL_FORMATION.length) return;
+
+      const { cx: centerCx, cy: centerCy } = gridToSvg(47, 25);
+      const goesRight = Math.random() < 0.5;
+
+      // Landing zone: ~13 ft from center toward the tipped side
+      const landGx = goesRight
+        ? Math.round(60 + Math.random() * 3)   // gx 60-63, near Away SF — away wins tip
+        : Math.round(31 + Math.random() * 3);   // gx 31-34, near Home SF — home wins tip
+      const landGy = Math.round(22 + Math.random() * 6); // gy 22-28
+      const { cx: landCx, cy: landCy } = gridToSvg(landGx, landGy);
+
+      // Phase 0: Centers charge up (PowerBar fills over 480ms) before the toss
+      playersRef.current = playersRef.current.map(p =>
+        (p.id === homeCId || p.id === awayCId) ? { ...p, isChargingJump: true } : p
+      );
+      setPlayers(prev => prev.map(p =>
+        (p.id === homeCId || p.id === awayCId) ? { ...p, isChargingJump: true } : p
+      ));
+
+      setTimeout(() => {
+        // Clear charge state — ball toss begins
+        playersRef.current = playersRef.current.map(p =>
+          (p.id === homeCId || p.id === awayCId) ? { ...p, isChargingJump: false } : p
+        );
+        setPlayers(prev => prev.map(p =>
+          (p.id === homeCId || p.id === awayCId) ? { ...p, isChargingJump: false } : p
+        ));
+
+      // Ball toss: 3 phases
+      //   1. Rise up to peak (600ms) — players wait
+      //   2. Fall to hands height (320ms = 4 frames) — players start jumping at phase 2 start,
+      //      so they reach their peak exactly when the ball reaches tip height
+      //   3. Ball deflects left or right from hands height (350ms)
+      const peakCy = centerCy - 65;  // ~65px above court
+      const tipCy  = centerCy - 30;  // hands height at peak jump
+      const UP_DUR   = 600;
+      const DOWN_DUR = 320;  // = 4 frames × 80ms — matches time to player jump peak
+      const TIP_DUR  = 350;  // matches other ball speeds
+
+      setShot({ cx: centerCx, cy: centerCy });
+      const upStart = performance.now();
+      const phaseUp = (now) => {
+        const t = Math.min((now - upStart) / UP_DUR, 1);
+        setShot({ cx: centerCx, cy: centerCy + (peakCy - centerCy) * t });
+        if (t < 1) { requestAnimationFrame(phaseUp); return; }
+
+        // Ball at peak — trigger player jumps now so they peak in 320ms
+        playLeap();
+        playersRef.current = playersRef.current.map(p =>
+          (p.id === homeCId || p.id === awayCId) ? { ...p, isJumpBall: true } : p
+        );
+        setPlayers(prev => prev.map(p =>
+          (p.id === homeCId || p.id === awayCId) ? { ...p, isJumpBall: true } : p
+        ));
+
+        // Ball descends to meet the players' extended hands
+        const downStart = performance.now();
+        const phaseDown = (now2) => {
+          const t2 = Math.min((now2 - downStart) / DOWN_DUR, 1);
+          setShot({ cx: centerCx, cy: peakCy + (tipCy - peakCy) * t2 });
+          if (t2 < 1) { requestAnimationFrame(phaseDown); return; }
+
+          // Players are at peak, ball is at hands height — tip it sideways
+          playJumpball();
+          const tipStart = performance.now();
+          const phaseTip = (now3) => {
+            const t3 = Math.min((now3 - tipStart) / TIP_DUR, 1);
+            setShot({ cx: centerCx + (landCx - centerCx) * t3, cy: tipCy + (landCy - tipCy) * t3 });
+            if (t3 < 1) { requestAnimationFrame(phaseTip); return; }
+
+            // Ball landed — clear jump pose, find closest player
+            shotRef.current = null;
+            setShot(null);
+            playersRef.current = playersRef.current.map(p =>
+              (p.id === homeCId || p.id === awayCId) ? { ...p, isJumpBall: false } : p
+            );
+            setPlayers(prev => prev.map(p =>
+              (p.id === homeCId || p.id === awayCId) ? { ...p, isJumpBall: false } : p
+            ));
+
+            const receiver = playersRef.current.reduce((best, p) => {
+              const d = Math.hypot(p.cx - landCx, p.cy - landCy);
+              return !best || d < Math.hypot(best.cx - landCx, best.cy - landCy) ? p : best;
+            }, null);
+
+            if (!receiver) { onComplete?.(null); return; }
+
+            smoothMoveTo(landGx, landGy, receiver.id, receiver.facingRight, 1, () => {
+              playersRef.current = playersRef.current.map(p =>
+                p.id === receiver.id ? { ...p, hasBall: true } : p
+              );
+              setPlayers(prev => prev.map(p =>
+                p.id === receiver.id ? { ...p, hasBall: true } : p
+              ));
+              // Record jump ball winner for quarter possession rules:
+              // Q2 + Q3 → opposite team, Q4 → this team
+              if (!jumpBallWinnerRef.current) {
+                jumpBallWinnerRef.current = receiver.team;
+                setJumpBallWinner(receiver.team);
+              }
+              addLog(`${receiver.team.toUpperCase()} ${receiver.role} gets possession!`);
+              onComplete?.(receiver.team);
+            });
+          };
+          requestAnimationFrame(phaseTip);
+        };
+        requestAnimationFrame(phaseDown);
+      };
+      requestAnimationFrame(phaseUp);
+      }, 480); // wait for PowerBar to fill before tossing
+    };
+
+    JUMP_BALL_FORMATION.forEach(({ id, gx, gy, facingRight }) =>
+      smoothMoveTo(gx, gy, id, facingRight, 1, onArrived)
+    );
+  };
+
   // ─── Game Loop ─────────────────────────────────────────────────────────────
 
-  const gameLoopActiveRef = useRef(false);
-  const wanderActiveRef = useRef(false);
-  // Refs hold the latest closures for mutual recursion between the two halves.
-  const loopHomeRef = useRef(null);
-  const loopAwayRef = useRef(null);
+  const gameLoopActiveRef    = useRef(false);
+  const wanderActiveRef      = useRef(false);
+  const gamePausedRef        = useRef(false);
+  const resumeAfterPauseRef  = useRef(null);
+  // Refs hold the latest closures for mutual recursion between the loop halves.
+  const loopHomeRef    = useRef(null);
+  const loopAwayRef    = useRef(null);
+  const attemptShotRef = useRef(null);
 
   // Starts small random movement for every player on `team` to simulate
   // half-court positioning. Each player picks a new spot every 0.5–1.5s,
@@ -418,10 +924,10 @@ export function useGame() {
     const facingRight = team === 'home';
 
     const scheduleWander = (playerId) => {
-      if (!wanderActiveRef.current || !gameLoopActiveRef.current) return;
+      if (!wanderActiveRef.current || !gameLoopActiveRef.current || gamePausedRef.current) return;
       const delay = 500 + Math.random() * 1000;
       setTimeout(() => {
-        if (!wanderActiveRef.current || !gameLoopActiveRef.current) return;
+        if (!wanderActiveRef.current || !gameLoopActiveRef.current || gamePausedRef.current) return;
         const player = playersRef.current.find(p => p.id === playerId);
         if (!player) return;
 
@@ -463,10 +969,10 @@ export function useGame() {
     const facingRight = defensiveTeam === 'home';
 
     const scheduleGuard = (defenderId, offenderId) => {
-      if (!wanderActiveRef.current || !gameLoopActiveRef.current) return;
+      if (!wanderActiveRef.current || !gameLoopActiveRef.current || gamePausedRef.current) return;
       const delay = 200 + Math.random() * 200; // reposition every 200–400ms
       setTimeout(() => {
-        if (!wanderActiveRef.current || !gameLoopActiveRef.current) return;
+        if (!wanderActiveRef.current || !gameLoopActiveRef.current || gamePausedRef.current) return;
         const offender = playersRef.current.find(p => p.id === offenderId);
         if (!offender) { scheduleGuard(defenderId, offenderId); return; }
 
@@ -497,33 +1003,96 @@ export function useGame() {
     });
   };
 
+  // ACC-based shot attempt. On make → finishMake (hand off after score).
+  // On miss → rebound: same team gets 0–2 quick passes then shoots again;
+  //            opposing team gets an outlet to their PG then restarts their loop.
+  attemptShotRef.current = (finishMake) => {
+    if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+    const shooter = playersRef.current.find(p => p.hasBall);
+    if (!shooter) return;
+
+    if (Math.random() < 0.4) {
+      // 40% chance of a dunk — dunks never miss
+      triggerDunk(finishMake);
+      return;
+    }
+
+    const acc    = getShooterAcc(shooter);
+    const isMake = Math.random() * 100 < acc;
+
+    if (isMake) {
+      triggerShoot(finishMake);
+    } else {
+      triggerShootFail(() => {
+        if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+        const rebounder = playersRef.current.find(p => p.hasBall);
+        if (!rebounder) return;
+
+        if (rebounder.team === shooter.team) {
+          // Offensive rebound — 0–2 quick passes then another attempt
+          const numPasses = Math.floor(Math.random() * 3);
+          let rem = numPasses;
+          const doPass = () => {
+            rem--;
+            triggerPass(() => {
+              if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+              if (rem > 0) setTimeout(doPass, 200 + Math.random() * 400);
+              else setTimeout(() => attemptShotRef.current?.(finishMake), 400);
+            });
+          };
+          if (numPasses === 0) setTimeout(() => attemptShotRef.current?.(finishMake), 300);
+          else setTimeout(doPass, 300);
+        } else {
+          // Opposing team grabbed the board — pause 0.1–1s, then outlet to PG
+          setTimeout(() => {
+            if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+            triggerReboundTransition(rebounder.team, () => {
+              if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+              const nextLoop = rebounder.team === 'home'
+                ? () => loopHomeRef.current?.()
+                : () => loopAwayRef.current?.();
+              setupOffense(rebounder.team, () => {
+                if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+                nextLoop();
+              });
+            });
+          }, 100 + Math.random() * 900);
+        }
+      });
+    }
+  };
+
   loopHomeRef.current = () => {
-    if (!gameLoopActiveRef.current) return;
+    if (!gameLoopActiveRef.current || gamePausedRef.current) return;
     startWander('home');
     startGuarding('away');
     triggerPreShoot(() => {
-      if (!gameLoopActiveRef.current) return;
-      const finish = () => {
-        if (!gameLoopActiveRef.current) return;
+      if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+      const finishMake = () => {
+        if (!gameLoopActiveRef.current || gamePausedRef.current) {
+          resumeAfterPauseRef.current = finishMake;
+          return;
+        }
         triggerThrowInAway(() => loopAwayRef.current?.());
       };
-      if (Math.random() < 0.5) triggerShoot(finish);
-      else triggerDunk(finish);
+      attemptShotRef.current(finishMake);
     });
   };
 
   loopAwayRef.current = () => {
-    if (!gameLoopActiveRef.current) return;
+    if (!gameLoopActiveRef.current || gamePausedRef.current) return;
     startWander('away');
     startGuarding('home');
     triggerPreShoot(() => {
-      if (!gameLoopActiveRef.current) return;
-      const finish = () => {
-        if (!gameLoopActiveRef.current) return;
+      if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+      const finishMake = () => {
+        if (!gameLoopActiveRef.current || gamePausedRef.current) {
+          resumeAfterPauseRef.current = finishMake;
+          return;
+        }
         triggerThrowInHome(() => loopHomeRef.current?.());
       };
-      if (Math.random() < 0.5) triggerShoot(finish);
-      else triggerDunk(finish);
+      attemptShotRef.current(finishMake);
     });
   };
 
@@ -567,6 +1136,10 @@ export function useGame() {
         if (!playersRef.current.find(p => p.hasBall)) { addLog('nobody has the ball', 'err'); return; }
         triggerShoot();
 
+      } else if (op === 'shootFail') {
+        if (!playersRef.current.find(p => p.hasBall)) { addLog('nobody has the ball', 'err'); return; }
+        triggerShootFail();
+
       } else if (op === 'testPass') {
         const role = parts[1]?.toUpperCase();
         if (!role) { addLog('usage: testPass <role>  e.g. testPass SG', 'err'); return; }
@@ -582,7 +1155,7 @@ export function useGame() {
         const duration = 300; // fast chest pass
 
         setPlayers(prev => prev.map(p => p.id === passer.id ? { ...p, hasBall: false } : p));
-        setShot({ cx: startCx, cy: startCy });
+        playPass(); setShot({ cx: startCx, cy: startCy });
 
         const startTime = performance.now();
         const animate = (now) => {
@@ -602,6 +1175,9 @@ export function useGame() {
         requestAnimationFrame(animate);
         addLog(`passing to ${role}...`);
 
+      } else if (op === 'testJumpBall') {
+        triggerJumpBall();
+
       } else if (op === 'testThrowInHome') {
         triggerThrowInHome();
 
@@ -614,14 +1190,16 @@ export function useGame() {
         const isHome = dunker.team === 'home';
         const launchGx = isHome ? 83 : 11;
         const { cx: basketCx, cy: basketCy } = isHome ? SHOOT_TARGET_RIGHT : SHOOT_TARGET_LEFT;
-        // Move to launch point, then soar toward the basket in a parabolic arc
-        smoothMoveTo(launchGx, 25, dunker.id, isHome ? true : false, 1, () => {
+        reactDunk(dunker.id, isHome);
+        // Move to launch point at 2×, then soar at 1.5×
+        const DF2 = Math.round(80 / 1.5);
+        smoothMoveTo(launchGx, 25, dunker.id, isHome ? true : false, 2, () => {
           const launcher = playersRef.current.find(p => p.id === dunker.id);
           const startCx = launcher.cx, startCy = launcher.cy;
           setPlayers(prev => prev.map(p => p.id === dunker.id ? { ...p, isDunking: true, hasBall: true } : p));
-          // Arc starts on frame 1 (one frame after animation begins)
+          driftTowardBasket(dunker.team);
           setTimeout(() => {
-            const jumpDur = 8 * 80;
+            const jumpDur = 8 * DF2;
             const jumpStart = performance.now();
             const jumpAnim = (now) => {
               const t = Math.min((now - jumpStart) / jumpDur, 1);
@@ -632,39 +1210,48 @@ export function useGame() {
               else setPlayers(prev => prev.map(p => p.id === dunker.id ? { ...p, cx: basketCx, cy: startCy, isDunking: false, hasBall: false } : p));
             };
             requestAnimationFrame(jumpAnim);
-          }, 80);
-          // Score fires at frame 5 (index 4)
+          }, DF2);
           setTimeout(() => {
             if (isHome) setHomeScore(s => s + 2);
             else setAwayScore(s => s + 2);
-            addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
-          }, 4 * 80);
-          // Ball leaves hand at frame 8 (index 7 = first null offset) — start drop
+            awardXp(dunker.id, 15, startCx, startCy);
+            playDunk(); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+          }, 4 * DF2);
           setTimeout(() => {
             setShot({ cx: basketCx, cy: basketCy });
             const dropStart = performance.now();
+            const dropDur2 = Math.round(400 / 1.5);
             const dropAnim = (now) => {
-              const t = Math.min((now - dropStart) / 400, 1);
+              const t = Math.min((now - dropStart) / dropDur2, 1);
               setShot({ cx: basketCx, cy: basketCy + 18 * t });
               if (t < 1) requestAnimationFrame(dropAnim);
               else setShot(null);
             };
             requestAnimationFrame(dropAnim);
-          }, 7 * 80);
+          }, 7 * DF2);
         });
         addLog('driving to the basket...');
 
       } else if (op === 'testGamePlay') {
         if (gameLoopActiveRef.current) { addLog('already running — type stopGamePlay', 'err'); return; }
         gameLoopActiveRef.current = true;
+        bgMusic.start();
+        startTimer(6);
         addLog('game loop started');
-        const carrier = playersRef.current.find(p => p.hasBall) || playersRef.current[0];
-        if (carrier.team === 'home') loopHomeRef.current();
-        else loopAwayRef.current();
+        triggerJumpBall((winnerTeam) => {
+          if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+          const loopFn = winnerTeam === 'home' ? loopHomeRef : loopAwayRef;
+          setupOffense(winnerTeam, () => {
+            if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+            loopFn.current?.();
+          });
+        });
 
       } else if (op === 'stopGamePlay') {
         gameLoopActiveRef.current = false;
         wanderActiveRef.current = false;
+        stopTimer();
+        bgMusic.stop();
         addLog('game loop stopped');
 
       } else if (op === 'reset') {
@@ -714,11 +1301,13 @@ export function useGame() {
         addLog('moveTo <x> <y>   — smooth move ball carrier to grid');
         addLog('tp <x> <y>       — teleport PG to grid pos');
         addLog('pos              — print PG grid position');
-        addLog('shoot            — shoot toward basket');
+        addLog('shoot            — shoot toward basket (make)');
+        addLog('shootFail        — shoot and miss, bounce to random rebound');
         addLog('reset            — reset PG to top of key');
         addLog('testMoveAway     — away team takes possession');
         addLog('testMoveHome     — home team takes possession');
         addLog('testPass <role>  — pass to teammate (PG/SG/SF/PF/C)');
+        addLog('testJumpBall     — both Cs tip off at center, 50/50 winner');
         addLog('testThrowInHome  — home C inbounds from left sideline');
         addLog('testThrowInAway  — away C inbounds from right sideline');
         addLog('testDunk         — ball carrier drives to basket and dunks');
@@ -727,7 +1316,7 @@ export function useGame() {
         addLog('testLevelUp      — trigger level-up sequence for ball carrier');
       } else if (op === 'testLevelUp') {
         const carrier = playersRef.current.find(p => p.hasBall) || playersRef.current[0];
-        setLevelUpState({ player: { ...carrier }, abilities: pickLevelUpChoices() });
+        playLevelUp(); setLevelUpState({ player: { ...carrier }, abilities: pickLevelUpChoices() });
         addLog(`${carrier.role} leveling up!`);
       } else {
         addLog(`unknown: "${op}" — type help`, 'err');
@@ -778,7 +1367,12 @@ export function useGame() {
     if (ability && p) addLog(`${p.role} gained: ${ability.name}!`);
     else addLog('level-up skipped');
     setLevelUpState(null);
+    gamePausedRef.current = false;
+    startTimer(timerSpeedRef.current);
+    const resume = resumeAfterPauseRef.current;
+    resumeAfterPauseRef.current = null;
+    if (resume) setTimeout(resume, 300);
   };
 
-  return { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp };
+  return { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup };
 }

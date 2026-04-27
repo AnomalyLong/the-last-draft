@@ -120,13 +120,13 @@ function PlayerPortrait({ player, rosterEntry, side, jerseyColor, hasBall = fals
       {/* Level + XP bar */}
       <PixelTextC text={`Lv.${player.level}`} cx={portX + PORT_W / 2} y={portY + PORT_H + 23}
         scale={1} fill="#7090a8" outline={null} />
-      <rect x={portX} y={portY + PORT_H + 31} width={PORT_W} height={3}
-        fill="#182030" shapeRendering="crispEdges" />
-      {player.xp > 0 && (
-        <rect x={portX} y={portY + PORT_H + 31}
-          width={Math.round(PORT_W * (player.xp / player.xpMax))} height={3}
-          fill="#40c8e0" shapeRendering="crispEdges" />
-      )}
+      {[0,1,2,3,4].map(i => (
+        <rect key={i}
+          x={portX + i * 4} y={portY + PORT_H + 34}
+          width={3} height={5}
+          fill={(player.xp / player.xpMax) * 5 > i ? '#00ff44' : '#1a3820'}
+          shapeRendering="crispEdges" />
+      ))}
 
       {/* Stat bars: LABEL [bar] VALUE */}
       {rosterEntry && STAT_DEFS.map(({ key, label, color }, i) => {

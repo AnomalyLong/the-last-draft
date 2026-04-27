@@ -8,6 +8,9 @@ export const TOTAL_H = TOP_BAR + COURT_H + BOT_BAR;
 export const COURT_Y = TOP_BAR;
 export const COURT_MID_Y = COURT_Y + COURT_H / 2;
 
+// ─── Quarter Break ────────────────────────────────────────────────────────────
+export const QUARTER_END_ALPHA = 0; // opacity target for players and ball when a quarter ends
+
 // ─── Jersey Colors ────────────────────────────────────────────────────────────
 export const JERSEY_HOME = "#1a4fa0"; // blue
 export const JERSEY_AWAY = "#c02020"; // red
@@ -28,22 +31,26 @@ export const svgToGrid = (cx, cy) => ({
   y: Math.round((cy - 96) / 240 * 50),
 });
 
+// ─── XP / Levelling ──────────────────────────────────────────────────────────
+export const MAX_LEVEL = 10;
+// XP needed to advance FROM level n: 10, 20, 40, 80 … (doubles each level)
+export const XP_FOR_LEVEL = (n) => Math.round(10 * Math.pow(2, n - 1));
+
 // ─── Initial Player Positions ────────────────────────────────────────────────
 const g = gridToSvg;
 
 export const INITIAL_PLAYERS = [
-  // Home team — offense, attacking right basket
-  { id: 1,  role: "PG", team: "home", hasBall: true,  isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  level: 1, xp: 0, xpMax: 100, ...g(62, 25) },
-  { id: 2,  role: "SG", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  level: 1, xp: 0, xpMax: 100, ...g(70, 12) },
-  { id: 3,  role: "SF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  level: 1, xp: 0, xpMax: 100, ...g(70, 38) },
-  { id: 4,  role: "PF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  level: 1, xp: 0, xpMax: 100, ...g(80, 18) },
-  { id: 5,  role: "C",  team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: true,  level: 1, xp: 0, xpMax: 100, ...g(82, 25) },
-  // Away team — defense, guarding right basket
-  { id: 6,  role: "PG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, level: 1, xp: 0, xpMax: 100, ...g(68, 25) },
-  { id: 7,  role: "SG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, level: 1, xp: 0, xpMax: 100, ...g(73, 11) },
-  { id: 8,  role: "SF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, level: 1, xp: 0, xpMax: 100, ...g(73, 39) },
-  { id: 9,  role: "PF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, level: 1, xp: 0, xpMax: 100, ...g(82, 17) },
-  { id: 10, role: "C",  team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, facingRight: false, level: 1, xp: 0, xpMax: 100, ...g(84, 24) },
+  // Jump ball formation — blue (home) left half, red (away) right half, no one has ball
+  { id: 1,  role: "PG", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(41, 20) },
+  { id: 2,  role: "SG", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(41, 30) },
+  { id: 3,  role: "SF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(34, 25) },
+  { id: 4,  role: "PF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(38, 16) },
+  { id: 5,  role: "C",  team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(46, 25) },
+  { id: 6,  role: "PG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(53, 20) },
+  { id: 7,  role: "SG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(53, 30) },
+  { id: 8,  role: "SF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(60, 25) },
+  { id: 9,  role: "PF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(56, 16) },
+  { id: 10, role: "C",  team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(48, 25) },
 ];
 
 // ─── Player Speed ────────────────────────────────────────────────────────────
@@ -84,3 +91,7 @@ export const SHOOT_JUMP_OFFSETS = [0, 3, 6, 10, 11, 12, 14, 8, 0, 0];
 // Per-frame upward Y offset (SVG px) for the block jump animation.
 // 11 frames: crouch → leave ground → rise → peak (×3 hang) → descend → land → settle.
 export const BLOCK_JUMP_OFFSETS = [0, 3, 10, 18, 20, 20, 20, 14, 6, 0, 0];
+
+// ─── Jump Ball Jump Offsets ───────────────────────────────────────────────────
+// 9 frames peaking at frame 4 (midpoint of reversed-dunk arc) — 8px max rise.
+export const JUMP_BALL_JUMP_OFFSETS = [0, 2, 4, 6, 8, 6, 4, 2, 0];

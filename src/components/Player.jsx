@@ -1,14 +1,23 @@
 import React from 'react';
-import { JERSEY_HOME, JERSEY_BASE, JERSEY_DARK_BASE, SHOOT_JUMP_OFFSETS, BLOCK_JUMP_OFFSETS } from '../constants.js';
-import { SPRITE_PIXELS, IDLE_FRAMES, RUN_FRAMES, RUN_BALL_FRAMES, SHOOT_CHAR_FRAMES, DUNK_FRAMES, DUNK_BALL_OFFSETS, BALL_FRAMES, BLOCK_JUMP_FRAMES } from '../sprites/index.js';
+import { JERSEY_HOME, JERSEY_BASE, JERSEY_DARK_BASE, SHOOT_JUMP_OFFSETS, BLOCK_JUMP_OFFSETS, JUMP_BALL_JUMP_OFFSETS } from '../constants.js';
+import { SPRITE_PIXELS, IDLE_FRAMES, RUN_FRAMES, RUN_BALL_FRAMES, SHOOT_CHAR_FRAMES, DUNK_FRAMES, DUNK_BALL_OFFSETS, BALL_FRAMES, BLOCK_JUMP_FRAMES, JUMP_BALL_FRAMES } from '../sprites/index.js';
 
-export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isBlocking = false, facingRight = false }) {
+export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isBlocking = false, isJumpBall = false, facingRight = false }) {
   const [frameIdx, setFrameIdx] = React.useState(0);
   const rafRef = React.useRef(null);
 
   React.useEffect(() => {
-    if (hasBall && !isMoving && !isShooting && !isDunking && !isBlocking) return;
+    if (hasBall && !isMoving && !isShooting && !isDunking && !isBlocking && !isJumpBall) return;
     cancelAnimationFrame(rafRef.current);
+    if (isJumpBall) {
+      const start = performance.now();
+      const tick = (now) => {
+        const f = Math.floor((now - start) / 80);
+        if (f < JUMP_BALL_FRAMES.length) { setFrameIdx(f); rafRef.current = requestAnimationFrame(tick); }
+      };
+      rafRef.current = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(rafRef.current);
+    }
     if (isDunking) {
       const start = performance.now();
       const tick = (now) => {
@@ -45,7 +54,7 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall =
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(rafRef.current); setFrameIdx(0); };
-  }, [hasBall, isMoving, isShooting, isDunking, isBlocking]);
+  }, [hasBall, isMoving, isShooting, isDunking, isBlocking, isJumpBall]);
 
   const jerseyDark = jerseyColor + '99';
 
@@ -53,6 +62,17 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall =
     const c = fill === JERSEY_BASE ? jerseyColor : fill === JERSEY_DARK_BASE ? jerseyDark : fill;
     return <rect key={i} x={x * scale} y={y * scale} width={scale} height={scale} fill={c} />;
   });
+
+  if (isJumpBall) {
+    const fi = Math.min(frameIdx, JUMP_BALL_FRAMES.length - 1);
+    const pixels = JUMP_BALL_FRAMES[fi] || JUMP_BALL_FRAMES[0];
+    const jumpY = JUMP_BALL_JUMP_OFFSETS[fi] ?? 0;
+    return (
+      <g transform={`translate(${cx - 7 * scale}, ${cy - 17 * scale - jumpY})`} shapeRendering="crispEdges">
+        {applyColors(pixels)}
+      </g>
+    );
+  }
 
   if (isDunking) {
     const fi = Math.min(frameIdx, DUNK_FRAMES.length - 1);

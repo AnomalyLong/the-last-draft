@@ -1,6 +1,7 @@
 import React from 'react';
 import { ZOOM_W, TOTAL_H } from '../constants.js';
 import { PixelTextC } from './PixelText.jsx';
+import { playCursor, playCancel } from '../sound/ui.js';
 
 const CX = ZOOM_W / 2;
 
@@ -21,7 +22,7 @@ function DialogButton({ y, h = 26, label, color, disabled = false, onClick }) {
   const darkText = disabled ? '#404060' : 'rgba(0,0,0,0.45)';
   const lightText = disabled ? '#404060' : '#fff';
   return (
-    <g onClick={disabled ? undefined : onClick} style={{ cursor: disabled ? 'default' : 'pointer' }}
+    <g onClick={disabled ? undefined : () => { playCursor(); onClick?.(); }} style={{ cursor: disabled ? 'default' : 'pointer' }}
       onMouseEnter={() => !disabled && setHover(true)} onMouseLeave={() => setHover(false)}>
       {!disabled && <rect x={IX+3} y={y + SHADOW_DROP} width={IW-6} height={h} rx={4} fill="rgba(0,0,0,0.50)" shapeRendering="crispEdges" />}
       <rect x={IX} y={by} width={IW} height={h} rx={6} fill={fill} shapeRendering="crispEdges" />
@@ -89,7 +90,7 @@ export function TeamSelect({ onStart, onBack }) {
 
       {/* BACK button */}
       <DialogButton y={DY + 178} label="BACK" color="#2a3868"
-        onClick={onBack} />
+        onClick={() => { playCancel(); onBack(); }} />
     </g>
   );
 }

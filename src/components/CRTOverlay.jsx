@@ -33,10 +33,10 @@ export function CRTOverlay({ cameraX }) {
       </defs>
 
       {/* Scanlines */}
-      <rect x={cameraX - 2} y={-2} width={ZOOM_W + 4} height={TOTAL_H + 4} fill="url(#crt-lines)" />
+      <rect x={cameraX - 50} y={-50} width={ZOOM_W + 100} height={TOTAL_H + 100} fill="url(#crt-lines)" />
 
       {/* Vignette */}
-      <rect x={cameraX - 2} y={-2} width={ZOOM_W + 4} height={TOTAL_H + 4} fill="url(#crt-vignette)" />
+      <rect x={cameraX - 50} y={-50} width={ZOOM_W + 100} height={TOTAL_H + 100} fill="url(#crt-vignette)" />
     </g>
   );
 }
