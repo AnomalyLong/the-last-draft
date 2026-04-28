@@ -1,16 +1,11 @@
 import React from 'react';
-import { W, COURT_H, COURT_Y, COURT_MID_Y } from '../constants.js';
+import { W, COURT_H, COURT_Y, COURT_MID_Y, TOTAL_H } from '../constants.js';
+import bg2 from '../sprites/bg2.svg';
 
 export function Court() {
-  const planks = Array.from({ length: 30 }, (_, i) => COURT_Y + 8 + i * 8);
   return (
     <g>
-      <rect x={0} y={COURT_Y} width={30} height={COURT_H} fill="#d6bc97" />
-      <rect x={650} y={COURT_Y} width={30} height={COURT_H} fill="#d6bc97" />
-      <rect x={30} y={COURT_Y} width={620} height={COURT_H} fill="#e8d5b0" />
-      {planks.map((y) => (
-        <rect key={y} x={30} y={y} width={620} height={2} fill="#c4a97a" opacity={0.15} />
-      ))}
+      <image href={bg2} x={0} y={0} width={W} height={TOTAL_H} />
       <rect x={30} y={178} width={125} height={76} fill="#7ab3c8" opacity={0.55} />
       <rect x={525} y={178} width={125} height={76} fill="#7ab3c8" opacity={0.55} />
       {/* Court boundaries */}
