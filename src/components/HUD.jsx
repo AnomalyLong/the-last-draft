@@ -64,16 +64,17 @@ function HeadPortrait({ x, y, jerseyColor, flip = false }) {
 // Panels nearly fill the full width with a 4px gap between them.
 // A debug strip (y=2..13) sits above; panels start at PANEL_Y.
 const PANEL_Y = 15;
-// Tight panels — center gap (~104px) reserved for future HUD options
-const LP_X = 2,   LP_W = 150;   // right edge x=152
-const RP_X = 256, RP_W = 150;   // left edge x=256
+// Panels anchored to viewport edges; center gap reserved for scoreboard
+export const LP_X = 0,   LP_W = 150;   // flush left
+export const RP_W = 150;
+export const RP_X = ZOOM_W - RP_W;     // flush right (dynamically anchored to ZOOM_W)
 const BAR_W = 68, BAR_H = 5, ROW_H = 13;
 // 4 stat rows + 5px gap + ability badge (9px) + 4px bottom pad = 70
 const PANEL_H = 4 * ROW_H + BAR_H + 5 + 9 + 4; // 71
 
 const RARITY_COLORS = { 1: '#20c8a0', 2: '#c060e0', 3: '#e8c060' };
 
-function PlayerPortrait({ player, rosterEntry, side, jerseyColor, hasBall = false }) {
+export function PlayerPortrait({ player, rosterEntry, side, jerseyColor, hasBall = false }) {
   const isLeft  = side === 'left';
   const panelX  = isLeft ? LP_X : RP_X;
   const panelW  = isLeft ? LP_W : RP_W;
@@ -214,7 +215,7 @@ function cxName(sec) {
 
 // ─── Component ────────────────────────────────────────────────────────────
 
-export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, logs, onCommand, players, possession, homeRoster = [], awayRoster = [], awayTeamName = 'AWAY' }) {
+export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, logs, onCommand, players, possession, awayTeamName = 'AWAY' }) {
   const mins = Math.floor(time / 60), secs = time % 60;
   const timeStr = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
   const qStr    = `Q${quarter}`;
@@ -242,17 +243,7 @@ export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time
     if (e.key === 'Escape') setShowDebug(false);
   };
 
-  const carrier     = players.find(p => p.hasBall) ?? players[0];
-  const homeCurrent = carrier.team === 'home'
-    ? carrier
-    : players.find(p => p.team === 'home' && p.role === carrier.role) ?? players[0];
-  const awayCurrent = carrier.team === 'away'
-    ? carrier
-    : players.find(p => p.team === 'away' && p.role === homeCurrent.role) ?? players[5];
-  const POS_ORDER = ['PG', 'SG', 'SF', 'PF', 'C'];
-  const homeEntry = homeRoster[POS_ORDER.indexOf(homeCurrent.role)] ?? null;
-  const awayEntry = awayRoster[POS_ORDER.indexOf(awayCurrent.role)] ?? null;
-  const homeHasBall = carrier.team === 'home';
+  const carrier = players.find(p => p.hasBall) ?? players[0];
   const g1 = svgToGrid(carrier.cx, carrier.cy);
 
   const textY  = MID_Y - Math.round(MONOGRAM_GLYPH_H / 2);
@@ -262,11 +253,7 @@ export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time
   return (
     <g>
       {/* ── TOP BAR ───────────────────────────────────────── */}
-      <rect x={0} y={0} width={ZOOM_W} height={TOP_BAR} fill="#111" />
-
-      {/* Player portraits */}
-      <PlayerPortrait player={homeCurrent} rosterEntry={homeEntry} side="left"  jerseyColor={JERSEY_HOME} hasBall={homeHasBall} />
-      <PlayerPortrait player={awayCurrent} rosterEntry={awayEntry} side="right" jerseyColor={JERSEY_AWAY} hasBall={!homeHasBall} />
+      <rect x={0} y={0} width={ZOOM_W} height={TOP_BAR} fill="#111" opacity={0.2} />
 
       {/* Debug coords — single line, top centre */}
       <text x={204} y={10} textAnchor="middle" fontSize={8} fontFamily="monospace"

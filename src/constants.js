@@ -41,16 +41,16 @@ const g = gridToSvg;
 
 export const INITIAL_PLAYERS = [
   // Jump ball formation — blue (home) left half, red (away) right half, no one has ball
-  { id: 1,  role: "PG", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(41, 20) },
-  { id: 2,  role: "SG", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(41, 30) },
-  { id: 3,  role: "SF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(34, 25) },
-  { id: 4,  role: "PF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(38, 16) },
-  { id: 5,  role: "C",  team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(46, 25) },
-  { id: 6,  role: "PG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(53, 20) },
-  { id: 7,  role: "SG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(53, 30) },
-  { id: 8,  role: "SF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(60, 25) },
-  { id: 9,  role: "PF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(56, 16) },
-  { id: 10, role: "C",  team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(48, 25) },
+  { id: 1,  role: "PG", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, isStealing: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(41, 20) },
+  { id: 2,  role: "SG", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, isStealing: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(41, 30) },
+  { id: 3,  role: "SF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, isStealing: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(34, 25) },
+  { id: 4,  role: "PF", team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, isStealing: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(38, 16) },
+  { id: 5,  role: "C",  team: "home", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, isStealing: false, facingRight: true,  level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(46, 25) },
+  { id: 6,  role: "PG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, isStealing: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(53, 20) },
+  { id: 7,  role: "SG", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, isStealing: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(53, 30) },
+  { id: 8,  role: "SF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, isStealing: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(60, 25) },
+  { id: 9,  role: "PF", team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, isStealing: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(56, 16) },
+  { id: 10, role: "C",  team: "away", hasBall: false, isMoving: false, isShooting: false, isDunking: false, isBlocking: false, isJumpBall: false, isChargingJump: false, isStealing: false, facingRight: false, level: 1, xp: 0, xpMax: XP_FOR_LEVEL(1), ...g(48, 25) },
 ];
 
 // ─── Player Speed ────────────────────────────────────────────────────────────

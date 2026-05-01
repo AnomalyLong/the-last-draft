@@ -1,5 +1,5 @@
 import React from 'react';
-import { W, TOTAL_H, BOT_BAR, ZOOM_W, JERSEY_HOME, JERSEY_AWAY } from './constants.js';
+import { W, TOTAL_H, TOP_BAR, BOT_BAR, ZOOM_W, JERSEY_HOME, JERSEY_AWAY } from './constants.js';
 import { requestExpandedMode, getWebViewMode } from '@devvit/web/client';
 
 // Safe wrappers — devvit globals aren't present outside the Reddit app
@@ -10,7 +10,7 @@ function tryExpand(nativeEvent) {
   try { requestExpandedMode(nativeEvent, 'game'); } catch {}
 }
 
-import { Court, Ball, ShotBall, Player, HUD, Shadow, PowerBar, ScorePopup, XpFlyup, TitleScreen, TeamSelect, DraftScreen, LevelUpOverlay, BballTip, QuarterBanner, LoadingScreen } from './components/index.js';
+import { Court, Ball, ShotBall, Player, HUD, PlayerPortrait, LP_X, LP_W, RP_X, RP_W, Shadow, PowerBar, ScorePopup, XpFlyup, StealFlyup, TitleScreen, TeamSelect, DraftScreen, LevelUpOverlay, BballTip, QuarterBanner, LoadingScreen } from './components/index.js';
 import { titleMusic } from './sound/basketball.js';
 import { useGame } from './useGame.js';
 import OPPONENTS from './opponents.json';
@@ -45,9 +45,20 @@ export default function App() {
     () => OPPONENTS[Math.floor(Math.random() * OPPONENTS.length)]
   );
 
-  const { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, quarterAnnouncement, playerAlpha, xpFlyup } = useGame({ homeRoster, awayRoster: awayTeam.players });
+  const { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup } = useGame({ homeRoster, awayRoster: awayTeam.players });
 
   const viewX = scene === 'game' ? cameraX : 0;
+
+  // Portrait panel data (game scene only)
+  const POS_ORDER = ['PG', 'SG', 'SF', 'PF', 'C'];
+  const carrier     = players.find(p => p.hasBall) ?? players[0];
+  const homeCurrent = carrier.team === 'home' ? carrier : (players.find(p => p.team === 'home' && p.role === carrier.role) ?? players[0]);
+  const awayCurrent = carrier.team === 'away' ? carrier : (players.find(p => p.team === 'away' && p.role === homeCurrent.role) ?? players[5]);
+  const homePortEntry = homeRoster[POS_ORDER.indexOf(homeCurrent.role)] ?? null;
+  const awayPortEntry = awayTeam.players[POS_ORDER.indexOf(awayCurrent.role)] ?? null;
+  const homeHasBall = carrier.team === 'home';
+  // Panel height tracks the game's rendered TOP_BAR height (game fills screen height on landscape)
+  const panelH = `min(${(TOP_BAR / TOTAL_H * 100).toFixed(2)}vh, ${(TOP_BAR / ZOOM_W * 100).toFixed(2)}vw)`;
 
   return (
     <div data-testid="game-root"
@@ -132,12 +143,12 @@ export default function App() {
                     {flipH
                       ? <g transform={`scale(-1,1) translate(${-p.cx * 2}, 0)`}>
                           <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
-                            hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} facingRight={p.facingRight} />
+                            hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} isStealing={p.isStealing} facingRight={p.facingRight} />
                         </g>
                       : <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
-                          hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} facingRight={p.facingRight} />
+                          hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} isStealing={p.isStealing} facingRight={p.facingRight} />
                     }
-                    {p.hasBall && !p.isDunking && <Ball data-testid="dribble-ball"
+                    {p.hasBall && !p.isDunking && !p.isStealing && <Ball data-testid="dribble-ball"
                       cx={p.isMoving
                         ? (p.facingRight ? p.cx + 10 : p.cx - 10)
                         : (p.facingRight ? p.cx - 6 : p.cx + 6)}
@@ -155,6 +166,7 @@ export default function App() {
             </g>
             {scorePopup && <ScorePopup text={scorePopup} cameraX={cameraX} />}
             {xpFlyup && <XpFlyup key={xpFlyup.id} fromCx={xpFlyup.fromCx} fromCy={xpFlyup.fromCy} toCx={xpFlyup.toCx} toCy={xpFlyup.toCy} amount={xpFlyup.amount} />}
+            {stealFlyup && <StealFlyup key={stealFlyup.id} fromCx={stealFlyup.fromCx} fromCy={stealFlyup.fromCy} toCx={stealFlyup.toCx} toCy={stealFlyup.toCy} color={stealFlyup.color} />}
 
             <g transform={`translate(${cameraX}, 0)`}>
               {gameTip && (
@@ -176,8 +188,6 @@ export default function App() {
                 onCommand={handleCommand}
                 players={players}
                 possession={possession}
-                homeRoster={homeRoster}
-                awayRoster={awayTeam.players}
                 awayTeamName={awayTeam.name}
               />
             </g>
@@ -200,6 +210,19 @@ export default function App() {
         )}
 
       </svg>
+      {/* Player portrait overlays — pinned to screen corners, outside the letterboxed game SVG */}
+      {!isInline && scene === 'game' && (<>
+        <svg style={{ position:'absolute', top:0, left:0, height:panelH, width:'auto', pointerEvents:'none', zIndex:5, imageRendering:'pixelated' }}
+          viewBox={`${LP_X} 0 ${LP_W} ${TOP_BAR}`}>
+          <PlayerPortrait player={homeCurrent} rosterEntry={homePortEntry} side="left"
+            jerseyColor={JERSEY_HOME} hasBall={homeHasBall} />
+        </svg>
+        <svg style={{ position:'absolute', top:0, right:0, height:panelH, width:'auto', pointerEvents:'none', zIndex:5, imageRendering:'pixelated' }}
+          viewBox={`${RP_X} 0 ${RP_W} ${TOP_BAR}`}>
+          <PlayerPortrait player={awayCurrent} rosterEntry={awayPortEntry} side="right"
+            jerseyColor={JERSEY_AWAY} hasBall={!homeHasBall} />
+        </svg>
+      </>)}
       {/* CRT scanlines — full window coverage */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10,

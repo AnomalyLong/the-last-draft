@@ -8,3 +8,4 @@ export { BALL_FRAMES } from './ball.js';
 export { SHOT_FRAMES } from './shot.js';
 export { BLOCK_JUMP_FRAMES } from './blockjump.js';
 export { JUMP_BALL_FRAMES, JUMP_BALL_OFFSETS } from './jumpball.js';
+export { STEAL_FRAMES } from './steal.js';
