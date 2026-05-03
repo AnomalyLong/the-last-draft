@@ -807,10 +807,10 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
         cx={CX_LP} y={195} scale={1}
         fill={canStart ? '#40c870' : '#1eb8d8'} outline={null} />
 
-      <DraftButton x={6} y={204} w={LP_W - 8} label="START GAME"
+      <DraftButton x={6} y={212} w={LP_W - 8} label="START GAME"
         color="#1a7a38" disabled={!canStart}
         onClick={() => canStart && onStart(POS_ORDER.map(pos => ({ ...assignments[pos], role: pos })))} />
-      <DraftButton x={6} y={240} w={LP_W - 8}
+      <DraftButton x={6} y={248} w={LP_W - 8}
         label={phase === 'assign' ? 'REDRAFT' : 'BACK'}
         color="#385090"
         onClick={() => { phase === 'assign' ? resetDraft() : (playCancel(), onBack()); }} />

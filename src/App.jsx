@@ -10,7 +10,7 @@ function tryExpand(nativeEvent) {
   try { requestExpandedMode(nativeEvent, 'game'); } catch {}
 }
 
-import { Court, Ball, ShotBall, Player, HUD, PlayerPortrait, LP_X, LP_W, RP_X, RP_W, Shadow, PowerBar, ScorePopup, XpFlyup, StealFlyup, TitleScreen, TeamSelect, DraftScreen, LevelUpOverlay, BballTip, QuarterBanner, LoadingScreen } from './components/index.js';
+import { Court, Ball, ShotBall, Player, HUD, PlayerPortrait, LP_X, LP_W, RP_X, RP_W, Shadow, PowerBar, ScorePopup, XpFlyup, StealFlyup, BlockFlyup, TitleScreen, TeamSelect, DraftScreen, LevelUpOverlay, BballTip, QuarterBanner, LoadingScreen } from './components/index.js';
 import { titleMusic } from './sound/basketball.js';
 import { useGame } from './useGame.js';
 import OPPONENTS from './opponents.json';
@@ -45,7 +45,7 @@ export default function App() {
     () => OPPONENTS[Math.floor(Math.random() * OPPONENTS.length)]
   );
 
-  const { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup } = useGame({ homeRoster, awayRoster: awayTeam.players });
+  const { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup } = useGame({ homeRoster, awayRoster: awayTeam.players });
 
   const viewX = scene === 'game' ? cameraX : 0;
 
@@ -58,7 +58,7 @@ export default function App() {
   const awayPortEntry = awayTeam.players[POS_ORDER.indexOf(awayCurrent.role)] ?? null;
   const homeHasBall = carrier.team === 'home';
   // Panel height tracks the game's rendered TOP_BAR height (game fills screen height on landscape)
-  const panelH = `min(${(TOP_BAR / TOTAL_H * 100).toFixed(2)}vh, ${(TOP_BAR / ZOOM_W * 100).toFixed(2)}vw)`;
+  const panelH = `min(${(TOP_BAR / TOTAL_H * 100 * 0.8).toFixed(2)}vh, ${(TOP_BAR / ZOOM_W * 100 * 0.8).toFixed(2)}vw)`;
 
   return (
     <div data-testid="game-root"
@@ -167,6 +167,7 @@ export default function App() {
             {scorePopup && <ScorePopup text={scorePopup} cameraX={cameraX} />}
             {xpFlyup && <XpFlyup key={xpFlyup.id} fromCx={xpFlyup.fromCx} fromCy={xpFlyup.fromCy} toCx={xpFlyup.toCx} toCy={xpFlyup.toCy} amount={xpFlyup.amount} />}
             {stealFlyup && <StealFlyup key={stealFlyup.id} fromCx={stealFlyup.fromCx} fromCy={stealFlyup.fromCy} toCx={stealFlyup.toCx} toCy={stealFlyup.toCy} color={stealFlyup.color} />}
+            {blockFlyup && <BlockFlyup key={blockFlyup.id} fromCx={blockFlyup.fromCx} fromCy={blockFlyup.fromCy} toCx={blockFlyup.toCx} toCy={blockFlyup.toCy} color={blockFlyup.color} />}
 
             <g transform={`translate(${cameraX}, 0)`}>
               {gameTip && (
@@ -189,6 +190,8 @@ export default function App() {
                 players={players}
                 possession={possession}
                 awayTeamName={awayTeam.name}
+                homeRoster={homeRoster}
+                awayRoster={awayTeam.players}
               />
             </g>
           </>

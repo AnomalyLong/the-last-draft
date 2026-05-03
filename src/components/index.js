@@ -16,4 +16,5 @@ export { BballTip } from './BballTip.jsx';
 export { QuarterBanner } from './QuarterBanner.jsx';
 export { XpFlyup } from './XpFlyup.jsx';
 export { StealFlyup } from './StealFlyup.jsx';
+export { BlockFlyup } from './BlockFlyup.jsx';
 export { LoadingScreen } from './LoadingScreen.jsx';

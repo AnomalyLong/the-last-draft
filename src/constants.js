@@ -1,3 +1,13 @@
+// ─── Game Rates ───────────────────────────────────────────────────────────────
+export const STEAL_RATE = 0.10; // probability a pass is stolen (0–1)
+export const DUNK_RATE  = 0.20; // probability a shot attempt becomes a dunk (0–1)
+export const BLOCK_RATE = 0.20; // probability the closest defender blocks a shot (0–1)
+
+export const MISS_REBOUND_MIN_FT  = 5;  // grid-ft: nearest rebound lands from basket on a miss
+export const MISS_REBOUND_MAX_FT  = 15; // grid-ft: farthest rebound lands from basket on a miss
+export const BLOCK_REBOUND_MIN_FT = 5;  // grid-ft: nearest rebound lands from basket on a block
+export const BLOCK_REBOUND_MAX_FT = 8;  // grid-ft: farthest rebound lands from basket on a block
+
 // ─── Court Layout ────────────────────────────────────────────────────────────
 export const W = 680;
 export const ZOOM_W = Math.round(W * 0.6); // 408 — camera viewport width

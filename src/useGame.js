@@ -1,7 +1,9 @@
 import { useRef, useState, useEffect } from 'react';
-import { gridToSvg, svgToGrid, INITIAL_PLAYERS, SHOOT_TARGET_LEFT, SHOOT_TARGET_RIGHT, W, ZOOM_W, PLAYER_SPEED_FT_S, C_BOOST_SECS, BASKET_RIGHT_GX, BASKET_LEFT_GX, BASKET_GY, OFFENSE_RADIUS_FT, SHOOT_JUMP_OFFSETS, QUARTER_END_ALPHA, XP_FOR_LEVEL, MAX_LEVEL } from './constants.js';
+import { gridToSvg, svgToGrid, INITIAL_PLAYERS, SHOOT_TARGET_LEFT, SHOOT_TARGET_RIGHT, W, ZOOM_W, PLAYER_SPEED_FT_S, C_BOOST_SECS, BASKET_RIGHT_GX, BASKET_LEFT_GX, BASKET_GY, OFFENSE_RADIUS_FT, SHOOT_JUMP_OFFSETS, QUARTER_END_ALPHA, XP_FOR_LEVEL, MAX_LEVEL, STEAL_RATE, DUNK_RATE, BLOCK_RATE,
+  MISS_REBOUND_MIN_FT, MISS_REBOUND_MAX_FT,
+  BLOCK_REBOUND_MIN_FT, BLOCK_REBOUND_MAX_FT } from './constants.js';
 import { SHOOT_CHAR_FRAMES } from './sprites/index.js';
-import { playShot, playMiss, playDunk, playJumpball, playPass, playLeap, playQuarter, playSwish, playLevelUp, bounceBall, bgMusic } from './sound/basketball.js';
+import { playShot, playMiss, playDunk, playJumpball, playPass, playLeap, playQuarter, playSwish, playLevelUp, playBlock, bounceBall, bgMusic } from './sound/basketball.js';
 
 // ─── Half-court formation positions ─────────────────────────────────────────
 // Mirrors the positions used by triggerThrowInHome / triggerThrowInAway.
@@ -73,6 +75,8 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
   const xpFlyupIdRef = useRef(0);
   const [stealFlyup, setStealFlyup] = useState(null);
   const stealFlyupIdRef = useRef(0);
+  const [blockFlyup, setBlockFlyup] = useState(null);
+  const blockFlyupIdRef = useRef(0);
 
   // Awards XP to a player by id. Home level-ups pause for player choice;
   // away level-ups apply silently and immediately.
@@ -295,9 +299,9 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     const teammates = playersRef.current.filter(p => p.team === passer.team && p.id !== passer.id);
     const receiver = teammates[Math.floor(Math.random() * teammates.length)];
 
-    // 50% steal chance — pick the closest opponent to the receiver upfront
+    // 10% steal chance — pick the closest opponent to the receiver upfront
     const stealerId = (() => {
-      if (Math.random() >= 0.50) return null;
+      if (Math.random() >= STEAL_RATE) return null;
       const opponents = playersRef.current.filter(p => p.team !== passer.team);
       const closest = opponents.reduce((best, p) => {
         const d = Math.hypot(p.cx - receiver.cx, p.cy - receiver.cy);
@@ -475,9 +479,99 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
   };
 
   // Shoots with whoever currently has the ball.
+  // Bounces the ball from (fromCx, fromCy) to a random spot [minDist, maxDist] grid-ft from the basket.
+  // Closest player (excluding excludeId) picks it up; their nearest opponent chases.
+  const bounceToRebound = (fromCx, fromCy, basketGx, excludeId, minDist, maxDist, onComplete) => {
+    const angle  = Math.random() * 2 * Math.PI;
+    const dist   = minDist + Math.random() * (maxDist - minDist);
+    const rebGx  = Math.round(Math.max(2, Math.min(92, basketGx + Math.cos(angle) * dist)));
+    const rebGy  = Math.round(Math.max(2, Math.min(48, BASKET_GY + Math.sin(angle) * dist)));
+    const { cx: rebCx, cy: rebCy } = gridToSvg(rebGx, rebGy);
+
+    const eligible  = playersRef.current.filter(p => p.id !== excludeId);
+    const closestTo = (arr) => arr.reduce((best, p) => {
+      const d = Math.hypot(p.cx - rebCx, p.cy - rebCy);
+      return !best || d < Math.hypot(best.cx - rebCx, best.cy - rebCy) ? p : best;
+    }, null);
+    const rebounder = closestTo(eligible);
+    const chaser    = rebounder ? closestTo(eligible.filter(p => p.team !== rebounder.team)) : null;
+
+    let bounceActive = true;
+    if (rebounder) {
+      smoothMoveTo(rebGx, rebGy, rebounder.id, null, 1, () => {
+        bounceActive = false;
+        shotRef.current = null;
+        setShot(null);
+        playersRef.current = playersRef.current.map(p => p.id === rebounder.id ? { ...p, hasBall: true } : p);
+        setPlayers(prev => prev.map(p => p.id === rebounder.id ? { ...p, hasBall: true } : p));
+        addLog(`${rebounder.role} (${rebounder.team}) grabs the board!`);
+        if (onComplete) onComplete();
+      });
+    }
+    if (chaser) smoothMoveTo(rebGx, rebGy, chaser.id);
+
+    const bounceDur   = 480;
+    const bounceStart = performance.now();
+    const animateBounce = (now) => {
+      if (!bounceActive) return;
+      const t  = Math.min((now - bounceStart) / bounceDur, 1);
+      const cx = fromCx + (rebCx - fromCx) * t;
+      const cy = fromCy + (rebCy - fromCy) * t - 18 * Math.sin(t * Math.PI);
+      setShot({ cx, cy });
+      if (t < 1) requestAnimationFrame(animateBounce);
+    };
+    requestAnimationFrame(animateBounce);
+  };
+
+  // Ball deflects off the blocker toward a rebound spot.
+  const triggerBlock = (pg, handCx, arcStartCy, blocker, onComplete) => {
+    playBlock();
+    setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isShooting: false } : p));
+    addLog(`BLOCKED by ${blocker.role} (${blocker.team})!`);
+
+    const blockerNow = playersRef.current.find(p => p.id === blocker.id);
+    const deflectCx  = blockerNow ? blockerNow.cx : (handCx + (pg.team === 'home' ? SHOOT_TARGET_RIGHT.cx : SHOOT_TARGET_LEFT.cx)) / 2;
+    const deflectCy  = blockerNow ? blockerNow.cy - 15 : arcStartCy;
+
+    const bfColor = blocker.team === 'home' ? '#00CCFF' : '#FF6600';
+    const bfId = ++blockFlyupIdRef.current;
+    setBlockFlyup({ id: bfId, fromCx: deflectCx, fromCy: deflectCy - 10, toCx: deflectCx, toCy: deflectCy - 40, color: bfColor });
+    setTimeout(() => setBlockFlyup(prev => prev?.id === bfId ? null : prev), 1100);
+    const basketGx   = pg.team === 'home' ? BASKET_RIGHT_GX : BASKET_LEFT_GX;
+
+    const deflectDur   = 250;
+    const deflectStart = performance.now();
+    const animateDeflect = (now) => {
+      const t  = Math.min((now - deflectStart) / deflectDur, 1);
+      const cx = handCx + (deflectCx - handCx) * t;
+      const cy = arcStartCy + (deflectCy - arcStartCy) * t - 20 * Math.sin(t * Math.PI);
+      setShot({ cx, cy });
+      if (t < 1) { requestAnimationFrame(animateDeflect); return; }
+      bounceToRebound(deflectCx, deflectCy, basketGx, pg.id, BLOCK_REBOUND_MIN_FT, BLOCK_REBOUND_MAX_FT, onComplete);
+    };
+    requestAnimationFrame(animateDeflect);
+  };
+
+  const triggerBlockAnimation = (shooterCx, shooterCy, shooterTeam) => {
+    const opponents = playersRef.current.filter(p => p.team !== shooterTeam);
+    const blocker = opponents.reduce((closest, p) => {
+      const d = Math.hypot(p.cx - shooterCx, p.cy - shooterCy);
+      return !closest || d < Math.hypot(closest.cx - shooterCx, closest.cy - shooterCy) ? p : closest;
+    }, null);
+    if (!blocker) return null;
+    setTimeout(() => {
+      setPlayers(prev => prev.map(p => p.id === blocker.id ? { ...p, isBlocking: true } : p));
+      setTimeout(() => {
+        setPlayers(prev => prev.map(p => p.id === blocker.id ? { ...p, isBlocking: false } : p));
+      }, 12 * 80);
+    }, 160);
+    return blocker;
+  };
+
   // If onComplete is provided, it's called after the score instead of
   // returning the ball to the shooter (used by the game loop).
-  const triggerShoot = (onComplete = null) => {
+  // onBlock is called after a blocked shot rebound is picked up (game loop only).
+  const triggerShoot = (onComplete = null, onBlock = null) => {
     wanderActiveRef.current = false;
     const pg = playersRef.current.find(p => p.hasBall);
     if (!pg) return;
@@ -485,20 +579,8 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     const { cx: targetCx, cy: targetCy } = pg.team === 'home' ? SHOOT_TARGET_RIGHT : SHOOT_TARGET_LEFT;
     const duration = 800;
 
-    // Closest opposing player jumps to contest the shot (12 frames × 80ms = 960ms)
-    const opponents = playersRef.current.filter(p => p.team !== pg.team);
-    const blocker = opponents.reduce((closest, p) => {
-      const d = Math.hypot(p.cx - startCx, p.cy - startCy);
-      return !closest || d < Math.hypot(closest.cx - startCx, closest.cy - startCy) ? p : closest;
-    }, null);
-    if (blocker) {
-      setTimeout(() => {
-        setPlayers(prev => prev.map(p => p.id === blocker.id ? { ...p, isBlocking: true } : p));
-        setTimeout(() => {
-          setPlayers(prev => prev.map(p => p.id === blocker.id ? { ...p, isBlocking: false } : p));
-        }, 12 * 80);
-      }, 100);
-    }
+    const blocker   = triggerBlockAnimation(startCx, startCy, pg.team);
+    const isBlock   = !!blocker && Math.random() < BLOCK_RATE;
 
     playLeap();
     setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: false, isShooting: true } : p));
@@ -515,6 +597,11 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     const arcStartCy = handCy - SHOOT_JUMP_OFFSETS[6]; // launch from peak (frame 5c): -14
 
     setTimeout(() => {
+      if (isBlock) {
+        triggerBlock(pg, handCx, arcStartCy, blocker, onBlock);
+        return;
+      }
+
       playShot();
       setTimeout(playSwish, 700); // 700ms into 800ms arc — ball enters net before landing
       driftTowardBasket(pg.team);
@@ -564,20 +651,7 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     const basketGx = isHome ? BASKET_RIGHT_GX : BASKET_LEFT_GX;
     const duration = 800;
 
-    // Blocker (same as triggerShoot)
-    const opponents = playersRef.current.filter(p => p.team !== pg.team);
-    const blocker = opponents.reduce((closest, p) => {
-      const d = Math.hypot(p.cx - startCx, p.cy - startCy);
-      return !closest || d < Math.hypot(closest.cx - startCx, closest.cy - startCy) ? p : closest;
-    }, null);
-    if (blocker) {
-      setTimeout(() => {
-        setPlayers(prev => prev.map(p => p.id === blocker.id ? { ...p, isBlocking: true } : p));
-        setTimeout(() => {
-          setPlayers(prev => prev.map(p => p.id === blocker.id ? { ...p, isBlocking: false } : p));
-        }, 12 * 80);
-      }, 100);
-    }
+    triggerBlockAnimation(startCx, startCy, pg.team);
 
     playLeap();
     setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: false, isShooting: true } : p));
@@ -589,22 +663,6 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     setTimeout(() => setShot({ cx: handCx, cy: handCy - SHOOT_JUMP_OFFSETS[5] }), 400);
     setTimeout(() => setShot({ cx: handCx, cy: handCy - SHOOT_JUMP_OFFSETS[6] }), 480);
     const arcStartCy = handCy - SHOOT_JUMP_OFFSETS[6];
-
-    // Random rebound spot: 5–15 grid-ft from the basket, clamped to court bounds
-    const angle = Math.random() * 2 * Math.PI;
-    const dist  = 5 + Math.random() * 10;
-    const rebGx = Math.round(Math.max(2, Math.min(92, basketGx + Math.cos(angle) * dist)));
-    const rebGy = Math.round(Math.max(2, Math.min(48, BASKET_GY + Math.sin(angle) * dist)));
-    const { cx: rebCx, cy: rebCy } = gridToSvg(rebGx, rebGy);
-
-    // Pre-compute rebounder (closest non-shooter) and chaser (closest opponent of rebounder)
-    const nonShooters = playersRef.current.filter(p => p.id !== pg.id);
-    const closestTo = (arr) => arr.reduce((best, p) => {
-      const d = Math.hypot(p.cx - rebCx, p.cy - rebCy);
-      return !best || d < Math.hypot(best.cx - rebCx, best.cy - rebCy) ? p : best;
-    }, null);
-    const rebounder = closestTo(nonShooters);
-    const chaser    = rebounder ? closestTo(nonShooters.filter(p => p.team !== rebounder.team)) : null;
 
     setTimeout(() => {
       playShot();
@@ -618,39 +676,9 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
         if (t < 1) {
           requestAnimationFrame(animateShot);
         } else {
-          // Ball hits rim
           playMiss();
           setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isShooting: false } : p));
-
-          // bounceActive guards against the rAF loop overriding setShot(null)
-          // if the rebounder arrives before the 480ms bounce animation finishes.
-          let bounceActive = true;
-
-          if (rebounder) {
-            smoothMoveTo(rebGx, rebGy, rebounder.id, null, 1, () => {
-              bounceActive = false;          // stop any remaining bounce frames
-              shotRef.current = null;        // sync camera immediately
-              setShot(null);
-              playersRef.current = playersRef.current.map(p => p.id === rebounder.id ? { ...p, hasBall: true } : p);
-              setPlayers(prev => prev.map(p => p.id === rebounder.id ? { ...p, hasBall: true } : p));
-              addLog(`${rebounder.role} (${rebounder.team}) grabs the board!`);
-              if (onComplete) onComplete();
-            });
-          }
-          if (chaser) smoothMoveTo(rebGx, rebGy, chaser.id);
-
-          // Bounce arc to rebound spot — stops early if rebounder arrives first
-          const bounceDur = 480;
-          const bounceStart = performance.now();
-          const animateBounce = (now2) => {
-            if (!bounceActive) return;
-            const t2 = Math.min((now2 - bounceStart) / bounceDur, 1);
-            const cx2 = targetCx + (rebCx - targetCx) * t2;
-            const cy2 = targetCy + (rebCy - targetCy) * t2 - 18 * Math.sin(t2 * Math.PI);
-            setShot({ cx: cx2, cy: cy2 });
-            if (t2 < 1) requestAnimationFrame(animateBounce);
-          };
-          requestAnimationFrame(animateBounce);
+          bounceToRebound(targetCx, targetCy, basketGx, pg.id, MISS_REBOUND_MIN_FT, MISS_REBOUND_MAX_FT, onComplete);
         }
       };
       requestAnimationFrame(animateShot);
@@ -1143,8 +1171,8 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     const shooter = playersRef.current.find(p => p.hasBall);
     if (!shooter) return;
 
-    if (Math.random() < 0.4) {
-      // 40% chance of a dunk — dunks never miss
+    if (Math.random() < DUNK_RATE) {
+      // dunks never miss
       triggerDunk(finishMake);
       return;
     }
@@ -1153,7 +1181,40 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     const isMake = Math.random() * 100 < acc;
 
     if (isMake) {
-      triggerShoot(finishMake);
+      triggerShoot(finishMake, () => {
+        // Block rebound — route possession exactly like a miss rebound.
+        if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+        const rebounder = playersRef.current.find(p => p.hasBall);
+        if (!rebounder) return;
+        if (rebounder.team === shooter.team) {
+          const numPasses = Math.floor(Math.random() * 3);
+          let rem = numPasses;
+          const doPass = () => {
+            rem--;
+            triggerPass(() => {
+              if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+              if (rem > 0) setTimeout(doPass, 200 + Math.random() * 400);
+              else setTimeout(() => attemptShotRef.current?.(finishMake), 400);
+            }, onPassSteal);
+          };
+          if (numPasses === 0) setTimeout(() => attemptShotRef.current?.(finishMake), 300);
+          else setTimeout(doPass, 300);
+        } else {
+          setTimeout(() => {
+            if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+            triggerReboundTransition(rebounder.team, () => {
+              if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+              const nextLoop = rebounder.team === 'home'
+                ? () => loopHomeRef.current?.()
+                : () => loopAwayRef.current?.();
+              setupOffense(rebounder.team, () => {
+                if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+                nextLoop();
+              });
+            });
+          }, 100 + Math.random() * 900);
+        }
+      });
     } else {
       triggerShootFail(() => {
         if (!gameLoopActiveRef.current || gamePausedRef.current) return;
@@ -1529,5 +1590,5 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     if (resume) setTimeout(resume, 300);
   };
 
-  return { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup };
+  return { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup };
 }

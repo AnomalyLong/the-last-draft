@@ -13,6 +13,7 @@ import rare3Sound      from './basketball/rare3.wav';
 import quarterSound    from './basketball/quarter.wav';
 import swishSound      from './basketball/swish.wav';
 import levelUpSound    from './levelup.wav';
+import blockSound      from './block.wav';
 
 function makeSound(src, volume = 0.8) {
   const proto = new Audio(src);
@@ -100,3 +101,4 @@ export const playRare3      = makeSound(rare3Sound,      0.9);
 export const playQuarter    = makeSound(quarterSound,    0.8);
 export const playSwish      = makeSound(swishSound,      0.8);
 export const playLevelUp    = makeSound(levelUpSound,    0.9);
+export const playBlock      = makeSound(blockSound,      0.8);
