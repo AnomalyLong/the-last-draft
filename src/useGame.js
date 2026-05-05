@@ -71,6 +71,7 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
   const [quarter, setQuarter] = useState(1);   // 1–4
   const [time, setTime] = useState(720);        // seconds (12-minute quarters)
   const [levelUpState, setLevelUpState] = useState(null); // { player, abilities } | null
+  const [playPickState, setPlayPickState] = useState(false);
   const [xpFlyup, setXpFlyup] = useState(null);
   const xpFlyupIdRef = useRef(0);
   const [stealFlyup, setStealFlyup] = useState(null);
@@ -118,6 +119,14 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
   const [quarterAnnouncement, setQuarterAnnouncement] = useState(null);
   const [playerAlpha, setPlayerAlpha] = useState(1);
 
+  // Per-quarter stat counters (refs for closure access)
+  const quarterStatsRef = useRef({ home: { shots: 0, dunks: 0, blocks: 0, steals: 0 }, away: { shots: 0, dunks: 0, blocks: 0, steals: 0 } });
+  const quarterPointsRef = useRef({ home: 0, away: 0 });
+  const homeScoreRef = useRef(0);
+  const awayScoreRef = useRef(0);
+  const quarterRef = useRef(1);
+  const [quarterSummary, setQuarterSummary] = useState(null);
+
   const timerIntervalRef = useRef(null);
   const timerSpeedRef    = useRef(1);
 
@@ -151,6 +160,9 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
   // latest positions without capturing a stale closure value.
   const playersRef = useRef(players);
   useEffect(() => { playersRef.current = players; }, [players]);
+  useEffect(() => { homeScoreRef.current = homeScore; }, [homeScore]);
+  useEffect(() => { awayScoreRef.current = awayScore; }, [awayScore]);
+  useEffect(() => { quarterRef.current = quarter; }, [quarter]);
 
   useEffect(() => {
     const carrier = players.find(p => p.hasBall);
@@ -287,8 +299,19 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     gameLoopActiveRef.current = false;
     wanderActiveRef.current = false;
     playQuarter();
-    setQuarterAnnouncement('FIRST QUARTER TIME!');
+    const qAnnouncements = ['', 'END OF 1ST!', 'HALFTIME!', 'END OF 3RD!', 'FINAL BUZZER!'];
+    setQuarterAnnouncement(qAnnouncements[quarterRef.current] ?? `Q${quarterRef.current} FINAL!`);
     setTimeout(walkOffCourt, 1200);
+    // Show quarter stats screen after players walk off (1200ms delay + 1500ms walk = 2700ms, add 400ms buffer)
+    setTimeout(() => {
+      setQuarterSummary({
+        quarter: quarterRef.current,
+        home: { ...quarterStatsRef.current.home },
+        away: { ...quarterStatsRef.current.away },
+        homeScore: homeScoreRef.current,
+        awayScore: awayScoreRef.current,
+      });
+    }, 3100);
   }, [time]);
 
   // Passes from the current ball carrier to a random teammate.
@@ -337,6 +360,7 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
           if (!stealer) { addLog(`${passer.role} → ${receiver.role}`); if (onComplete) onComplete(); return; }
 
           addLog(`STEAL! ${stealer.team.toUpperCase()} ${stealer.role} strips ${receiver.role}!`);
+          quarterStatsRef.current[stealer.team].steals += 1;
           playLeap();
           wanderActiveRef.current = false; // stop guard/wander loops so they don't snap the stealer back
 
@@ -528,6 +552,7 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     playBlock();
     setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isShooting: false } : p));
     addLog(`BLOCKED by ${blocker.role} (${blocker.team})!`);
+    quarterStatsRef.current[blocker.team].blocks += 1;
 
     const blockerNow = playersRef.current.find(p => p.id === blocker.id);
     const deflectCx  = blockerNow ? blockerNow.cx : (handCx + (pg.team === 'home' ? SHOOT_TARGET_RIGHT.cx : SHOOT_TARGET_LEFT.cx)) / 2;
@@ -620,6 +645,8 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
               setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isShooting: false } : p));
               if (pg.team === 'home') setHomeScore(s => s + 2);
               else setAwayScore(s => s + 2);
+              quarterStatsRef.current[pg.team].shots += 1;
+              quarterPointsRef.current[pg.team] += 2;
               awardXp(pg.id, 10, pg.cx, pg.cy);
               addLog('swish! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
               onComplete();
@@ -628,6 +655,8 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
               setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: true, isShooting: false } : p));
               if (pg.team === 'home') setHomeScore(s => s + 2);
               else setAwayScore(s => s + 2);
+              quarterStatsRef.current[pg.team].shots += 1;
+              quarterPointsRef.current[pg.team] += 2;
               awardXp(pg.id, 10, pg.cx, pg.cy);
               addLog('swish! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
             }
@@ -743,6 +772,8 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
       setTimeout(() => {
         if (isHome) setHomeScore(s => s + 2);
         else setAwayScore(s => s + 2);
+        quarterStatsRef.current[isHome ? 'home' : 'away'].dunks += 1;
+        quarterPointsRef.current[isHome ? 'home' : 'away'] += 2;
         awardXp(dunker.id, 15, startCx, startCy);
         playDunk(); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
       }, 4 * DF);
@@ -1272,25 +1303,35 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
 
   loopHomeRef.current = () => {
     if (!gameLoopActiveRef.current || gamePausedRef.current) return;
-    startWander('home');
-    startGuarding('away');
-    triggerPreShoot(() => {
-      if (!gameLoopActiveRef.current || gamePausedRef.current) return;
-      const finishMake = () => {
-        if (!gameLoopActiveRef.current || gamePausedRef.current) {
-          resumeAfterPauseRef.current = finishMake;
-          return;
-        }
-        triggerThrowInAway(() => loopAwayRef.current?.());
-      };
-      attemptShotRef.current(finishMake);
-    }, onPassSteal);
+
+    stopTimer();
+    setPlayPickState(true);
+    resumeAfterPauseRef.current = () => {
+      startWander('home');
+      startGuarding('away');
+      triggerPreShoot(() => {
+        if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+        const finishMake = () => {
+          if (!gameLoopActiveRef.current || gamePausedRef.current) {
+            resumeAfterPauseRef.current = finishMake;
+            return;
+          }
+          triggerThrowInAway(() => loopAwayRef.current?.());
+        };
+        attemptShotRef.current(finishMake);
+      }, onPassSteal);
+    };
   };
 
   loopAwayRef.current = () => {
     if (!gameLoopActiveRef.current || gamePausedRef.current) return;
     startWander('away');
     startGuarding('home');
+
+    /** 
+     * PreShoot is the start of the 1-3 passes upon getting 
+     * the ball after getting into position 
+    **/
     triggerPreShoot(() => {
       if (!gameLoopActiveRef.current || gamePausedRef.current) return;
       const finishMake = () => {
@@ -1422,6 +1463,8 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
           setTimeout(() => {
             if (isHome) setHomeScore(s => s + 2);
             else setAwayScore(s => s + 2);
+            quarterStatsRef.current[isHome ? 'home' : 'away'].dunks += 1;
+            quarterPointsRef.current[isHome ? 'home' : 'away'] += 2;
             awardXp(dunker.id, 15, startCx, startCy);
             playDunk(); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
           }, 4 * DF2);
@@ -1578,6 +1621,15 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
 
   const possession = carrier.team; // 'home' | 'away'
 
+  const onPickPlay = (play) => {
+    if (play) addLog(`Play called: ${play.name}`);
+    setPlayPickState(false);
+    startTimer(timerSpeedRef.current);
+    const resume = resumeAfterPauseRef.current;
+    resumeAfterPauseRef.current = null;
+    if (resume) setTimeout(resume, 300);
+  };
+
   const onPickLevelUp = (ability) => {
     const p = levelUpState?.player;
     if (ability && p) addLog(`${p.role} gained: ${ability.name}!`);
@@ -1590,5 +1642,37 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     if (resume) setTimeout(resume, 300);
   };
 
-  return { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup };
+  const startNextQuarter = () => {
+    const freshPlayers = INITIAL_PLAYERS.map(p => ({ ...p }));
+    playersRef.current = freshPlayers;
+    setPlayers(freshPlayers);
+    setPlayerAlpha(1);
+    setTime(720);
+    gamePausedRef.current = false;
+    gameLoopActiveRef.current = true;
+    bgMusic.start();
+    startTimer(6);
+    triggerJumpBall((winnerTeam) => {
+      if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+      const loopFn = winnerTeam === 'home' ? loopHomeRef : loopAwayRef;
+      setupOffense(winnerTeam, () => {
+        if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+        loopFn.current?.();
+      });
+    });
+  };
+
+  const onDismissQuarterSummary = () => {
+    setQuarterSummary(null);
+    setQuarterAnnouncement(null);
+    quarterStatsRef.current = { home: { shots: 0, dunks: 0, blocks: 0, steals: 0 }, away: { shots: 0, dunks: 0, blocks: 0, steals: 0 } };
+    quarterPointsRef.current = { home: 0, away: 0 };
+    setQuarter(prev => {
+      const next = prev + 1;
+      if (next <= 4) setTimeout(startNextQuarter, 200);
+      return next <= 4 ? next : prev;
+    });
+  };
+
+  return { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, playPickState, onPickPlay, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary };
 }

@@ -10,7 +10,7 @@ function tryExpand(nativeEvent) {
   try { requestExpandedMode(nativeEvent, 'game'); } catch {}
 }
 
-import { Court, Ball, ShotBall, Player, HUD, PlayerPortrait, LP_X, LP_W, RP_X, RP_W, Shadow, PowerBar, ScorePopup, XpFlyup, StealFlyup, BlockFlyup, TitleScreen, TeamSelect, DraftScreen, LevelUpOverlay, BballTip, QuarterBanner, LoadingScreen } from './components/index.js';
+import { Court, Ball, ShotBall, Player, HUD, PlayerPortrait, LP_X, LP_W, RP_X, RP_W, Shadow, PowerBar, ScorePopup, XpFlyup, StealFlyup, BlockFlyup, TitleScreen, TeamSelect, DraftScreen, LevelUpOverlay, BballTip, QuarterBanner, LoadingScreen, QuarterSummary, PlayPickerOverlay } from './components/index.js';
 import { titleMusic } from './sound/basketball.js';
 import { useGame } from './useGame.js';
 import OPPONENTS from './opponents.json';
@@ -45,7 +45,7 @@ export default function App() {
     () => OPPONENTS[Math.floor(Math.random() * OPPONENTS.length)]
   );
 
-  const { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup } = useGame({ homeRoster, awayRoster: awayTeam.players });
+  const { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, playPickState, onPickPlay, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary } = useGame({ homeRoster, awayRoster: awayTeam.players });
 
   const viewX = scene === 'game' ? cameraX : 0;
 
@@ -202,6 +202,14 @@ export default function App() {
           <QuarterBanner text={quarterAnnouncement} cameraX={cameraX} />
         )}
 
+        {/* ── PLAY PICKER ──────────────────────────────── */}
+        {!isInline && scene === 'game' && playPickState && (
+          <PlayPickerOverlay
+            cameraX={cameraX}
+            onPick={onPickPlay}
+          />
+        )}
+
         {/* ── LEVEL UP ─────────────────────────────────── */}
         {!isInline && scene === 'game' && levelUpState && (
           <LevelUpOverlay
@@ -209,6 +217,17 @@ export default function App() {
             abilities={levelUpState.abilities}
             cameraX={cameraX}
             onPick={onPickLevelUp}
+          />
+        )}
+
+        {/* ── QUARTER SUMMARY ──────────────────────────── */}
+        {!isInline && scene === 'game' && quarterSummary && (
+          <QuarterSummary
+            quarterSummary={quarterSummary}
+            homeTeamName={homeTeamName}
+            awayTeamName={awayTeam.name}
+            cameraX={cameraX}
+            onDismiss={onDismissQuarterSummary}
           />
         )}
 
