@@ -55,8 +55,10 @@ export function QuarterSummary({ quarterSummary, homeTeamName, awayTeamName, cam
 
   React.useEffect(() => {
     setTick(0);
-    const id = setInterval(() => setTick(t => t + 1), 16);
-    return () => clearInterval(id);
+    let rafId;
+    const loop = () => { setTick(t => t + 1); rafId = requestAnimationFrame(loop); };
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
   }, [quarterSummary]);
 
   React.useEffect(() => {

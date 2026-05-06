@@ -5,15 +5,16 @@ import cancelSound from './ui/cancel.mp3';
 import flipSound      from './ui/flip.wav';
 import menuMove3Sound   from './ui/sfx_menu_move3.wav';
 import menuSelect2Sound from './ui/sfx_menu_select2.wav';
+import { audioSettings } from './audioSettings.js';
 
 // Pre-loads the audio file at module init time so the browser decodes it
 // immediately. Each play clones the pre-loaded node — fast and overlap-safe.
-function makeSound(src, volume = 0.7) {
+function makeSound(src, baseVol = 0.7) {
   const proto = new Audio(src);
   proto.preload = 'auto';
   return () => {
     const a = proto.cloneNode();
-    a.volume = volume;
+    a.volume = baseVol * audioSettings.sfx;
     a.play().catch(() => {});
   };
 }

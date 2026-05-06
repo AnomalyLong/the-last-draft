@@ -835,7 +835,7 @@ function cxName(sec) {
 
 // ─── Component ────────────────────────────────────────────────────────────
 
-export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, logs, onCommand, players, possession, awayTeamName = 'AWAY', homeRoster = [], awayRoster = [] }) {
+export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, logs, onCommand, players, possession, awayTeamName = 'AWAY', homeRoster = [], awayRoster = [], onOptions }) {
   const mins = Math.floor(time / 60), secs = time % 60;
   const timeStr = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
   const qStr    = `Q${quarter}`;
@@ -873,21 +873,30 @@ export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time
 
   return (
     <g>
-      {/* ── TOP BAR ───────────────────────────────────────── */}
-      <rect x={0} y={0} width={ZOOM_W} height={TOP_BAR} fill="#111" opacity={0.2} />
+      {/* ── TOP MENU ───────────────────────────────────────── */}
 
       {/* Debug coords — single line, top centre */}
       <text x={204} y={10} textAnchor="middle" fontSize={8} fontFamily="monospace"
         fill="#4af">{`x:${g1.x} y:${g1.y}`}</text>
 
-      {/* Teams button — centre, below coords */}
+      {/* Teams button — left of centre pair */}
       <g onClick={() => setShowTeams(s => !s)} style={{ cursor: 'pointer' }}>
-        <rect x={182} y={13} width={44} height={10} rx={1}
+        <rect x={158} y={13} width={44} height={10} rx={1}
           fill={showTeams ? '#14283c' : '#0c1420'} shapeRendering="crispEdges" />
-        <rect x={182} y={13} width={44} height={10} rx={1}
+        <rect x={158} y={13} width={44} height={10} rx={1}
           fill="none" stroke={showTeams ? '#3060a0' : '#1e3050'} strokeWidth={1} />
-        <PixelTextC text="TEAMS" cx={204} y={15}
+        <PixelTextC text="TEAMS" cx={180} y={15}
           scale={1} fill={showTeams ? '#5898d8' : '#2a4060'} outline={null} />
+      </g>
+
+      {/* Options button — right of centre pair */}
+      <g data-testid="hud-options-btn" onClick={onOptions} style={{ cursor: 'pointer' }}>
+        <rect x={206} y={13} width={44} height={10} rx={1}
+          fill="#0c1420" shapeRendering="crispEdges" />
+        <rect x={206} y={13} width={44} height={10} rx={1}
+          fill="none" stroke="#1e3050" strokeWidth={1} />
+        <PixelTextC text="OPT" cx={228} y={15}
+          scale={1} fill="#2a4060" outline={null} />
       </g>
 
       {/* DBG toggle — top left */}

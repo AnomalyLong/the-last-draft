@@ -1,13 +1,13 @@
 import React from 'react';
 import { JERSEY_HOME, JERSEY_BASE, JERSEY_DARK_BASE, SHOOT_JUMP_OFFSETS, BLOCK_JUMP_OFFSETS, JUMP_BALL_JUMP_OFFSETS } from '../constants.js';
-import { SPRITE_PIXELS, IDLE_FRAMES, RUN_FRAMES, RUN_BALL_FRAMES, SHOOT_CHAR_FRAMES, DUNK_FRAMES, DUNK_BALL_OFFSETS, BALL_FRAMES, BLOCK_JUMP_FRAMES, JUMP_BALL_FRAMES, STEAL_FRAMES } from '../sprites/index.js';
+import { SPRITE_PIXELS, IDLE_FRAMES, RUN_FRAMES, RUN_BALL_FRAMES, SHOOT_CHAR_FRAMES, DUNK_FRAMES, DUNK_BALL_OFFSETS, BALL_FRAMES, BLOCK_JUMP_FRAMES, JUMP_BALL_FRAMES, STEAL_FRAMES, SPIN_MOVE_FRAMES, DASH_FRAMES } from '../sprites/index.js';
 
-export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isBlocking = false, isJumpBall = false, isStealing = false, facingRight = false }) {
+export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isBlocking = false, isJumpBall = false, isStealing = false, isSpinning = false, isDashing = false, facingRight = false }) {
   const [frameIdx, setFrameIdx] = React.useState(0);
   const rafRef = React.useRef(null);
 
   React.useEffect(() => {
-    if (hasBall && !isMoving && !isShooting && !isDunking && !isBlocking && !isJumpBall && !isStealing) return;
+    if (hasBall && !isMoving && !isShooting && !isDunking && !isBlocking && !isJumpBall && !isStealing && !isSpinning && !isDashing) return;
     cancelAnimationFrame(rafRef.current);
     if (isJumpBall) {
       const start = performance.now();
@@ -32,6 +32,24 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall =
       const tick = (now) => {
         const f = Math.floor((now - start) / 80);
         if (f < SHOOT_CHAR_FRAMES.length) { setFrameIdx(f); rafRef.current = requestAnimationFrame(tick); }
+      };
+      rafRef.current = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(rafRef.current);
+    }
+    if (isSpinning) {
+      const start = performance.now();
+      const tick = (now) => {
+        const f = Math.floor((now - start) / 80);
+        if (f < SPIN_MOVE_FRAMES.length) { setFrameIdx(f); rafRef.current = requestAnimationFrame(tick); }
+      };
+      rafRef.current = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(rafRef.current);
+    }
+    if (isDashing) {
+      const start = performance.now();
+      const tick = (now) => {
+        const f = Math.floor((now - start) / 60);
+        if (f < DASH_FRAMES.length) { setFrameIdx(f); rafRef.current = requestAnimationFrame(tick); }
       };
       rafRef.current = requestAnimationFrame(tick);
       return () => cancelAnimationFrame(rafRef.current);
@@ -63,7 +81,7 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall =
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(rafRef.current); setFrameIdx(0); };
-  }, [hasBall, isMoving, isShooting, isDunking, isBlocking, isJumpBall, isStealing]);
+  }, [hasBall, isMoving, isShooting, isDunking, isBlocking, isJumpBall, isStealing, isSpinning, isDashing]);
 
   const jerseyDark = jerseyColor + '99';
 
@@ -105,6 +123,26 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall =
     const jumpY = SHOOT_JUMP_OFFSETS[frameIdx] ?? 0;
     return (
       <g transform={`translate(${cx - 24.9 * scale}, ${cy - 27.5 * scale - jumpY})`} shapeRendering="crispEdges">
+        {applyColors(pixels)}
+      </g>
+    );
+  }
+
+  if (isSpinning) {
+    const fi = Math.min(frameIdx, SPIN_MOVE_FRAMES.length - 1);
+    const pixels = SPIN_MOVE_FRAMES[fi] || SPIN_MOVE_FRAMES[0];
+    return (
+      <g transform={`translate(${cx - 21 * scale}, ${cy - 28 * scale})`} shapeRendering="crispEdges">
+        {applyColors(pixels)}
+      </g>
+    );
+  }
+
+  if (isDashing) {
+    const fi = Math.min(frameIdx, DASH_FRAMES.length - 1);
+    const pixels = DASH_FRAMES[fi] || DASH_FRAMES[0];
+    return (
+      <g transform={`translate(${cx - 9 * scale}, ${cy - 17 * scale})`} shapeRendering="crispEdges">
         {applyColors(pixels)}
       </g>
     );

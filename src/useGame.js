@@ -170,9 +170,14 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     else bounceBall.stop();
   }, [players]);
 
-  // Only the PG (id=1) stores its rAF handle so incoming move commands can
-  // cancel an in-progress animation. Other players run fire-and-forget rAF.
-  const animRef = useRef(null);
+  // Shared animation loop — all smoothMoveTo calls register here so one setPlayers
+  // call per frame covers all moving players, instead of N separate RAF callbacks.
+  const activeAnimsRef = useRef(new Map()); // id → (now) → fields | { _done, ...fields }
+  const animCbsRef     = useRef(new Map()); // id → onComplete callback
+  const gameRafRef     = useRef(null);
+  // Incrementing this cancels all in-flight smoothMoveTo animations (each
+  // animation captures the epoch at creation and bails if it has changed).
+  const moveEpochRef = useRef(0);
 
   // Roster data — kept in a ref so animation closures always read latest values.
   const rosterRef = useRef({ home: homeRoster, away: awayRoster });
@@ -190,7 +195,37 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
   // of which direction they traveled).
   // boostSecs: if finite, player moves at speedMult for that many seconds then
   // drops to normal speed (1×) for the remainder — all in one rAF loop.
+  const ensureGameRaf = () => {
+    if (gameRafRef.current !== null) return;
+    const tick = (now) => {
+      const updates   = new Map();
+      const toFinish  = [];
+      for (const [id, fn] of activeAnimsRef.current) {
+        const r = fn(now);
+        if (!r) continue;
+        if ('_done' in r) {
+          const { _done, ...fields } = r;
+          if (Object.keys(fields).length) updates.set(id, fields);
+          toFinish.push({ id, fire: _done });
+        } else {
+          updates.set(id, r);
+        }
+      }
+      for (const { id } of toFinish) activeAnimsRef.current.delete(id);
+      if (updates.size > 0)
+        setPlayers(prev => prev.map(p => { const u = updates.get(p.id); return u ? { ...p, ...u } : p; }));
+      for (const { id, fire } of toFinish) {
+        const cb = animCbsRef.current.get(id);
+        animCbsRef.current.delete(id);
+        if (fire && cb) cb();
+      }
+      gameRafRef.current = activeAnimsRef.current.size > 0 ? requestAnimationFrame(tick) : null;
+    };
+    gameRafRef.current = requestAnimationFrame(tick);
+  };
+
   const smoothMoveTo = (gridX, gridY, playerId = 1, restoreFacingRight = null, speedMult = 1, onComplete = null, boostSecs = Infinity) => {
+    const epoch = moveEpochRef.current;
     const target = gridToSvg(gridX, gridY);
     const p = playersRef.current.find(p => p.id === playerId);
     const startCx = p.cx, startCy = p.cy;
@@ -211,19 +246,21 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     const remainDist = totalDist - boostDist;
     const phase2Dur = remainDist > 0.1 ? Math.max(100, remainDist / (PLAYER_SPEED_FT_S * SVG_PER_FT) * 1000) : 0;
 
-    if (playerId === 1 && animRef.current) cancelAnimationFrame(animRef.current);
+    // Mark player as moving immediately (batches with other sync smoothMoveTo calls in forEach loops)
     setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isMoving: true, facingRight: movingRight } : p));
 
     const startTime = performance.now();
+    if (onComplete) animCbsRef.current.set(playerId, onComplete);
+    else animCbsRef.current.delete(playerId);
 
-    const animate = (now) => {
-      if (gamePausedRef.current) {
-        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, isMoving: false } : p));
-        return;
+    // Overwriting the entry cancels any previous animation for this player
+    activeAnimsRef.current.set(playerId, (now) => {
+      if (moveEpochRef.current !== epoch || gamePausedRef.current) {
+        animCbsRef.current.delete(playerId);
+        return { _done: false, isMoving: false };
       }
       const elapsed = now - startTime;
       let cx, cy, done;
-
       if (elapsed < phase1Dur) {
         const t = elapsed / phase1Dur;
         cx = startCx + (midCx - startCx) * t;
@@ -237,19 +274,10 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
       } else {
         cx = target.cx; cy = target.cy; done = true;
       }
-
-      if (!done) {
-        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, cx, cy, isMoving: true, facingRight: movingRight } : p));
-        if (playerId === 1) animRef.current = requestAnimationFrame(animate);
-        else requestAnimationFrame(animate);
-      } else {
-        setPlayers(prev => prev.map(p => p.id === playerId ? { ...p, cx: target.cx, cy: target.cy, isMoving: false, facingRight: finalFacing } : p));
-        if (onComplete) onComplete();
-      }
-    };
-
-    if (playerId === 1) animRef.current = requestAnimationFrame(animate);
-    else requestAnimationFrame(animate);
+      if (!done) return { cx, cy, isMoving: true, facingRight: movingRight };
+      return { _done: true, cx: target.cx, cy: target.cy, isMoving: false, facingRight: finalFacing };
+    });
+    ensureGameRaf();
   };
 
   // ─── Reusable Game Actions ─────────────────────────────────────────────────
@@ -432,46 +460,43 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
             setPlayers(prev => prev.map(p =>
               p.id === stealerId ? { ...p, isStealing: false } : p
             ));
-            // Attacking team → offensive formation
-            setupOffense(stealer.team);
-            // Defending team → guard positions (between their counterpart and the basket)
-            const defTeam = stealer.team === 'home' ? 'away' : 'home';
-            const atkBasketGx = stealer.team === 'home' ? BASKET_RIGHT_GX : BASKET_LEFT_GX;
-            const defFacing = stealer.team !== 'home';
-            playersRef.current.filter(p => p.team === defTeam).forEach(defP => {
-              const offP = playersRef.current.find(op => op.team === stealer.team && op.role === defP.role);
-              if (!offP) return;
-              const { x: ox, y: oy } = svgToGrid(offP.cx, offP.cy);
-              const gx = Math.max(1, Math.min(93, Math.round(ox + (atkBasketGx - ox) * 0.2)));
-              const gy = Math.max(2, Math.min(48, Math.round(oy + (BASKET_GY - oy) * 0.2)));
-              smoothMoveTo(gx, gy, defP.id, defFacing, 1);
+            // Cancel all competing smoothMoveTo loops before starting formation movement.
+            // This prevents old wander/guard rAF callbacks from fighting the new positions.
+            moveEpochRef.current += 1;
+            // Check fast break immediately (stealer position is current at this moment).
+            const stealerNow = playersRef.current.find(p => p.id === stealerId);
+            const isHome = stealer.team === 'home';
+            const laneClear = stealerNow && !playersRef.current.some(p => {
+              if (p.team === stealer.team) return false;
+              const ahead = isHome ? p.cx > stealerNow.cx : p.cx < stealerNow.cx;
+              return ahead && Math.abs(p.cy - stealerNow.cy) < 50;
             });
-            setTimeout(() => {
-              if (!gameLoopActiveRef.current || gamePausedRef.current) return;
-              const stealerNow = playersRef.current.find(p => p.id === stealerId);
-              const isHome = stealer.team === 'home';
-              // Check if any opponent is between the stealer and the basket (fast break lane)
-              const laneClear = stealerNow && !playersRef.current.some(p => {
-                if (p.team === stealer.team) return false;
-                const ahead = isHome ? p.cx > stealerNow.cx : p.cx < stealerNow.cx;
-                return ahead && Math.abs(p.cy - stealerNow.cy) < 50;
-              });
-              if (laneClear) {
-                addLog('FAST BREAK!');
-                triggerDunk(() => {
+            if (laneClear) {
+              addLog('FAST BREAK!');
+              setupOffense(stealer.team);
+              triggerDunk(() => {
+                if (!gameLoopActiveRef.current) return;
+                const resumeFastBreak = () => {
                   if (!gameLoopActiveRef.current) return;
-                  const resumeFastBreak = () => {
-                    if (!gameLoopActiveRef.current) return;
-                    if (gamePausedRef.current) { resumeAfterPauseRef.current = resumeFastBreak; return; }
-                    if (isHome) triggerThrowInAway(() => loopAwayRef.current?.());
-                    else triggerThrowInHome(() => loopHomeRef.current?.());
-                  };
-                  resumeFastBreak();
-                }, 1.25);
-              } else {
+                  if (gamePausedRef.current) { resumeAfterPauseRef.current = resumeFastBreak; return; }
+                  if (isHome) triggerThrowInAway(() => loopAwayRef.current?.());
+                  else triggerThrowInHome(() => loopHomeRef.current?.());
+                };
+                resumeFastBreak();
+              }, 1.25);
+            } else {
+              // Give ball directly to PG and move both teams into formation.
+              // Loop fires as soon as the PG arrives — zero idle gap.
+              const pgId = stealer.team === 'home' ? 1 : 6;
+              playersRef.current = playersRef.current.map(p => ({
+                ...p, hasBall: p.id === pgId,
+              }));
+              setPlayers(prev => prev.map(p => ({ ...p, hasBall: p.id === pgId })));
+              setupOffense(stealer.team, () => {
+                if (!gameLoopActiveRef.current || gamePausedRef.current) return;
                 if (onSteal) onSteal(stealer.team);
-              }
-            }, 2000);
+              });
+            }
           }, 9 * 20);
         } else {
           addLog(`${passer.role} → ${receiver.role}`);
@@ -1292,13 +1317,7 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     if (!gameLoopActiveRef.current || gamePausedRef.current) return;
     wanderActiveRef.current = false;
     const nextLoop = stealerTeam === 'home' ? () => loopHomeRef.current?.() : () => loopAwayRef.current?.();
-    triggerReboundTransition(stealerTeam, () => {
-      if (!gameLoopActiveRef.current || gamePausedRef.current) return;
-      setupOffense(stealerTeam, () => {
-        if (!gameLoopActiveRef.current || gamePausedRef.current) return;
-        nextLoop();
-      });
-    });
+    nextLoop();
   };
 
   loopHomeRef.current = () => {
@@ -1514,7 +1533,8 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
         addLog('game loop stopped');
 
       } else if (op === 'reset') {
-        if (animRef.current) cancelAnimationFrame(animRef.current);
+        activeAnimsRef.current.delete(1);
+        animCbsRef.current.delete(1);
         const { cx, cy } = gridToSvg(62, 25);
         setPlayers(prev => prev.map(p => p.id === 1 ? { ...p, cx, cy } : p));
         addLog('PG reset to top of key');
@@ -1572,7 +1592,31 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
         addLog('testDunk         — ball carrier drives to basket and dunks');
         addLog('testGamePlay     — start continuous game loop');
         addLog('stopGamePlay     — stop the game loop');
+        addLog('testSpinMove     — ball carrier performs spin move animation');
+        addLog('testHomePG       — give ball to home PG for testing');
+        addLog('testSpeedBurst   — ball carrier performs speed-burst dash animation');
+        addLog('testDash         — alias for testSpeedBurst');
         addLog('testLevelUp      — trigger level-up sequence for ball carrier');
+      } else if (op === 'testHomePG') {
+        setPlayers(prev => prev.map(p => ({ ...p, hasBall: p.id === 1 })));
+        addLog('ball given to home PG');
+      } else if (op === 'testSpeedBurst' || op === 'testDash') {
+        const carrier = playersRef.current.find(p => p.hasBall);
+        if (!carrier) { addLog('no ball carrier', 'err'); return; }
+        setPlayers(prev => prev.map(p => p.id === carrier.id ? { ...p, isDashing: true } : p));
+        setTimeout(() => {
+          setPlayers(prev => prev.map(p => p.id === carrier.id ? { ...p, isDashing: false } : p));
+        }, 9 * 60);
+        addLog(`${carrier.role} speed burst!`);
+      } else if (op === 'testSpinMove') {
+        const carrier = playersRef.current.find(p => p.hasBall);
+        if (!carrier) { addLog('no ball carrier', 'err'); return; }
+        setPlayers(prev => prev.map(p => p.id === carrier.id ? { ...p, isSpinning: true } : p));
+        setTimeout(() => {
+          setPlayers(prev => prev.map(p => p.id === carrier.id ? { ...p, isSpinning: false } : p));
+        }, 11 * 80);
+        addLog(`${carrier.role} spin move!`);
+
       } else if (op === 'testLevelUp') {
         const carrier = playersRef.current.find(p => p.hasBall) || playersRef.current[0];
         playLevelUp(); setLevelUpState({ player: { ...carrier }, abilities: pickLevelUpChoices() });
@@ -1643,6 +1687,10 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
   };
 
   const startNextQuarter = () => {
+    moveEpochRef.current += 1; // cancel any still-running animations
+    activeAnimsRef.current.clear();
+    animCbsRef.current.clear();
+    if (gameRafRef.current) { cancelAnimationFrame(gameRafRef.current); gameRafRef.current = null; }
     const freshPlayers = INITIAL_PLAYERS.map(p => ({ ...p }));
     playersRef.current = freshPlayers;
     setPlayers(freshPlayers);

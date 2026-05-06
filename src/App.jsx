@@ -10,8 +10,10 @@ function tryExpand(nativeEvent) {
   try { requestExpandedMode(nativeEvent, 'game'); } catch {}
 }
 
-import { Court, Ball, ShotBall, Player, HUD, PlayerPortrait, LP_X, LP_W, RP_X, RP_W, Shadow, PowerBar, ScorePopup, XpFlyup, StealFlyup, BlockFlyup, TitleScreen, TeamSelect, DraftScreen, LevelUpOverlay, BballTip, QuarterBanner, LoadingScreen, QuarterSummary, PlayPickerOverlay } from './components/index.js';
-import { titleMusic } from './sound/basketball.js';
+import { Court, Ball, ShotBall, Player, HUD, PlayerPortrait, LP_X, LP_W, RP_X, RP_W, Shadow, PowerBar, ScorePopup, XpFlyup, StealFlyup, BlockFlyup, TitleScreen, TeamSelect, DraftScreen, LevelUpOverlay, BballTip, QuarterBanner, LoadingScreen, QuarterSummary, PlayPickerOverlay, OptionsScreen, OptionsOverlay, SpinMoveCard, SpecialMoveCard } from './components/index.js';
+import { DASH_FRAMES } from './sprites/index.js';
+import { titleMusic, bgMusic, bounceBall } from './sound/basketball.js';
+import { audioSettings } from './sound/audioSettings.js';
 import { useGame } from './useGame.js';
 import OPPONENTS from './opponents.json';
 
@@ -29,15 +31,34 @@ const GAME_TIP_TEXT_Y  = GAME_TIP_DLG_Y + Math.floor((GAME_TIP_DLG_H - 7) / 2);
 
 export default function App() {
   const isInline = React.useMemo(() => getMode() === 'inline', []);
-  const [scene, setScene] = React.useState('loading'); // 'loading' | 'title' | 'teamSelect' | 'draft' | 'game'
+  const [scene, setScene] = React.useState('loading'); // 'loading' | 'title' | 'options' | 'teamSelect' | 'draft' | 'game'
+  const [musicVol, setMusicVol] = React.useState(1.0);
+  const [sfxVol, setSfxVol] = React.useState(1.0);
+  // CRT: stored 0-1; scanlines CSS opacity = value*0.35, vignette CSS opacity = value*0.80
+  const [scanlines, setScanlines] = React.useState(0.5);   // 0.5 → 0.175 ≈ original 0.16
+  const [vignette,  setVignette]  = React.useState(0.75);  // 0.75 → 0.60 = original 0.60
+  const [showInGameOptions, setShowInGameOptions] = React.useState(false);
 
   React.useEffect(() => {
-    if (scene === 'title' || scene === 'teamSelect' || scene === 'draft') {
+    if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft') {
       titleMusic.start();
     } else {
       titleMusic.stop();
     }
   }, [scene]);
+
+  const handleMusicVol = (v) => {
+    audioSettings.music = v;
+    titleMusic.applyVolume();
+    bgMusic.applyVolume();
+    setMusicVol(v);
+  };
+  const handleSfxVol = (v) => {
+    audioSettings.sfx = v;
+    bounceBall.applyVolume();
+    setSfxVol(v);
+  };
+
   const [gameTip, setGameTip] = React.useState(null);
   const [homeTeamName, setHomeTeamName] = React.useState('HOME');
   const [homeRoster, setHomeRoster] = React.useState([]);
@@ -86,8 +107,23 @@ export default function App() {
         {!isInline && scene === 'title' && (
           <TitleScreen
             onPlay={() => setScene('teamSelect')}
-            onOptions={() => {}}
+            onOptions={() => setScene('options')}
             onCollections={() => {}}
+          />
+        )}
+
+        {/* ── OPTIONS ──────────────────────────────────────── */}
+        {!isInline && scene === 'options' && (
+          <OptionsScreen
+            musicVol={musicVol}
+            sfxVol={sfxVol}
+            onMusicVol={handleMusicVol}
+            onSfxVol={handleSfxVol}
+            scanlines={scanlines}
+            vignette={vignette}
+            onScanlines={setScanlines}
+            onVignette={setVignette}
+            onBack={() => setScene('title')}
           />
         )}
 
@@ -143,12 +179,12 @@ export default function App() {
                     {flipH
                       ? <g transform={`scale(-1,1) translate(${-p.cx * 2}, 0)`}>
                           <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
-                            hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} isStealing={p.isStealing} facingRight={p.facingRight} />
+                            hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} isStealing={p.isStealing} isSpinning={p.isSpinning} isDashing={p.isDashing} facingRight={p.facingRight} />
                         </g>
                       : <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
-                          hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} isStealing={p.isStealing} facingRight={p.facingRight} />
+                          hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} isStealing={p.isStealing} isSpinning={p.isSpinning} isDashing={p.isDashing} facingRight={p.facingRight} />
                     }
-                    {p.hasBall && !p.isDunking && !p.isStealing && <Ball data-testid="dribble-ball"
+                    {p.hasBall && !p.isDunking && !p.isStealing && !p.isSpinning && !p.isDashing && <Ball data-testid="dribble-ball"
                       cx={p.isMoving
                         ? (p.facingRight ? p.cx + 10 : p.cx - 10)
                         : (p.facingRight ? p.cx - 6 : p.cx + 6)}
@@ -168,6 +204,8 @@ export default function App() {
             {xpFlyup && <XpFlyup key={xpFlyup.id} fromCx={xpFlyup.fromCx} fromCy={xpFlyup.fromCy} toCx={xpFlyup.toCx} toCy={xpFlyup.toCy} amount={xpFlyup.amount} />}
             {stealFlyup && <StealFlyup key={stealFlyup.id} fromCx={stealFlyup.fromCx} fromCy={stealFlyup.fromCy} toCx={stealFlyup.toCx} toCy={stealFlyup.toCy} color={stealFlyup.color} />}
             {blockFlyup && <BlockFlyup key={blockFlyup.id} fromCx={blockFlyup.fromCx} fromCy={blockFlyup.fromCy} toCx={blockFlyup.toCx} toCy={blockFlyup.toCy} color={blockFlyup.color} />}
+            {(() => { const sp = players.find(p => p.isSpinning); return sp ? <SpinMoveCard key={sp.id} player={sp} jerseyColor={sp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} /> : null; })()}
+            {(() => { const dp = players.find(p => p.isDashing); return dp ? <SpecialMoveCard key={`dash-${dp.id}`} player={dp} frames={DASH_FRAMES} label="SPEED BURST!" jerseyColor={dp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={60} accentColor="#44AAFF" bgColor="#C8E8FF" anchorX={9} anchorY={17} /> : null; })()}
 
             <g transform={`translate(${cameraX}, 0)`}>
               {gameTip && (
@@ -192,6 +230,7 @@ export default function App() {
                 awayTeamName={awayTeam.name}
                 homeRoster={homeRoster}
                 awayRoster={awayTeam.players}
+                onOptions={() => setShowInGameOptions(true)}
               />
             </g>
           </>
@@ -231,6 +270,22 @@ export default function App() {
           />
         )}
 
+        {/* ── IN-GAME OPTIONS ──────────────────────────── */}
+        {!isInline && showInGameOptions && (
+          <OptionsOverlay
+            musicVol={musicVol}
+            sfxVol={sfxVol}
+            onMusicVol={handleMusicVol}
+            onSfxVol={handleSfxVol}
+            scanlines={scanlines}
+            vignette={vignette}
+            onScanlines={setScanlines}
+            onVignette={setVignette}
+            onClose={() => setShowInGameOptions(false)}
+            cameraX={cameraX}
+          />
+        )}
+
       </svg>
       {/* Player portrait overlays — pinned to screen corners, outside the letterboxed game SVG */}
       {!isInline && scene === 'game' && (<>
@@ -246,15 +301,19 @@ export default function App() {
         </svg>
       </>)}
       {/* CRT scanlines — full window coverage */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10,
-        backgroundImage: 'repeating-linear-gradient(to bottom, transparent 0px, transparent 1px, rgba(0,0,0,0.16) 1px, rgba(0,0,0,0.16) 2px)',
-      }} />
+      {scanlines > 0 && (
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10,
+          backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent 1px, rgba(0,0,0,${(scanlines * 0.35).toFixed(3)}) 1px, rgba(0,0,0,${(scanlines * 0.35).toFixed(3)}) 2px)`,
+        }} />
+      )}
       {/* CRT vignette — full window coverage */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 11,
-        background: 'radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.6) 100%)',
-      }} />
+      {vignette > 0 && (
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 11,
+          background: `radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,${(vignette * 0.80).toFixed(3)}) 100%)`,
+        }} />
+      )}
     </div>
   );
 }

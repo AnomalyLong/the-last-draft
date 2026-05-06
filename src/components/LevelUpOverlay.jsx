@@ -222,8 +222,10 @@ const N_PARTS = 14;
 function AbilityPickerDialog({ abilities, cameraX, onPick }) {
   const [tick, setTick] = React.useState(0);
   React.useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 16);
-    return () => clearInterval(id);
+    let rafId;
+    const loop = () => { setTick(t => t + 1); rafId = requestAnimationFrame(loop); };
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
   }, []);
 
   const dlgX    = cameraX + Math.round((ZOOM_W - DLG_W) / 2);
