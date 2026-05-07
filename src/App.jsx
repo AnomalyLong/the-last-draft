@@ -10,8 +10,8 @@ function tryExpand(nativeEvent) {
   try { requestExpandedMode(nativeEvent, 'game'); } catch {}
 }
 
-import { Court, Ball, ShotBall, Player, HUD, PlayerPortrait, LP_X, LP_W, RP_X, RP_W, Shadow, PowerBar, ScorePopup, XpFlyup, StealFlyup, BlockFlyup, TitleScreen, TeamSelect, DraftScreen, LevelUpOverlay, BballTip, QuarterBanner, LoadingScreen, QuarterSummary, PlayPickerOverlay, OptionsScreen, OptionsOverlay, SpinMoveCard, SpecialMoveCard } from './components/index.js';
-import { DASH_FRAMES } from './sprites/index.js';
+import { Court, Ball, ShotBall, Player, HUD, PlayerPortrait, LP_X, LP_W, RP_X, RP_W, Shadow, PowerBar, ScorePopup, XpFlyup, StealFlyup, BlockFlyup, TitleScreen, TeamSelect, DraftScreen, LevelUpOverlay, BballTip, QuarterBanner, LoadingScreen, QuarterSummary, PlayPickerOverlay, OptionsScreen, OptionsOverlay, SpecialMoveCard } from './components/index.js';
+import { DASH_FRAMES, FADEAWAY_FRAMES, SPIN_MOVE_FRAMES } from './sprites/index.js';
 import { titleMusic, bgMusic, bounceBall } from './sound/basketball.js';
 import { audioSettings } from './sound/audioSettings.js';
 import { useGame } from './useGame.js';
@@ -179,12 +179,12 @@ export default function App() {
                     {flipH
                       ? <g transform={`scale(-1,1) translate(${-p.cx * 2}, 0)`}>
                           <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
-                            hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} isStealing={p.isStealing} isSpinning={p.isSpinning} isDashing={p.isDashing} facingRight={p.facingRight} />
+                            hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} isStealing={p.isStealing} isSpinning={p.isSpinning} isDashing={p.isDashing} isFadingAway={p.isFadingAway} facingRight={p.facingRight} />
                         </g>
                       : <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
-                          hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} isStealing={p.isStealing} isSpinning={p.isSpinning} isDashing={p.isDashing} facingRight={p.facingRight} />
+                          hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting} isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall} isStealing={p.isStealing} isSpinning={p.isSpinning} isDashing={p.isDashing} isFadingAway={p.isFadingAway} facingRight={p.facingRight} />
                     }
-                    {p.hasBall && !p.isDunking && !p.isStealing && !p.isSpinning && !p.isDashing && <Ball data-testid="dribble-ball"
+                    {p.hasBall && !p.isDunking && !p.isStealing && !p.isSpinning && !p.isDashing && !p.isFadingAway && <Ball data-testid="dribble-ball"
                       cx={p.isMoving
                         ? (p.facingRight ? p.cx + 10 : p.cx - 10)
                         : (p.facingRight ? p.cx - 6 : p.cx + 6)}
@@ -204,8 +204,9 @@ export default function App() {
             {xpFlyup && <XpFlyup key={xpFlyup.id} fromCx={xpFlyup.fromCx} fromCy={xpFlyup.fromCy} toCx={xpFlyup.toCx} toCy={xpFlyup.toCy} amount={xpFlyup.amount} />}
             {stealFlyup && <StealFlyup key={stealFlyup.id} fromCx={stealFlyup.fromCx} fromCy={stealFlyup.fromCy} toCx={stealFlyup.toCx} toCy={stealFlyup.toCy} color={stealFlyup.color} />}
             {blockFlyup && <BlockFlyup key={blockFlyup.id} fromCx={blockFlyup.fromCx} fromCy={blockFlyup.fromCy} toCx={blockFlyup.toCx} toCy={blockFlyup.toCy} color={blockFlyup.color} />}
-            {(() => { const sp = players.find(p => p.isSpinning); return sp ? <SpinMoveCard key={sp.id} player={sp} jerseyColor={sp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} /> : null; })()}
+            {(() => { const sp = players.find(p => p.isSpinning); return sp ? <SpecialMoveCard key={`spin-${sp.id}`} player={sp} frames={SPIN_MOVE_FRAMES} label="SPIN MOVE!" jerseyColor={sp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#F5C800" bgColor="#F5E6C8" anchorX={21} anchorY={28} /> : null; })()}
             {(() => { const dp = players.find(p => p.isDashing); return dp ? <SpecialMoveCard key={`dash-${dp.id}`} player={dp} frames={DASH_FRAMES} label="SPEED BURST!" jerseyColor={dp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={60} accentColor="#44AAFF" bgColor="#C8E8FF" anchorX={9} anchorY={17} /> : null; })()}
+            {(() => { const fp = players.find(p => p.isFadingAway); return fp ? <SpecialMoveCard key={`fadeaway-${fp.id}`} player={fp} frames={FADEAWAY_FRAMES} label="FADEAWAY!" jerseyColor={fp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#FF8C00" bgColor="#FFF0CC" anchorX={9} anchorY={12} /> : null; })()}
 
             <g transform={`translate(${cameraX}, 0)`}>
               {gameTip && (

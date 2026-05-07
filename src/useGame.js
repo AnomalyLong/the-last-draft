@@ -278,7 +278,7 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
   const driftTowardBasket = (shooterTeam) => {
     const basketGx = shooterTeam === 'home' ? BASKET_RIGHT_GX : BASKET_LEFT_GX;
     playersRef.current
-      .filter(p => !p.isShooting && !p.isDunking && !p.isBlocking)
+      .filter(p => !p.isShooting && !p.isDunking && !p.isBlocking && !p.isFadingAway)
       .forEach(p => {
         const { x: gx, y: gy } = svgToGrid(p.cx, p.cy);
         const dx = basketGx - gx;
@@ -681,6 +681,78 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
       requestAnimationFrame(animate);
     }, 560);
     addLog('shooting...');
+  };
+
+  const triggerFadeaway = (onComplete = null) => {
+    wanderActiveRef.current = false;
+    const pg = playersRef.current.find(p => p.hasBall);
+    if (!pg) return;
+    const startCx = pg.cx, startCy = pg.cy;
+    const { cx: targetCx, cy: targetCy } = pg.team === 'home' ? SHOOT_TARGET_RIGHT : SHOOT_TARGET_LEFT;
+    const duration = 800;
+
+    playLeap();
+    setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: false, isFadingAway: true } : p));
+
+    // Slide player 5px away from the basket over the wind-up (320ms).
+    // Ball tracks the hand position (drifting with the player) each frame.
+    const driftBack = pg.facingRight ? -5 : 5;
+    const handOffset = pg.facingRight ? 6 : -6;
+    const handYPerFrame = [-17, -18, -21, -21]; // cy offsets for frames 1-4
+    const arcStartCy = startCy - 24;            // frame 5 launch point
+
+    setShot({ cx: startCx + handOffset, cy: startCy - 17 });
+    const driftStart = performance.now();
+    const animateDrift = (now) => {
+      const t = Math.min((now - driftStart) / 320, 1);
+      const newCx = startCx + driftBack * t;
+      setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, cx: newCx } : p));
+      const fi = Math.min(Math.floor(t * 4), 3);
+      setShot({ cx: newCx + handOffset, cy: startCy + handYPerFrame[fi] });
+      if (t < 1) requestAnimationFrame(animateDrift);
+    };
+    requestAnimationFrame(animateDrift);
+
+    const arcStartCx = startCx + driftBack + handOffset; // hand position at end of drift
+
+    setTimeout(() => {
+      playShot();
+      setTimeout(playSwish, 700);
+      driftTowardBasket(pg.team);
+      const startTime = performance.now();
+      const animate = (now) => {
+        const t = Math.min((now - startTime) / duration, 1);
+        const cx = arcStartCx + (targetCx - arcStartCx) * t;
+        const cy = arcStartCy + (targetCy - arcStartCy) * t - 40 * Math.sin(t * Math.PI);
+        setShot({ cx, cy });
+        if (t < 1) requestAnimationFrame(animate);
+        else {
+          setShot(null);
+          setTimeout(() => {
+            if (onComplete) {
+              setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isFadingAway: false } : p));
+              if (pg.team === 'home') setHomeScore(s => s + 2);
+              else setAwayScore(s => s + 2);
+              quarterStatsRef.current[pg.team].shots += 1;
+              quarterPointsRef.current[pg.team] += 2;
+              awardXp(pg.id, 10, pg.cx, pg.cy);
+              addLog('fadeaway! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+              onComplete();
+            } else {
+              setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: true, isFadingAway: false } : p));
+              if (pg.team === 'home') setHomeScore(s => s + 2);
+              else setAwayScore(s => s + 2);
+              quarterStatsRef.current[pg.team].shots += 1;
+              quarterPointsRef.current[pg.team] += 2;
+              awardXp(pg.id, 10, pg.cx, pg.cy);
+              addLog('fadeaway! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+            }
+          }, 400);
+        }
+      };
+      requestAnimationFrame(animate);
+    }, 320);
+    addLog('fadeaway...');
   };
 
   // Like triggerShoot but the ball rims out and bounces to a random spot within
@@ -1398,6 +1470,10 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
         if (!playersRef.current.find(p => p.hasBall)) { addLog('nobody has the ball', 'err'); return; }
         triggerShootFail();
 
+      } else if (op === 'fadeaway') {
+        if (!playersRef.current.find(p => p.hasBall)) { addLog('nobody has the ball', 'err'); return; }
+        triggerFadeaway();
+
       } else if (op === 'testPass') {
         const role = parts[1]?.toUpperCase();
         if (!role) { addLog('usage: testPass <role>  e.g. testPass SG', 'err'); return; }
@@ -1571,6 +1647,7 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
         addLog('tp <x> <y>       — teleport PG to grid pos');
         addLog('pos              — print PG grid position');
         addLog('shoot            — shoot toward basket (make)');
+        addLog('fadeaway         — fadeaway shot toward basket (make)');
         addLog('shootFail        — shoot and miss, bounce to random rebound');
         addLog('reset            — reset PG to top of key');
         addLog('testMoveAway     — away team takes possession');
@@ -1619,7 +1696,7 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
 
   // ─── Camera ────────────────────────────────────────────────────────────────
 
-  const carrier = players.find(p => p.hasBall) || players.find(p => p.isShooting) || players[0];
+  const carrier = players.find(p => p.hasBall) || players.find(p => p.isShooting) || players.find(p => p.isFadingAway) || players[0];
 
   // Smoothed camera: lerps toward the carrier each frame so possession changes
   // (pass, rebound) pan gradually instead of snapping to the new carrier.

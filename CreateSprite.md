@@ -161,7 +161,7 @@ In `src/components/` (whichever component renders the player sprite):
 
 3. Add the animation priority branch. The current priority order is:
    ```
-   isShooting → isDunking → isSpinning → hasBall → isMoving → idle
+   isJumpBall → isDunking → isShooting → isSpinning → isDashing → isStealing → isBlocking → hasBall+isMoving → hasBall → isMoving → idle
    ```
    Insert your new state at the appropriate priority level.
 
@@ -176,14 +176,22 @@ In `src/components/` (whichever component renders the player sprite):
 
 If you want to trigger the animation from the debug console:
 
-1. Add a case to `handleCommand` in `useGame.js`:
+1. Add an `else if` branch to `handleCommand` in `useGame.js`:
    ```js
-   case 'spinmove':
-     // set isSpinning on the ball carrier
-     break;
+   } else if (op === 'testMyMove') {
+     const carrier = playersRef.current.find(p => p.hasBall);
+     if (!carrier) { addLog('no ball carrier', 'err'); return; }
+     setPlayers(prev => prev.map(p => p.id === carrier.id ? { ...p, isMyMove: true } : p));
+     setTimeout(() => {
+       setPlayers(prev => prev.map(p => p.id === carrier.id ? { ...p, isMyMove: false } : p));
+     }, FRAME_COUNT * FRAME_DURATION_MS);
+     addLog(`${carrier.role} my move!`);
+   }
    ```
-2. Add it to the `help` output in the same switch.
+2. Add it to the `help` output in the same `else if (op === 'help')` block.
 3. Document it in the Commands Reference table in `CLAUDE.md`.
+
+**Note:** Use `testHomePG` first in the debug console to give the ball to a known player before testing.
 
 ---
 
@@ -201,6 +209,19 @@ If you want to trigger the animation from the debug console:
 - [ ] Debug command added and documented (optional)
 - [ ] `npx playwright test` passes
 
+### Additional checklist for shot-type animations (where `hasBall` drops to `false` mid-animation)
+
+If your animation sets `hasBall: false` before it completes (i.e. the player releases the ball
+during the animation), three extra wiring steps are required:
+
+- [ ] **Hide dribble ball** — add `!p.isYourState` to the `Ball` visibility condition in `App.jsx`.
+  Without this the ball sprite pops off the player the moment `hasBall` becomes `false`.
+- [ ] **Camera tracking** — add `players.find(p => p.isYourState)` to the carrier fallback chain
+  in `useGame.js` (the `const carrier = ...` line near the bottom). Without this the camera
+  snaps away from the animating player as soon as they drop the ball.
+- [ ] **Drift exclusion** — add `!p.isYourState` to the `.filter(...)` in `driftTowardBasket` in
+  `useGame.js`. Without this the animating player slides mid-shot when other players drift.
+
 ---
 
 ## Reference: Existing Animations
@@ -214,7 +235,37 @@ If you want to trigger the animation from the debug console:
 | `SHOOT_CHAR_FRAMES` | shoot.js | 7 | 32×34 | 80ms/f |
 | `DUNK_FRAMES` | dunk.js | varies | — | 80ms/f |
 | `BLOCK_JUMP_FRAMES` | blockjump.js | varies | — | 80ms/f |
-| `STEAL_FRAMES` | steal.js | 9 | 19×28 | 80ms/f |
-| `SPIN_MOVE_FRAMES` | spinmove.js | 11 | ~19×19 | 80ms/f |
+| `JUMP_BALL_FRAMES` | jumpball.js | 9 | — | 80ms/f |
+| `STEAL_FRAMES` | steal.js | 9 | 19×28 | 20ms/f |
+| `SPIN_MOVE_FRAMES` | spinmove.js | 11 | ~21×19 | 80ms/f |
+| `DASH_FRAMES` | dash.js | 9 | 19×28 | 60ms/f |
 | `BALL_FRAMES` | ball.js | varies | 7×7 | 500ms cycle |
 | `SHOT_FRAMES` | shot.js | 4 | 7×7 | 80ms/f |
+
+---
+
+## SpecialMoveCard
+
+For animations that should show a pop-up card (like spin move or speed burst), use the reusable `SpecialMoveCard` component instead of writing a new card from scratch.
+
+```jsx
+<SpecialMoveCard
+  player={player}           // player object — used for key and jersey color
+  frames={MY_FRAMES}        // the animation frames array
+  label="MY MOVE!"          // text shown on the card banner
+  jerseyColor={jerseyColor}
+  cameraX={cameraX}
+  frameDurationMs={80}      // ms per frame on the card (can differ from Player.jsx speed)
+  accentColor="#F5C800"     // speed line + label color
+  bgColor="#F5E6C8"         // card interior background
+  anchorX={9}               // sprite anchor — matches the Player.jsx render translate X divisor
+  anchorY={17}              // sprite anchor — matches the Player.jsx render translate Y divisor
+/>
+```
+
+Render it in `App.jsx` alongside the existing spin move card:
+```jsx
+{(() => { const p = players.find(p => p.isMyMove); return p ? <SpecialMoveCard ... /> : null; })()}
+```
+
+Import `DASH_FRAMES` (or your new frames) directly in `App.jsx` since `SpecialMoveCard` is generic and doesn't know which frames to use.

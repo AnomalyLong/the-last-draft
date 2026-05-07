@@ -22,5 +22,4 @@ export { QuarterSummary } from './QuarterSummary.jsx';
 export { PlayPickerOverlay } from './PlayPickerOverlay.jsx';
 export { OptionsOverlay } from './OptionsOverlay.jsx';
 export { OptionsScreen } from './OptionsScreen.jsx';
-export { SpinMoveCard } from './SpinMoveCard.jsx';
 export { SpecialMoveCard } from './SpecialMoveCard.jsx';

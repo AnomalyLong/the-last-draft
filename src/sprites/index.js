@@ -11,3 +11,4 @@ export { JUMP_BALL_FRAMES, JUMP_BALL_OFFSETS } from './jumpball.js';
 export { STEAL_FRAMES } from './steal.js';
 export { SPIN_MOVE_FRAMES } from './spinmove.js';
 export { DASH_FRAMES } from './dash.js';
+export { FADEAWAY_FRAMES } from './fadeaway.js';
