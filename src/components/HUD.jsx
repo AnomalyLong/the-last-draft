@@ -92,6 +92,12 @@ export function PlayerPortrait({ player, rosterEntry, side, jerseyColor, hasBall
   return (
     <g>
 
+      {/* Glossy background */}
+      <rect x={panelX} y={PANEL_Y} width={panelW} height={PANEL_H}
+        fill="rgba(8,12,28,0.72)" shapeRendering="crispEdges" />
+      <rect x={panelX} y={PANEL_Y} width={panelW} height={Math.floor(PANEL_H * 0.35)}
+        fill="rgba(255,255,255,0.06)" shapeRendering="crispEdges" />
+
       {/* Ball-holder border — inset so full stroke renders inside the overlay viewBox */}
       {hasBall && (<>
         <rect x={panelX+1} y={PANEL_Y+1} width={panelW-2} height={PANEL_H-2}

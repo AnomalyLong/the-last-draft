@@ -3,6 +3,7 @@ import { ZOOM_W, TOTAL_H, JERSEY_BASE } from '../constants.js';
 import { PixelTextC, PixelText } from './PixelText.jsx';
 import { IDLE_FRAMES, RUN_FRAMES } from '../sprites/index.js';
 import { BballTip } from './BballTip.jsx';
+import { LEVEL_UP_ABILITIES as ABILITIES } from '../abilities.js';
 import { playSlide, playCursor, playSelect, playCancel, playFlip, playMenuMove3, playMenuSelect2 } from '../sound/ui.js';
 import { playRare, playRare2, playRare3 } from '../sound/basketball.js';
 
@@ -101,17 +102,6 @@ const PLAYERS = [
 const ROUND_COLORS = { 1: '#e8c060', 2: '#30c0e0', 3: '#b0b8c8' };
 
 // ─── Ability data ─────────────────────────────────────────────────────────────
-
-const ABILITIES = [
-  { id: 1, name: 'FIRE DUNK',   desc: '+2 ON DUNKS',   rarity: 3 },
-  { id: 2, name: 'IRON BLOCK',  desc: 'BLOCK BONUS',   rarity: 2 },
-  { id: 3, name: 'HOT HAND',    desc: 'STREAK BONUS',  rarity: 2 },
-  { id: 4, name: 'ANKLE BREAK', desc: 'BREAK DEFENSE', rarity: 1 },
-  { id: 5, name: 'CLUTCH GENE', desc: 'LATE GAME +',   rarity: 2 },
-  { id: 6, name: 'SPEED BURST', desc: 'SPD BURST',     rarity: 1 },
-  { id: 7, name: 'GLASS CLEAN', desc: 'REBND BONUS',   rarity: 1 },
-  { id: 8, name: 'LOCKDOWN',    desc: 'DEF LOCKOUT',   rarity: 1 },
-];
 
 const RARITY_COLORS = { 1: '#20c8a0', 2: '#c060e0', 3: '#e8c060' };
 const RARITY_TINTS  = {

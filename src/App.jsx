@@ -79,7 +79,7 @@ export default function App() {
   const awayPortEntry = awayTeam.players[POS_ORDER.indexOf(awayCurrent.role)] ?? null;
   const homeHasBall = carrier.team === 'home';
   // Panel height tracks the game's rendered TOP_BAR height (game fills screen height on landscape)
-  const panelH = `min(${(TOP_BAR / TOTAL_H * 100 * 0.8).toFixed(2)}vh, ${(TOP_BAR / ZOOM_W * 100 * 0.8).toFixed(2)}vw)`;
+  const panelH = `min(${(TOP_BAR / TOTAL_H * 100 * 0.62).toFixed(2)}vh, ${(TOP_BAR / ZOOM_W * 100 * 0.62).toFixed(2)}vw)`;
 
   return (
     <div data-testid="game-root"
