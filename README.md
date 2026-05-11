@@ -20,9 +20,24 @@ A starter to build web applications on Reddit's developer platform
 2. Go through the installation wizard. You will need to create a Reddit account and connect it to Reddit developers
 3. Copy the command on the success page into your terminal
 
+## Local Dev Tools (no Reddit required)
+
+A standalone Vite app for debugging and previewing game assets without deploying to Reddit.
+
+```
+npm run dev:tools
+```
+
+Opens at `http://localhost:5174`. Features:
+
+- **Sprite Preview** — all sprite animations displayed in a grid. Each card has play/pause, frame step, a scrubber, zoom controls, and a jersey color picker.
+
+No Devvit account or Reddit connection needed. Safe to use for rapid iteration on sprites and UI.
+
 ## Commands
 
 - `npm run dev`: Starts a development server where you can develop your application live on Reddit.
+- `npm run dev:tools`: Starts the local dev tools preview (no Reddit required).
 - `npm run build`: Builds your client and server projects
 - `npm run deploy`: Uploads a new version of your app
 - `npm run launch`: Publishes your app for review

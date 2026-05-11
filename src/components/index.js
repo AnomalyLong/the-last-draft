@@ -23,3 +23,5 @@ export { PlayPickerOverlay } from './PlayPickerOverlay.jsx';
 export { OptionsOverlay } from './OptionsOverlay.jsx';
 export { OptionsScreen } from './OptionsScreen.jsx';
 export { SpecialMoveCard } from './SpecialMoveCard.jsx';
+export { GameScene } from './GameScene.jsx';
+export { CollectionScreen } from './CollectionScreen.jsx';

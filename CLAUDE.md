@@ -189,6 +189,34 @@ Adding a new command = add it to `handleCommand` in `useGame.js` + add to `help`
 
 ---
 
+## Local Dev Tools
+
+A standalone Vite app at `dev-tools/` for debugging without Reddit/Devvit.
+
+```
+npm run dev:tools   # opens http://localhost:5174
+```
+
+Config: `vite.devtools.config.ts` — no `@devvit/start/vite` plugin, uses `@src` alias pointing to `src/`.
+
+### Sprite Preview (`dev-tools/SpritePreview.jsx`)
+
+Renders every sprite animation as an interactive card:
+- Play/pause, frame step (◀▶), scrubber, zoom (2×–16×)
+- Jersey color picker — swaps `JERSEY_BASE` live across all sprites
+- Filter input to search by name
+
+**Adding a new sprite to the preview:**
+1. Import the export from `src/sprites/` using the `@src/` alias
+2. Add an entry to the `SPRITES` array: `{ name: '...', raw: EXPORT, interval: <ms> }`
+
+The `toFrames()` helper normalises all three sprite shapes automatically:
+- Flat pixel array `[[x,y,c],...]` → single frame
+- Array of frames `[[[x,y,c],...],...]` → multi-frame animation
+- Object with named keys `{ up, mid, flat }` (e.g. `BALL_FRAMES`) → labelled frames
+
+---
+
 ## Devvit-Specific Notes
 
 - This game runs inside a Reddit post iframe — no browser storage APIs available

@@ -1,0 +1,10 @@
+[
+  { "id": 1, "pos": "PG", "name": "RIVERS",  "ovr": 72, "spd": 78, "dex": 75, "jmp": 62, "acc": 72, "round": 1, "ability": null },
+  { "id": 2, "pos": "SG", "name": "BANKS",   "ovr": 69, "spd": 69, "dex": 67, "jmp": 59, "acc": 81, "round": 1, "ability": { "name": "CLUTCH",  "rarity": 2, "desc": "Bonus in close games" } },
+  { "id": 3, "pos": "SF", "name": "WELLS",   "ovr": 70, "spd": 74, "dex": 71, "jmp": 67, "acc": 68, "round": 2, "ability": null },
+  { "id": 4, "pos": "PF", "name": "STONE",   "ovr": 62, "spd": 61, "dex": 61, "jmp": 69, "acc": 58, "round": 3, "ability": { "name": "ANCHOR",  "rarity": 3, "desc": "Elite defense" } },
+  { "id": 5, "pos": "C",  "name": "GRANT",   "ovr": 61, "spd": 55, "dex": 53, "jmp": 75, "acc": 62, "round": 2, "ability": null },
+  { "id": 6, "pos": "PG", "name": "HAYES",   "ovr": 75, "spd": 82, "dex": 79, "jmp": 64, "acc": 70, "round": 1, "ability": { "name": "FLASHY",  "rarity": 1, "desc": "Extra flair on drives" } },
+  { "id": 7, "pos": "SG", "name": "CROSS",   "ovr": 66, "spd": 65, "dex": 70, "jmp": 58, "acc": 76, "round": 2, "ability": null },
+  { "id": 8, "pos": "C",  "name": "TOWNES",  "ovr": 68, "spd": 52, "dex": 50, "jmp": 80, "acc": 60, "round": 1, "ability": { "name": "PAINT",   "rarity": 2, "desc": "Dominates the paint" } }
+]

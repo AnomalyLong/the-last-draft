@@ -839,18 +839,11 @@ function cxName(sec) {
   return sec.bx + ACCENT_W + (sec.bw - ACCENT_W) / 2 + SKEW / 2;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────
+// ─── Debug Console (HTML overlay, renders outside SVG) ────────────────────
 
-export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, logs, onCommand, players, possession, awayTeamName = 'AWAY', homeRoster = [], awayRoster = [], onOptions }) {
-  const mins = Math.floor(time / 60), secs = time % 60;
-  const timeStr = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
-  const qStr    = `Q${quarter}`;
-  const hStr    = String(homeScore);
-  const aStr    = String(awayScore);
-
+export function DebugConsole({ logs, onCommand }) {
   const [input, setInput] = React.useState('');
   const [showDebug, setShowDebug] = React.useState(false);
-  const [showTeams, setShowTeams] = React.useState(false);
   const logRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -869,6 +862,58 @@ export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time
     if (e.key === 'Enter' && input.trim()) { onCommand(input.trim()); setInput(''); }
     if (e.key === 'Escape') setShowDebug(false);
   };
+
+  return (
+    <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 20, fontFamily: 'monospace', fontSize: '18px' }}>
+      {/* DBG toggle */}
+      <div
+        onClick={() => setShowDebug(d => !d)}
+        style={{
+          position: 'absolute', top: 4, left: 4,
+          width: 44, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: showDebug ? '#1a3a1a' : '#1a1a1a', border: `1px solid ${showDebug ? '#3a6a3a' : '#333'}`,
+          borderRadius: 2, cursor: 'pointer', pointerEvents: 'auto',
+          color: showDebug ? '#8f8' : '#555', fontSize: 14, userSelect: 'none',
+        }}>
+        DBG
+      </div>
+      {/* Console panel */}
+      {showDebug && (
+        <div style={{
+          position: 'absolute', top: 36, left: 8, width: 400, height: 260,
+          display: 'flex', flexDirection: 'column',
+          background: 'rgba(8,8,8,0.92)', border: '1px solid #333', borderRadius: 3,
+          overflow: 'hidden', pointerEvents: 'auto',
+        }}>
+          <div ref={logRef} data-testid="debug-log" style={{ flex: 1, overflowY: 'auto', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {logs.map((log, i) => (
+              <div key={i} data-testid={`log-entry-${log.type}`} style={{ color: log.type === 'cmd' ? '#4af' : log.type === 'err' ? '#f55' : '#8f8', whiteSpace: 'pre-wrap', lineHeight: '1.3' }}>
+                {log.type === 'cmd' ? `> ${log.text}` : log.text}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', borderTop: '1px solid #222', padding: '4px 8px', gap: 6 }}>
+            <span style={{ color: '#4af' }}>{'>'}</span>
+            <input data-testid="debug-input" value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontFamily: 'monospace', fontSize: 18, padding: 0 }}
+              placeholder="command..." autoFocus />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Component ────────────────────────────────────────────────────────────
+
+export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, players, possession, awayTeamName = 'AWAY', homeRoster = [], awayRoster = [], onOptions }) {
+  const mins = Math.floor(time / 60), secs = time % 60;
+  const timeStr = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+  const qStr    = `Q${quarter}`;
+  const hStr    = String(homeScore);
+  const aStr    = String(awayScore);
+
+  const [showTeams, setShowTeams] = React.useState(false);
 
   const carrier = players.find(p => p.hasBall) ?? players[0];
   const g1 = svgToGrid(carrier.cx, carrier.cy);
@@ -904,34 +949,6 @@ export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time
         <PixelTextC text="OPT" cx={228} y={15}
           scale={1} fill="#2a4060" outline={null} />
       </g>
-
-      {/* DBG toggle — top left */}
-      <rect x={2} y={2} width={22} height={11} fill={showDebug ? '#1a3a1a' : '#1a1a1a'} rx={1}
-        style={{ cursor: 'pointer' }} onClick={() => setShowDebug(d => !d)} />
-      <text x={13} y={10} textAnchor="middle" fontSize={7} fontFamily="monospace"
-        fill={showDebug ? '#8f8' : '#555'} style={{ cursor: 'pointer', userSelect: 'none' }}
-        onClick={() => setShowDebug(d => !d)}>DBG</text>
-
-      {/* Debug console overlay */}
-      {showDebug && (
-        <foreignObject x={4} y={18} width={200} height={130}>
-          <div xmlns="http://www.w3.org/1999/xhtml" style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', background:'rgba(8,8,8,0.92)', border:'1px solid #333', borderRadius:'3px', fontFamily:'monospace', fontSize:'9px', overflow:'hidden' }}>
-            <div ref={logRef} data-testid="debug-log" style={{ flex:1, overflowY:'auto', padding:'3px 4px', display:'flex', flexDirection:'column', gap:'1px' }}>
-              {logs.map((log, i) => (
-                <div key={i} data-testid={`log-entry-${log.type}`} style={{ color: log.type==='cmd' ? '#4af' : log.type==='err' ? '#f55' : '#8f8', whiteSpace:'pre-wrap', lineHeight:'1.3' }}>
-                  {log.type === 'cmd' ? `> ${log.text}` : log.text}
-                </div>
-              ))}
-            </div>
-            <div style={{ display:'flex', alignItems:'center', borderTop:'1px solid #222', padding:'2px 4px', gap:'3px' }}>
-              <span style={{ color:'#4af' }}>{'>'}</span>
-              <input data-testid="debug-input" value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
-                style={{ flex:1, background:'transparent', border:'none', outline:'none', color:'#fff', fontFamily:'monospace', fontSize:'9px', padding:0 }}
-                placeholder="command..." autoFocus />
-            </div>
-          </div>
-        </foreignObject>
-      )}
 
       <text data-testid="possession" visibility="hidden"
         fill={possession === 'home' ? '#4af' : '#f55'}>

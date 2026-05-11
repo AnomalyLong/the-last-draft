@@ -380,7 +380,7 @@ function PlayerCard({ player, x, y, phase, onClick, autoHighlight = false }) {
         </>
       ) : (
         <PixelTextC text="NO ABILITY" cx={x + CARD_W / 2} y={abilityY + 3}
-          scale={1} fill="#1e3060" outline={null} />
+          scale={1} fill="#3a5888" outline={null} />
       )}
     </g>
   );
@@ -452,7 +452,7 @@ function getDlgLine(state, tick) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
+export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) {
   const [roster,   setRoster]   = React.useState([]);
   const [rolled,   setRolled]   = React.useState(null);
   const [animTick,    setAnimTick]    = React.useState(0);
@@ -804,6 +804,11 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack }) {
         label={phase === 'assign' ? 'REDRAFT' : 'BACK'}
         color="#385090"
         onClick={() => { phase === 'assign' ? resetDraft() : (playCancel(), onBack()); }} />
+      {canStart && (
+        <DraftButton x={6} y={284} w={LP_W - 8} label="SAVE & MENU"
+          color="#2a5070"
+          onClick={() => { playCancel(); onMenu?.(POS_ORDER.map(pos => ({ ...assignments[pos], role: pos }))); }} />
+      )}
 
       {/* ── MAIN PANEL ───────────────────────────────────── */}
       <rect x={MP_X} y={MP_Y} width={MP_W} height={MP_H} rx={4}
