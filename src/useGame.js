@@ -3,7 +3,7 @@ import { gridToSvg, svgToGrid, INITIAL_PLAYERS, SHOOT_TARGET_LEFT, SHOOT_TARGET_
   MISS_REBOUND_MIN_FT, MISS_REBOUND_MAX_FT,
   BLOCK_REBOUND_MIN_FT, BLOCK_REBOUND_MAX_FT } from './constants.js';
 import { SHOOT_CHAR_FRAMES } from './sprites/index.js';
-import { LEVEL_UP_ABILITIES } from './abilities.js';
+import { ABILITIES } from './abilities.js';
 import { playShot, playMiss, playDunk, playJumpball, playPass, playLeap, playQuarter, playSwish, playLevelUp, playBlock, bounceBall, bgMusic } from './sound/basketball.js';
 
 // ─── Half-court formation positions ─────────────────────────────────────────
@@ -27,7 +27,7 @@ const SHOOT_DURATION = SHOOT_CHAR_FRAMES.length * 80; // 560ms
 
 
 function pickLevelUpChoices() {
-  return [...LEVEL_UP_ABILITIES].sort(() => Math.random() - 0.5).slice(0, 3);
+  return [...ABILITIES].sort(() => Math.random() - 0.5).slice(0, 3);
 }
 
 // Returns updated player fields after applying XP gain. Handles level-up carry-over.
@@ -61,6 +61,7 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
   const [quarter, setQuarter] = useState(1);   // 1–4
   const [time, setTime] = useState(720);        // seconds (12-minute quarters)
   const [levelUpState, setLevelUpState] = useState(null); // { player, abilities } | null
+  const abilityOverridesRef = useRef(new Map()); // playerId → ability object (earned via level-up)
   const [playPickState, setPlayPickState] = useState(false);
   const [xpFlyup, setXpFlyup] = useState(null);
   const xpFlyupIdRef = useRef(0);
@@ -353,18 +354,19 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
 
     const startCx = passer.cx, startCy = passer.cy;
     const duration = 300;
+    const isSpecialPass = getPlayerAbilityName(passer) === 'PLAY MAKER';
 
     playersRef.current = playersRef.current.map(p => p.id === passer.id ? { ...p, hasBall: false } : p);
     setPlayers(prev => prev.map(p => p.id === passer.id ? { ...p, hasBall: false } : p));
 
-    playPass(); setShot({ cx: startCx, cy: startCy });
+    playPass(); setShot({ cx: startCx, cy: startCy, isSpecialPass });
 
     const startTime = performance.now();
     const animate = (now) => {
       const t = Math.min((now - startTime) / duration, 1);
       const cx = startCx + (receiver.cx - startCx) * t;
       const cy = startCy + (receiver.cy - startCy) * t - 12 * Math.sin(t * Math.PI);
-      setShot({ cx, cy });
+      setShot({ cx, cy, isSpecialPass });
       if (t < 1) {
         requestAnimationFrame(animate);
       } else {
@@ -490,6 +492,26 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
           }, 9 * 20);
         } else {
           addLog(`${passer.role} → ${receiver.role}`);
+          const abilityName = getPlayerAbilityName(receiver);
+          if (abilityName === 'SPEEDY') {
+            const rNow = playersRef.current.find(p => p.id === receiver.id);
+            if (rNow) {
+              const { x: rxGx, y: rxGy } = svgToGrid(rNow.cx, rNow.cy);
+              const basketGx = receiver.team === 'home' ? BASKET_RIGHT_GX : BASKET_LEFT_GX;
+              const dx = basketGx - rxGx, dy = BASKET_GY - rxGy;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist > 3) {
+                const s = Math.min(6, dist) / dist;
+                const burstGx = Math.round(Math.max(2, Math.min(92, rxGx + dx * s)));
+                const burstGy = Math.round(Math.max(2, Math.min(48, rxGy + dy * s)));
+                addLog(`SPEED BURST! ${receiver.role} jets!`);
+                smoothMoveTo(burstGx, burstGy, receiver.id, null, 2.5, () => {
+                  if (onComplete && gameLoopActiveRef.current && !gamePausedRef.current) onComplete();
+                });
+                return;
+              }
+            }
+          }
           if (onComplete && gameLoopActiveRef.current && !gamePausedRef.current) onComplete();
         }
       }
@@ -683,7 +705,7 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     addLog('shooting...');
   };
 
-  const triggerFadeaway = (onComplete = null) => {
+  const triggerFadeaway = (onComplete = null, onBlock = null, blockRate = BLOCK_RATE) => {
     wanderActiveRef.current = false;
     const pg = playersRef.current.find(p => p.hasBall);
     if (!pg) return;
@@ -714,8 +736,14 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     requestAnimationFrame(animateDrift);
 
     const arcStartCx = startCx + driftBack + handOffset; // hand position at end of drift
+    const blocker = triggerBlockAnimation(startCx, startCy, pg.team);
+    const isBlock = !!blocker && Math.random() < blockRate;
 
     setTimeout(() => {
+      if (isBlock) {
+        triggerBlock(pg, arcStartCx, arcStartCy, blocker, onBlock);
+        return;
+      }
       playShot();
       setTimeout(playSwish, 700);
       driftTowardBasket(pg.team);
@@ -978,6 +1006,17 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     const roster = gamePlayer.team === 'home' ? rosterRef.current.home : rosterRef.current.away;
     const rp = roster.find(r => (r.role ?? r.pos) === gamePlayer.role);
     return rp ? rp.acc : 70;
+  };
+
+  // Returns the ability name for a game player, or null if none.
+  // Level-up earned abilities take precedence over draft abilities.
+  const getPlayerAbilityName = (gamePlayer) => {
+    if (abilityOverridesRef.current.has(gamePlayer.id)) {
+      return abilityOverridesRef.current.get(gamePlayer.id)?.name ?? null;
+    }
+    const roster = gamePlayer.team === 'home' ? rosterRef.current.home : rosterRef.current.away;
+    const rp = roster.find(r => (r.role ?? r.pos) === gamePlayer.role);
+    return rp?.ability?.name ?? null;
   };
 
   // Quick outlet pass from the current ball-carrier to their team's PG, then
@@ -1296,10 +1335,11 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     }
 
     const acc    = getShooterAcc(shooter);
-    const isMake = Math.random() * 100 < acc;
+    const effectiveAcc = getPlayerAbilityName(shooter) === 'SHARPSHOOTER' ? acc + 10 : acc;
+    const isMake = Math.random() * 100 < effectiveAcc;
 
     if (isMake) {
-      triggerShoot(finishMake, () => {
+      const onBlockRebound = () => {
         // Block rebound — route possession exactly like a miss rebound.
         if (!gameLoopActiveRef.current || gamePausedRef.current) return;
         const rebounder = playersRef.current.find(p => p.hasBall);
@@ -1332,7 +1372,12 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
             });
           }, 100 + Math.random() * 900);
         }
-      });
+      };
+      if (getPlayerAbilityName(shooter) === 'SHARPSHOOTER') {
+        triggerFadeaway(finishMake, onBlockRebound, 0.01);
+        return;
+      }
+      triggerShoot(finishMake, onBlockRebound);
     } else {
       triggerShootFail(() => {
         if (!gameLoopActiveRef.current || gamePausedRef.current) return;
@@ -1743,8 +1788,10 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
 
   const onPickLevelUp = (ability) => {
     const p = levelUpState?.player;
-    if (ability && p) addLog(`${p.role} gained: ${ability.name}!`);
-    else addLog('level-up skipped');
+    if (ability && p) {
+      abilityOverridesRef.current.set(p.id, ability);
+      addLog(`${p.role} gained: ${ability.name}!`);
+    } else addLog('level-up skipped');
     setLevelUpState(null);
     gamePausedRef.current = false;
     startTimer(timerSpeedRef.current);

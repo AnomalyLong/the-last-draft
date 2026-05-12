@@ -1,6 +1,7 @@
 export { Court } from './Court.jsx';
 export { Ball } from './Ball.jsx';
 export { ShotBall } from './ShotBall.jsx';
+export { SpecialPassBall } from './SpecialPassBall.jsx';
 export { Player } from './Player.jsx';
 export { HUD, PlayerPortrait, LP_X, LP_W, RP_X, RP_W } from './HUD.jsx';
 export { Shadow } from './Shadow.jsx';

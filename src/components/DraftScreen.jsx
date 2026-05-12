@@ -3,7 +3,7 @@ import { ZOOM_W, TOTAL_H, JERSEY_BASE } from '../constants.js';
 import { PixelTextC, PixelText } from './PixelText.jsx';
 import { IDLE_FRAMES, RUN_FRAMES } from '../sprites/index.js';
 import { BballTip } from './BballTip.jsx';
-import { LEVEL_UP_ABILITIES as ABILITIES } from '../abilities.js';
+import { ABILITIES } from '../abilities.js';
 import { playSlide, playCursor, playSelect, playCancel, playFlip, playMenuMove3, playMenuSelect2 } from '../sound/ui.js';
 import { playRare, playRare2, playRare3 } from '../sound/basketball.js';
 
@@ -522,7 +522,7 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
     const enriched = shuffled.slice(0, 3).map(p => ({
       ...p,
-      ability: Math.random() < 0.08 ? rollAbility() : null,
+      ability: Math.random() < 0.24 ? rollAbility() : null,
     }));
     setRolled(enriched);
     setAnimDone(false);
@@ -580,7 +580,7 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
     const shuffled    = [...currentPool].sort(() => Math.random() - 0.5);
     const enriched    = shuffled.slice(0, 3).map(p => ({
       ...p,
-      ability: Math.random() < 0.08 ? rollAbility() : null,
+      ability: Math.random() < 0.24 ? rollAbility() : null,
     }));
     const best = enriched.reduce((b, p) => p.ovr > b.ovr ? p : b, enriched[0]);
 

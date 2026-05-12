@@ -6,6 +6,7 @@ import {
 import { Court } from './Court.jsx';
 import { Ball } from './Ball.jsx';
 import { ShotBall } from './ShotBall.jsx';
+import { SpecialPassBall } from './SpecialPassBall.jsx';
 import { Player } from './Player.jsx';
 import { HUD, DebugConsole, PlayerPortrait, LP_X, LP_W, RP_X, RP_W } from './HUD.jsx';
 import { Shadow } from './Shadow.jsx';
@@ -159,7 +160,10 @@ export function GameScene({
             );
           })}
 
-          {shot && <ShotBall data-testid="shot-ball" shot={shot} scale={1} />}
+          {shot && (shot.isSpecialPass
+            ? <SpecialPassBall data-testid="shot-ball" shot={shot} scale={1} />
+            : <ShotBall data-testid="shot-ball" shot={shot} scale={1} />
+          )}
         </g>
 
         {scorePopup && <ScorePopup text={scorePopup} cameraX={cameraX} />}
