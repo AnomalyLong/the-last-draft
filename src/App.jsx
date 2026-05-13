@@ -129,6 +129,7 @@ export default function App() {
         <GameScene
           containerStyle={{ position: 'absolute', inset: 0 }}
           svgProps={{ 'data-testid': 'game-court' }}
+          setViewportW={gameState.setViewportW}
           {...gameState}
           homeTeamName={homeTeamName}
           awayTeamName={awayTeam.name}

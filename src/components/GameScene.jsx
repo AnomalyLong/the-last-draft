@@ -54,6 +54,7 @@ export function GameScene({
   containerStyle,
   containerProps,
   svgProps,
+  setViewportW,
 
   // from useGame
   players, shot, logs, handleCommand, cameraX,
@@ -100,33 +101,35 @@ export function GameScene({
   // so we use JS instead.
   const containerRef = React.useRef(null);
   const [extraViewH, setExtraViewH] = React.useState(0);
+  const [mobileZoom, setMobileZoom] = React.useState(1);
   const [panelH, setPanelH] = React.useState('0px');
   React.useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const measure = () => {
       const { width, height } = el.getBoundingClientRect();
-      const gameScale = Math.min(width / ZOOM_W, height / TOTAL_H);
+      const zoom = width < height ? 1.25 : 1;
+      setMobileZoom(zoom);
+      setViewportW?.(Math.round(ZOOM_W / zoom));
+      const scale = (width * zoom) / ZOOM_W;
       const widthConstrained = (width / ZOOM_W) <= (height / TOTAL_H);
-      // Width-constrained (mobile): panels = exact top-bar pixel height so they sit in the black bar
-      // Height-constrained (desktop): panels = 62% of top-bar pixel height (original sizing)
-      setPanelH(`${Math.round(TOP_BAR * gameScale * (widthConstrained ? 1.0 : 0.62))}px`);
-      // Extend viewBox down to fill ~65% of the leftover vertical space on mobile
-      const naturalH = width / ZOOM_W * TOTAL_H;
-      setExtraViewH(naturalH < height ? Math.round((height - naturalH) * 0.65 / (width / ZOOM_W)) : 0);
+      setPanelH(`${Math.round(TOP_BAR * (width / ZOOM_W) * (widthConstrained ? 1.0 : 0.62))}px`);
+      // Extend viewBox down to fill ~65% of leftover vertical space (in zoomed SVG units)
+      const naturalH = TOTAL_H / zoom * scale; // = TOTAL_H * width / ZOOM_W (zoom cancels)
+      setExtraViewH(naturalH < height ? Math.round((height - naturalH) * 0.65 / scale) : 0);
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [setViewportW]);
 
   return (
     <div ref={containerRef} style={{ position: 'relative', ...containerStyle }} {...containerProps}>
       <svg
         width="100%"
         height="100%"
-        viewBox={`${cameraX} 0 ${ZOOM_W} ${TOTAL_H + extraViewH}`}
+        viewBox={`${cameraX} 0 ${ZOOM_W / mobileZoom} ${TOTAL_H / mobileZoom + extraViewH}`}
         preserveAspectRatio="xMidYMin meet"
         style={{ imageRendering: 'pixelated', display: 'block' }}
         {...svgProps}

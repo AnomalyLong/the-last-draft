@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { gridToSvg, svgToGrid, INITIAL_PLAYERS, SHOOT_TARGET_LEFT, SHOOT_TARGET_RIGHT, W, ZOOM_W, PLAYER_SPEED_FT_S, C_BOOST_SECS, BASKET_RIGHT_GX, BASKET_LEFT_GX, BASKET_GY, OFFENSE_RADIUS_FT, SHOOT_JUMP_OFFSETS, QUARTER_END_ALPHA, XP_FOR_LEVEL, MAX_LEVEL, STEAL_RATE, DUNK_RATE, BLOCK_RATE,
   MISS_REBOUND_MIN_FT, MISS_REBOUND_MAX_FT,
   BLOCK_REBOUND_MIN_FT, BLOCK_REBOUND_MAX_FT, JUMP_BALL_FORMATION } from './constants.js';
@@ -1866,9 +1866,14 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
 
   const carrier = players.find(p => p.hasBall) || players.find(p => p.isShooting) || players.find(p => p.isFadingAway) || players[0];
 
+  // Effective viewport width in SVG units — updated by GameScene when mobile zoom changes.
+  const viewportWRef = useRef(ZOOM_W);
+  const setViewportW = useCallback((w) => { viewportWRef.current = w; }, []);
+
   // Smoothed camera: lerps toward the carrier each frame so possession changes
   // (pass, rebound) pan gradually instead of snapping to the new carrier.
-  const initialCameraX = Math.max(0, Math.min(W - ZOOM_W, carrier.cx - ZOOM_W / 2));
+  const vw0 = viewportWRef.current;
+  const initialCameraX = Math.max(0, Math.min(W - vw0, carrier.cx - vw0 / 2));
   const [cameraX, setCameraX] = useState(initialCameraX);
   const cameraXRef = useRef(initialCameraX);
   // Mirrors shot state so the camera rAF loop can follow ball-in-flight
@@ -1886,7 +1891,7 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
         ? levelUpPlayerRef.current
         : ball ? { cx: ball.cx }
         : (playersRef.current.find(p => p.hasBall) || playersRef.current[0]);
-      const target = Math.max(0, Math.min(W - ZOOM_W, c.cx - ZOOM_W / 2));
+      const target = Math.max(0, Math.min(W - viewportWRef.current, c.cx - viewportWRef.current / 2));
       const diff = target - cameraXRef.current;
       // Only update state when the camera actually needs to move (avoids pointless re-renders).
       if (Math.abs(diff) > 0.5) {
@@ -1974,5 +1979,5 @@ export function useGame({ homeRoster = [], awayRoster = [] } = {}) {
     });
   };
 
-  return { players, shot, logs, handleCommand, cameraX, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, playPickState, onPickPlay, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef };
+  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, playPickState, onPickPlay, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef };
 }
