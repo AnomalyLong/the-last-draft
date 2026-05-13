@@ -18,11 +18,12 @@ import { BlockFlyup } from './BlockFlyup.jsx';
 import { LevelUpOverlay } from './LevelUpOverlay.jsx';
 import { QuarterBanner } from './QuarterBanner.jsx';
 import { QuarterSummary } from './QuarterSummary.jsx';
+import { GameOverScreen } from './GameOverScreen.jsx';
 import { PlayPickerOverlay } from './PlayPickerOverlay.jsx';
 import { OptionsOverlay } from './OptionsOverlay.jsx';
 import { SpecialMoveCard } from './SpecialMoveCard.jsx';
 import { BballTip } from './BballTip.jsx';
-import { DASH_FRAMES, FADEAWAY_FRAMES, SPIN_MOVE_FRAMES } from '../sprites/index.js';
+import { DASH_FRAMES, FADEAWAY_FRAMES, SPIN_MOVE_FRAMES, PICKPOCKET_FRAMES, IRON_BLOCK_FRAMES } from '../sprites/index.js';
 
 // BballTip layout constants (game-screen space, inside cameraX group)
 const TIP_CHAR_X = 10;
@@ -62,6 +63,8 @@ export function GameScene({
   quarterAnnouncement, playerAlpha,
   xpFlyup, stealFlyup, blockFlyup,
   quarterSummary, onDismissQuarterSummary,
+  gameOver, onDismissGameOver,
+  totalCredits,
 
   // Team / roster info
   homeTeamName, awayTeamName,
@@ -75,6 +78,9 @@ export function GameScene({
   musicVol, sfxVol, onMusicVol, onSfxVol,
   scanlines, vignette, onScanlines, onVignette,
 }) {
+  const [showDebug, setShowDebug] = React.useState(false);
+  const [showTeams, setShowTeams] = React.useState(false);
+
   // Derive portrait subjects
   const carrier      = players.find(p => p.hasBall) ?? players[0];
   const homeCurrent  = carrier.team === 'home'
@@ -87,16 +93,41 @@ export function GameScene({
   const awayPortEntry = awayRoster[POS_ORDER.indexOf(awayCurrent.role)] ?? null;
   const homeHasBall   = carrier.team === 'home';
 
-  const panelH = `min(${(TOP_BAR / TOTAL_H * 100 * 0.62).toFixed(2)}vh, ${(TOP_BAR / ZOOM_W * 100 * 0.62).toFixed(2)}vw)`;
+  const anyOverlay = !!(levelUpState || quarterSummary || gameOver || showOptions || showTeams || playPickState || gameTip);
 
-  const anyOverlay = !!(levelUpState || quarterSummary || showOptions || playPickState || gameTip);
+  // Measure the container to compute pixel-accurate panel height and viewBox extension.
+  // CSS cqw/cqh resolve against the browser viewport in some contexts (devtools phone frame),
+  // so we use JS instead.
+  const containerRef = React.useRef(null);
+  const [extraViewH, setExtraViewH] = React.useState(0);
+  const [panelH, setPanelH] = React.useState('0px');
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const { width, height } = el.getBoundingClientRect();
+      const gameScale = Math.min(width / ZOOM_W, height / TOTAL_H);
+      const widthConstrained = (width / ZOOM_W) <= (height / TOTAL_H);
+      // Width-constrained (mobile): panels = exact top-bar pixel height so they sit in the black bar
+      // Height-constrained (desktop): panels = 62% of top-bar pixel height (original sizing)
+      setPanelH(`${Math.round(TOP_BAR * gameScale * (widthConstrained ? 1.0 : 0.62))}px`);
+      // Extend viewBox down to fill ~65% of the leftover vertical space on mobile
+      const naturalH = width / ZOOM_W * TOTAL_H;
+      setExtraViewH(naturalH < height ? Math.round((height - naturalH) * 0.65 / (width / ZOOM_W)) : 0);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
-    <div style={{ position: 'relative', ...containerStyle }} {...containerProps}>
+    <div ref={containerRef} style={{ position: 'relative', ...containerStyle }} {...containerProps}>
       <svg
         width="100%"
         height="100%"
-        viewBox={`${cameraX} 0 ${ZOOM_W} ${TOTAL_H}`}
+        viewBox={`${cameraX} 0 ${ZOOM_W} ${TOTAL_H + extraViewH}`}
+        preserveAspectRatio="xMidYMin meet"
         style={{ imageRendering: 'pixelated', display: 'block' }}
         {...svgProps}
       >
@@ -111,6 +142,7 @@ export function GameScene({
 
         <rect x={0} y={0} width={W} height={TOTAL_H} fill="#111" />
         <Court />
+        <rect x={0} y={0} width={W} height={TOP_BAR} fill="#111" />
         <rect x={0} y={336} width={W} height={BOT_BAR} fill="#111" />
 
         <g opacity={playerAlpha}>
@@ -134,17 +166,17 @@ export function GameScene({
                     ? <g transform={`scale(-1,1) translate(${-p.cx * 2}, 0)`}>
                         <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
                           hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting}
-                          isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall}
-                          isStealing={p.isStealing} isSpinning={p.isSpinning} isDashing={p.isDashing}
+                          isDunking={p.isDunking} isBlocking={p.isBlocking} isIronBlocking={p.isIronBlocking} isJumpBall={p.isJumpBall}
+                          isStealing={p.isStealing} isPickPocketing={p.isPickPocketing} isSpinning={p.isSpinning} isDashing={p.isDashing}
                           isFadingAway={p.isFadingAway} facingRight={p.facingRight} />
                       </g>
                     : <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
                         hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting}
-                        isDunking={p.isDunking} isBlocking={p.isBlocking} isJumpBall={p.isJumpBall}
-                        isStealing={p.isStealing} isSpinning={p.isSpinning} isDashing={p.isDashing}
+                        isDunking={p.isDunking} isBlocking={p.isBlocking} isIronBlocking={p.isIronBlocking} isJumpBall={p.isJumpBall}
+                        isStealing={p.isStealing} isPickPocketing={p.isPickPocketing} isSpinning={p.isSpinning} isDashing={p.isDashing}
                         isFadingAway={p.isFadingAway} facingRight={p.facingRight} />
                   }
-                  {p.hasBall && !p.isDunking && !p.isStealing && !p.isSpinning && !p.isDashing && !p.isFadingAway &&
+                  {p.hasBall && !p.isDunking && !p.isStealing && !p.isPickPocketing && !p.isSpinning && !p.isDashing && !p.isFadingAway &&
                     <Ball data-testid="dribble-ball"
                       cx={p.isMoving
                         ? (p.facingRight ? p.cx + 10 : p.cx - 10)
@@ -171,6 +203,8 @@ export function GameScene({
         {stealFlyup && <StealFlyup key={stealFlyup.id}  fromCx={stealFlyup.fromCx} fromCy={stealFlyup.fromCy} toCx={stealFlyup.toCx} toCy={stealFlyup.toCy} color={stealFlyup.color} />}
         {blockFlyup && <BlockFlyup key={blockFlyup.id}  fromCx={blockFlyup.fromCx} fromCy={blockFlyup.fromCy} toCx={blockFlyup.toCx} toCy={blockFlyup.toCy} color={blockFlyup.color} />}
 
+        {(() => { const ib = players.find(p => p.isIronBlocking); return ib ? <SpecialMoveCard key={`ib-${ib.id}`} player={ib} frames={IRON_BLOCK_FRAMES} label="IRON BLOCK!" jerseyColor={ib.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#CC3333" bgColor="#FFD0D0" anchorX={6} anchorY={17} /> : null; })()}
+        {(() => { const pp = players.find(p => p.isPickPocketing); return pp ? <SpecialMoveCard key={`pp-${pp.id}`} player={pp} frames={PICKPOCKET_FRAMES} label="PICK POCKET!" jerseyColor={pp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={107} accentColor="#00FF44" bgColor="#C8FFD8" anchorX={9} anchorY={17} /> : null; })()}
         {(() => { const sp = players.find(p => p.isSpinning);   return sp ? <SpecialMoveCard key={`spin-${sp.id}`}  player={sp} frames={SPIN_MOVE_FRAMES} label="SPIN MOVE!"   jerseyColor={sp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#F5C800" bgColor="#F5E6C8" anchorX={21} anchorY={28} /> : null; })()}
         {(() => { const dp = players.find(p => p.isDashing);    return dp ? <SpecialMoveCard key={`dash-${dp.id}`}  player={dp} frames={DASH_FRAMES}      label="SPEED BURST!" jerseyColor={dp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={60} accentColor="#44AAFF" bgColor="#C8E8FF" anchorX={9}  anchorY={17} /> : null; })()}
         {(() => { const fp = players.find(p => p.isFadingAway); return fp ? <SpecialMoveCard key={`fade-${fp.id}`} player={fp} frames={FADEAWAY_FRAMES}  label="FADEAWAY!"    jerseyColor={fp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#FF8C00" bgColor="#FFF0CC" anchorX={9}  anchorY={12} /> : null; })()}
@@ -192,6 +226,8 @@ export function GameScene({
             players={players} possession={possession}
             homeRoster={homeRoster} awayRoster={awayRoster}
             onOptions={onShowOptions}
+            showTeams={showTeams} onShowTeams={setShowTeams}
+            showDebug={showDebug} totalCredits={totalCredits}
           />
         </g>
 
@@ -218,6 +254,16 @@ export function GameScene({
           />
         )}
 
+        {gameOver && (
+          <GameOverScreen
+            gameOver={gameOver}
+            homeTeamName={homeTeamName}
+            awayTeamName={awayTeamName}
+            cameraX={cameraX}
+            onDismiss={onDismissGameOver}
+          />
+        )}
+
         {showOptions && (
           <OptionsOverlay
             musicVol={musicVol}   sfxVol={sfxVol}
@@ -231,7 +277,7 @@ export function GameScene({
       </svg>
 
       {/* Debug console — always on top */}
-      <DebugConsole logs={logs} onCommand={handleCommand} />
+      <DebugConsole logs={logs} onCommand={handleCommand} showDebug={showDebug} onToggleDebug={() => setShowDebug(d => !d)} />
 
       {/* Portrait panels — hidden when any overlay is active */}
       {!anyOverlay && (<>

@@ -22,6 +22,54 @@ const CARD_GAP = 8;
 const DLG_H   = 42 + CARD_H + 14; // header + cards + bottom padding = 158
 const DLG_Y   = Math.round((TOTAL_H - DLG_H) / 2);
 
+const RAINBOW_COLS = ['#ff2040', '#ff8020', '#ffe040', '#40e870', '#2070ff', '#a040ff', '#ff40e0'];
+
+function DiagBeam({ x, color, w }) {
+  const SKEW = 30;
+  const pts = `${x},-10 ${x + w},-10 ${x + w + SKEW},${TOTAL_H + 10} ${x + SKEW},${TOTAL_H + 10}`;
+  return <polygon points={pts} fill={color} shapeRendering="crispEdges" />;
+}
+
+function RainbowBurst({ tick, cameraX }) {
+  const BURST_DUR = 110;
+  if (tick <= 0 || tick >= BURST_DUR) return null;
+
+  const t       = tick / BURST_DUR;
+  const fadeIn  = Math.min(1, tick / 5);
+  const fadeOut = Math.max(0, 1 - Math.max(0, t - 0.4) / 0.6);
+  const alpha   = Math.min(fadeIn, fadeOut) * 0.85;
+
+  const SKEW   = 30;
+  const N      = 9;
+  const BEAM_W = Math.ceil((ZOOM_W + SKEW) / N) + 2;
+  const SPEED  = 5;
+  const offset = (tick * SPEED) % (N * BEAM_W);
+
+  const beams = Array.from({ length: N + 2 }, (_, i) => ({
+    x:     cameraX + i * BEAM_W - offset - SKEW,
+    color: RAINBOW_COLS[(i + Math.floor(tick * 0.16)) % RAINBOW_COLS.length],
+  }));
+
+  const flashOp = Math.max(0, 0.38 - tick * 0.022);
+  const ringR   = Math.min(tick * 11, 320);
+  const ringOp  = Math.max(0, 0.85 - tick * 0.015);
+
+  return (
+    <g opacity={alpha} style={{ pointerEvents: 'none' }}>
+      {beams.map((b, i) => <DiagBeam key={i} x={b.x} color={b.color} w={BEAM_W} />)}
+      {flashOp > 0 && (
+        <rect x={cameraX} y={0} width={ZOOM_W} height={TOTAL_H}
+          fill="white" opacity={flashOp} shapeRendering="crispEdges" />
+      )}
+      {ringOp > 0 && (
+        <ellipse cx={cameraX + ZOOM_W / 2} cy={TOTAL_H / 2}
+          rx={ringR} ry={ringR * 0.45}
+          fill="none" stroke="#fff" strokeWidth={4} opacity={ringOp} />
+      )}
+    </g>
+  );
+}
+
 // ─── Swirl effect ─────────────────────────────────────────────────────────────
 
 function SwirlEffect({ tick, px, py }) {
@@ -140,6 +188,25 @@ function SwirlEffect({ tick, px, py }) {
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function wrapDesc(text, maxChars = 16) {
+  if (text.length <= maxChars) return [text];
+  const words = text.split(' ');
+  const lines = [''];
+  for (const word of words) {
+    const candidate = lines[lines.length - 1] ? lines[lines.length - 1] + ' ' + word : word;
+    if (candidate.length <= maxChars || lines[lines.length - 1] === '') {
+      lines[lines.length - 1] = candidate;
+    } else if (lines.length < 2) {
+      lines.push(word);
+    } else {
+      lines[1] += ' ' + word;
+    }
+  }
+  return lines;
+}
+
 // ─── Ability card ─────────────────────────────────────────────────────────────
 
 function AbilityCard({ ability, x, y, onClick }) {
@@ -202,9 +269,11 @@ function AbilityCard({ ability, x, y, onClick }) {
       <rect x={x + 8} y={y + 40} width={CARD_W - 16} height={1}
         fill="#2a4070" shapeRendering="crispEdges" />
 
-      {/* Description */}
-      <PixelTextC text={ability.desc} cx={x + CARD_W / 2} y={y + 46}
-        scale={1} fill="#6090b8" outline={null} />
+      {/* Description — up to 2 lines */}
+      {wrapDesc(ability.desc).map((line, i) => (
+        <PixelTextC key={i} text={line} cx={x + CARD_W / 2} y={y + 46 + i * 11}
+          scale={1} fill="#6090b8" outline={null} />
+      ))}
 
       {/* PICK button */}
       <rect x={x + 10} y={y + CARD_H - 26} width={CARD_W - 20} height={18} rx={3}
@@ -311,6 +380,9 @@ function AbilityPickerDialog({ abilities, cameraX, onPick }) {
       {/* Header bar */}
       <rect x={dlgX} y={DLG_Y} width={DLG_W} height={26} rx={4}
         fill="#1a2a3e" shapeRendering="crispEdges" />
+
+      {/* Rainbow burst — over dialog background, under cards/text */}
+      <RainbowBurst tick={tick} cameraX={cameraX} />
 
       {/* Floating particles */}
       {particles.map((p, i) => (

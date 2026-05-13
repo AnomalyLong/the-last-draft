@@ -1,5 +1,6 @@
 import gameMusicSrc    from './game.mp3';
 import titleMusicSrc   from './title.mp3';
+import coinSound       from './coin.wav';
 import shotSound       from './basketball/shot.wav';
 import missSound       from './basketball/miss.wav';
 import dunkSound       from './basketball/dunk.wav';
@@ -13,6 +14,7 @@ import rare3Sound      from './basketball/rare3.wav';
 import quarterSound    from './basketball/quarter.wav';
 import swishSound      from './basketball/swish.wav';
 import levelUpSound    from './levelup.wav';
+import fanfareSound    from './fanfare.wav';
 import blockSound      from './block.wav';
 import { audioSettings } from './audioSettings.js';
 
@@ -108,4 +110,6 @@ export const playRare3      = makeSound(rare3Sound,      0.9);
 export const playQuarter    = makeSound(quarterSound,    0.8);
 export const playSwish      = makeSound(swishSound,      0.8);
 export const playLevelUp    = makeSound(levelUpSound,    0.9);
+export const playFanfare    = makeSound(fanfareSound,    0.9);
 export const playBlock      = makeSound(blockSound,      0.8);
+export const playCoin       = makeSound(coinSound,       0.6);

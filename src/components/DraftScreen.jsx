@@ -418,6 +418,95 @@ function DraftButton({ x, y, w, h = 26, label, color, disabled = false, onClick 
   );
 }
 
+// ─── Rainbow burst (shown when a rare+ ability is revealed) ───────────────────
+
+const RAINBOW_COLS = ['#ff2040', '#ff8020', '#ffe040', '#40e870', '#2070ff', '#a040ff', '#ff40e0'];
+
+function DiagBeam({ x, color, w, opacity }) {
+  const SKEW = 26;
+  const y0 = -10, y1 = TOTAL_H + 10;
+  const pts = `${x},${y0} ${x + w},${y0} ${x + w + SKEW},${y1} ${x + SKEW},${y1}`;
+  return <polygon points={pts} fill={color} opacity={opacity} shapeRendering="crispEdges" />;
+}
+
+function DraftRainbowBurst({ rarity, age }) {
+  if (!rarity || age <= 0) return null;
+
+  const BURST_DUR = rarity === 3 ? 130 : rarity === 2 ? 90 : 60;
+  if (age >= BURST_DUR) return null;
+
+  const t       = age / BURST_DUR;
+  const fadeIn  = Math.min(1, age / 5);
+  const fadeOut = Math.max(0, 1 - Math.max(0, t - 0.45) / 0.55);
+  // Overall group opacity — high so beams genuinely cover the background
+  const alpha   = Math.min(fadeIn, fadeOut) * (rarity === 3 ? 0.92 : rarity === 2 ? 0.78 : 0.52);
+
+  // Beams tiled to cover the full ZOOM_W — each beam is opaque (opacity=1)
+  const SKEW   = 30;
+  const N      = 9;
+  const BEAM_W = Math.ceil((ZOOM_W + SKEW) / N) + 2; // ~50px, tiles screen with no gaps
+  const SPEED  = rarity === 3 ? 7 : rarity === 2 ? 5 : 3;
+  const CYCLE  = N * BEAM_W;
+  const offset = (age * SPEED) % CYCLE;
+  const colorSpeed = rarity === 3 ? 0.22 : 0.12;
+
+  const beams = Array.from({ length: N + 2 }, (_, i) => {
+    const x  = i * BEAM_W - offset - SKEW;
+    const ci = (i + Math.floor(age * colorSpeed)) % RAINBOW_COLS.length;
+    return { x, color: RAINBOW_COLS[ci] };
+  });
+
+  // White flash on entry
+  const flashOp = Math.max(0, (rarity === 3 ? 0.55 : rarity === 2 ? 0.30 : 0.12) - age * 0.02);
+
+  // Expanding ellipse ring (rarity 2+)
+  const ringR  = rarity >= 2 ? Math.min(age * 11, 320) : 0;
+  const ringOp = rarity >= 2 ? Math.max(0, 0.9 - age * 0.016) : 0;
+  const ringW  = rarity === 3 ? 5 : 3;
+
+  // Sparkles radiating out (rarity 2+)
+  const N_SPARKS = rarity === 3 ? 20 : rarity === 2 ? 12 : 0;
+  const sparks = Array.from({ length: N_SPARKS }, (_, i) => {
+    const angle = (i / N_SPARKS) * Math.PI * 2 + age * 0.09;
+    const dist  = Math.min(age * 6.5, rarity === 3 ? 210 : 150);
+    const op    = Math.max(0, 1 - age / 45);
+    const sz    = rarity === 3 ? 5 : 3;
+    return {
+      x: ZOOM_W / 2 + Math.cos(angle) * dist,
+      y: TOTAL_H / 2 + Math.sin(angle) * dist * 0.45,
+      col: RAINBOW_COLS[(i * 2 + Math.floor(age * 0.18)) % RAINBOW_COLS.length],
+      op, sz,
+    };
+  });
+
+  return (
+    <g opacity={alpha} style={{ pointerEvents: 'none' }}>
+      {/* Full-screen tiling rainbow beams */}
+      {beams.map((b, i) => (
+        <DiagBeam key={i} x={b.x} color={b.color} w={BEAM_W} opacity={1} />
+      ))}
+      {/* White entry flash on top of beams */}
+      {flashOp > 0 && (
+        <rect x={0} y={0} width={ZOOM_W} height={TOTAL_H}
+          fill="white" opacity={flashOp} shapeRendering="crispEdges" />
+      )}
+      {/* Expanding ring */}
+      {ringOp > 0 && (
+        <ellipse cx={ZOOM_W / 2} cy={TOTAL_H / 2}
+          rx={ringR} ry={ringR * 0.45}
+          fill="none" stroke="#fff" strokeWidth={ringW} opacity={ringOp} />
+      )}
+      {/* Sparkles */}
+      {sparks.map((s, i) => (
+        <rect key={i}
+          x={Math.round(s.x - s.sz / 2)} y={Math.round(s.y - s.sz / 2)}
+          width={s.sz} height={s.sz}
+          fill={s.col} opacity={s.op} shapeRendering="crispEdges" />
+      ))}
+    </g>
+  );
+}
+
 // ─── Dialogue ─────────────────────────────────────────────────────────────────
 
 const CHAR_SCALE = 0.30;
@@ -467,6 +556,25 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
   const [dragPos,   setDragPos]   = React.useState({ x: 0, y: 0 });
   const [dropTarget, setDropTarget] = React.useState(null);
   const [hoverId,   setHoverId]   = React.useState(null);
+  const [burstRarity, setBurstRarity] = React.useState(0);
+  const [burstAge,    setBurstAge]    = React.useState(0);
+  const burstRafRef     = React.useRef(null);
+  const triggerBurstRef = React.useRef(null);
+  triggerBurstRef.current = (rarity) => {
+    if (burstRafRef.current) cancelAnimationFrame(burstRafRef.current);
+    setBurstRarity(rarity);
+    setBurstAge(0);
+    let t = 0;
+    const DUR = rarity === 3 ? 115 : rarity === 2 ? 78 : 50;
+    const loop = () => {
+      t++;
+      setBurstAge(t);
+      if (t < DUR) burstRafRef.current = requestAnimationFrame(loop);
+      else { setBurstRarity(0); setBurstAge(0); }
+    };
+    burstRafRef.current = requestAnimationFrame(loop);
+  };
+
   const animRef           = React.useRef(null);
   const bgRef             = React.useRef(null);
   const slotBoundsRef     = React.useRef([]);
@@ -482,6 +590,7 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
   React.useEffect(() => {
     return () => {
       if (animRef.current) clearInterval(animRef.current);
+      if (burstRafRef.current) cancelAnimationFrame(burstRafRef.current);
       autoTimeoutsRef.current.forEach(clearTimeout);
     };
   }, []);
@@ -546,9 +655,9 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
         if (tick >= rareSoundTick && !raritySoundPlayed[i]) {
           raritySoundPlayed[i] = true;
           const rarity = enriched[i]?.ability?.rarity;
-          if (rarity === 3) playRare3();
-          else if (rarity === 2) playRare2();
-          else if (rarity === 1) playRare();
+          if (rarity === 3) { playRare3(); triggerBurstRef.current?.(3); }
+          else if (rarity === 2) { playRare2(); triggerBurstRef.current?.(2); }
+          else if (rarity === 1) { playRare(); triggerBurstRef.current?.(1); }
         }
       }
       if (tick >= ANIM_TOTAL) {
@@ -813,6 +922,9 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
       {/* ── MAIN PANEL ───────────────────────────────────── */}
       <rect x={MP_X} y={MP_Y} width={MP_W} height={MP_H} rx={4}
         fill="#1e3050" shapeRendering="crispEdges" />
+
+      {/* Rainbow burst — after both panel bg rects so it covers them, but cards render on top */}
+      <DraftRainbowBurst rarity={burstRarity} age={burstAge} />
 
       <PixelTextC
         text={phase === 'assign' ? 'ASSIGN POSITIONS' : 'AVAILABLE PLAYERS'}

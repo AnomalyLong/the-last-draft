@@ -1,24 +1,25 @@
 import React from 'react';
 import { ZOOM_W, TOTAL_H } from '../constants.js';
 import { PixelTextC } from './PixelText.jsx';
+import { playCoin } from '../sound/basketball.js';
 
 const PANEL_W = 370;
-const PANEL_H = 272;
+const PANEL_H = 290;
 const PANEL_X_OFF = Math.round((ZOOM_W - PANEL_W) / 2); // 19
-const PANEL_Y = Math.round((TOTAL_H - PANEL_H) / 2);    // 38
+const PANEL_Y = Math.round((TOTAL_H - PANEL_H) / 2);    // 29
 
-// Column centers relative to cameraX
-const LABEL_CX_OFF  = PANEL_X_OFF + 68;   // label center
-const HOME_CX_OFF   = PANEL_X_OFF + 168;  // home number center
-const AWAY_CX_OFF   = PANEL_X_OFF + 268;  // away number center
+// Two-column layout: label left, value right
+const LABEL_CX_OFF = PANEL_X_OFF + 90;   // label center
+const VAL_CX_OFF   = PANEL_X_OFF + 270;  // value center
 
 const TEAM_Y      = PANEL_Y + 42;
-const DIV1_Y      = PANEL_Y + 54;
-const STAT_Y_BASE = PANEL_Y + 66;
+const DIV1_Y      = PANEL_Y + 64;  // pushed down to clear scale-2 team name (18px)
+const STAT_Y_BASE = PANEL_Y + 76;
 const STAT_STEP   = 24;
-const DIV2_Y      = STAT_Y_BASE + 4 * STAT_STEP + 4;
-const SCORE_Y     = DIV2_Y + 16;
-const BTN_Y       = PANEL_Y + PANEL_H - 34;
+const DIV2_Y        = STAT_Y_BASE + 4 * STAT_STEP + 4;
+const WIN_BONUS_Y   = DIV2_Y + 16;
+const SCORE_Y       = WIN_BONUS_Y + 30;  // below win bonus (scale-3 = 27px + 3px gap)
+const BTN_Y         = PANEL_Y + PANEL_H - 34;
 
 const STAT_ROWS = [
   { key: 'shots',  label: 'SHOTS' },
@@ -34,9 +35,11 @@ const TEAMS_TICK       = 20;
 const STAT_START_TICK  = 34;
 const STAT_COUNT_TICKS = 28;
 const STAT_GAP_TICKS   = 18;
-const SCORE_START      = STAT_START_TICK + STAT_ROWS.length * (STAT_COUNT_TICKS + STAT_GAP_TICKS);
-const SCORE_COUNT      = 55;
-const BTN_TICK         = SCORE_START + SCORE_COUNT + 10;
+const WIN_BONUS_START   = STAT_START_TICK + STAT_ROWS.length * (STAT_COUNT_TICKS + STAT_GAP_TICKS);
+const WIN_BONUS_COUNT   = 30;
+const SCORE_START       = WIN_BONUS_START + WIN_BONUS_COUNT + 6;
+const SCORE_COUNT       = 55;
+const BTN_TICK          = SCORE_START + SCORE_COUNT + 10;
 
 function easeOut(t) { return 1 - (1 - t) * (1 - t); }
 
@@ -48,7 +51,7 @@ function countUp(target, startTick, tick, duration) {
 
 const N_PARTICLES = 14;
 
-export function QuarterSummary({ quarterSummary, homeTeamName, awayTeamName, cameraX, onDismiss }) {
+export function QuarterSummary({ quarterSummary, homeTeamName, cameraX, onDismiss }) {
   const [tick, setTick]       = React.useState(0);
   const [btnPulse, setBtnPulse] = React.useState(0);
   const [hover, setHover]     = React.useState(false);
@@ -66,9 +69,20 @@ export function QuarterSummary({ quarterSummary, homeTeamName, awayTeamName, cam
     return () => clearInterval(id);
   }, []);
 
+  React.useEffect(() => {
+    if (tick % 8 !== 0) return;
+    const winBonus = quarterSummary?.winBonus ?? 0;
+    for (let i = 0; i < STAT_ROWS.length; i++) {
+      const s = STAT_START_TICK + i * (STAT_COUNT_TICKS + STAT_GAP_TICKS);
+      if (tick >= s && tick < s + STAT_COUNT_TICKS) { playCoin(); return; }
+    }
+    if (winBonus > 0 && tick >= WIN_BONUS_START && tick < WIN_BONUS_START + WIN_BONUS_COUNT) { playCoin(); return; }
+    if (tick >= SCORE_START && tick < SCORE_START + SCORE_COUNT) playCoin();
+  }, [tick]);
+
   if (!quarterSummary) return null;
 
-  const { quarter, home, away, homeScore, awayScore } = quarterSummary;
+  const { quarter, home } = quarterSummary;
 
   const px = cameraX + PANEL_X_OFF;
   const cx = cameraX + ZOOM_W / 2;
@@ -199,18 +213,12 @@ export function QuarterSummary({ quarterSummary, homeTeamName, awayTeamName, cam
         </g>
       )}
 
-      {/* Team name labels */}
+      {/* Team name label */}
       {tick >= TEAMS_TICK && (
         <g>
           <PixelTextC text={(homeTeamName || 'HOME').toUpperCase().slice(0, 8)}
-            cx={cameraX + HOME_CX_OFF} y={TEAM_Y}
-            scale={1} fill="#20c8ff" outline={null} />
-          <PixelTextC text="VS"
             cx={cx} y={TEAM_Y}
-            scale={1} fill="#304858" outline={null} />
-          <PixelTextC text={(awayTeamName || 'AWAY').toUpperCase().slice(0, 8)}
-            cx={cameraX + AWAY_CX_OFF} y={TEAM_Y}
-            scale={1} fill="#ff5050" outline={null} />
+            scale={2} fill="#20c8ff" outline="#001020" />
           <rect x={px + 18} y={DIV1_Y} width={PANEL_W - 36} height={1}
             fill="#152030" shapeRendering="crispEdges" />
         </g>
@@ -221,7 +229,6 @@ export function QuarterSummary({ quarterSummary, homeTeamName, awayTeamName, cam
         const rowStart = STAT_START_TICK + i * (STAT_COUNT_TICKS + STAT_GAP_TICKS);
         if (tick < rowStart - 4) return null;
         const hVal = countUp(home[row.key] * 100, rowStart, tick, STAT_COUNT_TICKS);
-        const aVal = countUp(away[row.key] * 100, rowStart, tick, STAT_COUNT_TICKS);
         const isCounting = tick >= rowStart && tick < rowStart + STAT_COUNT_TICKS;
         const numColor = isCounting ? '#ffe060' : '#e8f4ff';
         const rowAlpha = tick >= rowStart - 4 ? Math.min(1, (tick - (rowStart - 4)) / 6) : 0;
@@ -229,17 +236,11 @@ export function QuarterSummary({ quarterSummary, homeTeamName, awayTeamName, cam
 
         return (
           <g key={row.key} opacity={rowAlpha}>
-            {/* Row label */}
             <PixelTextC text={`${row.label}:`}
               cx={cameraX + LABEL_CX_OFF} y={ry}
               scale={1} fill="#4a6880" outline={null} />
-            {/* Home count */}
             <PixelTextC text={String(hVal).padStart(4, '0')}
-              cx={cameraX + HOME_CX_OFF} y={ry}
-              scale={2} fill={numColor} outline="#000a14" />
-            {/* Away count */}
-            <PixelTextC text={String(aVal).padStart(4, '0')}
-              cx={cameraX + AWAY_CX_OFF} y={ry}
+              cx={cameraX + VAL_CX_OFF} y={ry}
               scale={2} fill={numColor} outline="#000a14" />
           </g>
         );
@@ -251,32 +252,35 @@ export function QuarterSummary({ quarterSummary, homeTeamName, awayTeamName, cam
           fill="#ffe060" opacity={0.35} shapeRendering="crispEdges" />
       )}
 
-      {/* Score row */}
+      {/* Win bonus row — shown first so it visibly feeds into credits */}
+      {tick >= WIN_BONUS_START && (quarterSummary.winBonus ?? 0) > 0 && (
+        <g>
+          <PixelTextC text="WINNING BONUS:"
+            cx={cameraX + LABEL_CX_OFF} y={WIN_BONUS_Y}
+            scale={1} fill="#00ff88" outline={null} />
+          <PixelTextC
+            text={`+${String(countUp(quarterSummary.winBonus, WIN_BONUS_START, tick, WIN_BONUS_COUNT)).padStart(3, '0')}`}
+            cx={cameraX + VAL_CX_OFF} y={WIN_BONUS_Y}
+            scale={3} fill="#00ff88" outline="#001a08" />
+        </g>
+      )}
+
+      {/* Credits row — totals stats + win bonus */}
       {tick >= SCORE_START && (() => {
-        const hTotal = (home.shots + home.dunks + home.blocks + home.steals) * 100;
-        const aTotal = (away.shots + away.dunks + away.blocks + away.steals) * 100;
+        const hStatCredits = (home.shots + home.dunks + home.blocks + home.steals) * 100;
         return (
           <g>
-            <PixelTextC text="TOTAL:"
+            <PixelTextC text="CREDITS:"
               cx={cameraX + LABEL_CX_OFF} y={SCORE_Y}
               scale={1} fill="#ffe060" outline={null} />
             <PixelTextC
-              text={String(countUp(hTotal, SCORE_START, tick, SCORE_COUNT)).padStart(4, '0')}
-              cx={cameraX + HOME_CX_OFF} y={SCORE_Y}
-              scale={2} fill="#ffe060" outline="#201000" />
-            <PixelTextC
-              text={String(countUp(aTotal, SCORE_START, tick, SCORE_COUNT)).padStart(4, '0')}
-              cx={cameraX + AWAY_CX_OFF} y={SCORE_Y}
-              scale={2} fill="#ffe060" outline="#201000" />
+              text={String(countUp(hStatCredits, SCORE_START, tick, SCORE_COUNT)).padStart(4, '0')}
+              cx={cameraX + VAL_CX_OFF} y={SCORE_Y}
+              scale={3} fill="#ffe060" outline="#201000" />
           </g>
         );
       })()}
 
-      {/* Divider below score */}
-      {tick >= SCORE_START + SCORE_COUNT && (
-        <rect x={px + 18} y={SCORE_Y + 14} width={PANEL_W - 36} height={1}
-          fill="#ffe060" opacity={0.35} shapeRendering="crispEdges" />
-      )}
 
       {/* Continue button */}
       {tick >= BTN_TICK && (

@@ -150,29 +150,42 @@ export function PlayerPortrait({ player, rosterEntry, side, jerseyColor, hasBall
         );
       })}
 
-      {/* Ability slot — filled badge or empty placeholder */}
+      {/* Ability badges — horizontal row, truncated to 4 chars */}
       {rosterEntry && (() => {
         const ay = statY0 + 3 * ROW_H + BAR_H + 9;
-        const ab = rosterEntry.ability;
-        if (ab) {
-          const rc = RARITY_COLORS[ab.rarity] ?? '#888';
-          const nameW = ab.name.length * MONOGRAM_CELL_W + 6;
+        const abilities = rosterEntry.abilities ?? (rosterEntry.ability ? [rosterEntry.ability] : []);
+        if (abilities.length === 0) {
+          const slotW = 10 * MONOGRAM_CELL_W + 6;
           return (
             <g>
-              <rect x={lblX} y={ay - 1} width={nameW} height={9} rx={2}
-                fill={rc} opacity={0.18} shapeRendering="crispEdges" />
-              <rect x={lblX} y={ay - 1} width={nameW} height={9} rx={2}
-                fill="none" stroke={rc} strokeWidth={1} opacity={0.6} shapeRendering="crispEdges" />
-              <PixelText text={ab.name} x={lblX + 3} y={ay} scale={1} fill={rc} outline="#000" />
+              <rect x={lblX} y={ay - 1} width={slotW} height={9} rx={2}
+                fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={1} shapeRendering="crispEdges" />
+              <PixelText text="NO ABILITY" x={lblX + 3} y={ay} scale={1} fill="rgba(255,255,255,0.3)" outline={null} />
             </g>
           );
         }
-        const slotW = 10 * MONOGRAM_CELL_W + 6;
+        const abPos = [];
+        let ax = lblX;
+        for (const ab of abilities) {
+          const label = ab.name.slice(0, 4);
+          const bw = label.length * MONOGRAM_CELL_W + 6;
+          abPos.push({ ab, label, x: ax, bw });
+          ax += bw + 2;
+        }
         return (
           <g>
-            <rect x={lblX} y={ay - 1} width={slotW} height={9} rx={2}
-              fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={1} shapeRendering="crispEdges" />
-            <PixelText text="NO ABILITY" x={lblX + 3} y={ay} scale={1} fill="rgba(255,255,255,0.3)" outline={null} />
+            {abPos.map(({ ab, label, x, bw }, ai) => {
+              const rc = RARITY_COLORS[ab.rarity] ?? '#888';
+              return (
+                <g key={ai}>
+                  <rect x={x} y={ay - 1} width={bw} height={9} rx={2}
+                    fill={rc} opacity={0.18} shapeRendering="crispEdges" />
+                  <rect x={x} y={ay - 1} width={bw} height={9} rx={2}
+                    fill="none" stroke={rc} strokeWidth={1} opacity={0.6} shapeRendering="crispEdges" />
+                  <PixelText text={label} x={x + 3} y={ay} scale={1} fill={rc} outline="#000" />
+                </g>
+              );
+            })}
           </g>
         );
       })()}
@@ -246,7 +259,15 @@ function TVStatAway({ rx, y, label, val, oppVal, color }) {
 }
 
 function TVHome({ ry, player, opp, pc }) {
-  const ab = player?.ability ?? null;
+  const abilities = player?.abilities ?? (player?.ability ? [player.ability] : []);
+  const ay = ry + 49;
+  const abPos = [];
+  let ax = TV_CONT_HX;
+  for (const ab of abilities) {
+    const bw = ab.name.length * MONOGRAM_CELL_W + 6;
+    abPos.push({ ab, x: ax, bw });
+    ax += bw + 2;
+  }
   return (
     <g>
       {/* Portrait frame */}
@@ -272,23 +293,20 @@ function TVHome({ ry, player, opp, pc }) {
           label={label} val={player[key] ?? 0} oppVal={opp?.[key] ?? 0} color={color} />
       ))}
 
-      {/* Ability */}
-      {ab ? (() => {
+      {/* Ability badges — horizontal row */}
+      {abPos.length > 0 ? abPos.map(({ ab, x, bw }, ai) => {
         const rc = TV_RC[ab.rarity] ?? '#888';
-        const bw = ab.name.length * MONOGRAM_CELL_W + 6;
-        const ay = ry + 49;
         return (
-          <>
-            <rect x={TV_CONT_HX} y={ay - 1} width={bw} height={9} rx={2}
+          <g key={ai}>
+            <rect x={x} y={ay - 1} width={bw} height={9} rx={2}
               fill={rc} opacity={0.16} shapeRendering="crispEdges" />
-            <rect x={TV_CONT_HX} y={ay - 1} width={bw} height={9} rx={2}
+            <rect x={x} y={ay - 1} width={bw} height={9} rx={2}
               fill="none" stroke={rc} strokeWidth={1} opacity={0.50} />
-            <PixelText text={ab.name} x={TV_CONT_HX + 3} y={ay}
-              scale={1} fill={rc} outline={null} />
-          </>
+            <PixelText text={ab.name} x={x + 3} y={ay} scale={1} fill={rc} outline={null} />
+          </g>
         );
-      })() : (
-        <PixelText text="NO ABILITY" x={TV_CONT_HX} y={ry + 49}
+      }) : (
+        <PixelText text="NO ABILITY" x={TV_CONT_HX} y={ay}
           scale={1} fill="#182640" outline={null} />
       )}
     </g>
@@ -296,7 +314,17 @@ function TVHome({ ry, player, opp, pc }) {
 }
 
 function TVAway({ ry, player, opp, pc }) {
-  const ab = player?.ability ?? null;
+  const abilities = player?.abilities ?? (player?.ability ? [player.ability] : []);
+  const ay = ry + 49;
+  const abPos = [];
+  let rx = TV_CONT_ARX;
+  for (let i = abilities.length - 1; i >= 0; i--) {
+    const ab = abilities[i];
+    const bw = ab.name.length * MONOGRAM_CELL_W + 6;
+    rx -= bw;
+    abPos[i] = { ab, x: rx, bw };
+    if (i > 0) rx -= 2;
+  }
   return (
     <g>
       {/* OVR + name (left of away column) */}
@@ -324,22 +352,19 @@ function TVAway({ ry, player, opp, pc }) {
           label={label} val={player[key] ?? 0} oppVal={opp?.[key] ?? 0} color={color} />
       ))}
 
-      {/* Ability (right-aligned to content edge) */}
-      {ab ? (() => {
+      {/* Ability badges — horizontal row, right-aligned */}
+      {abPos.map(({ ab, x, bw }, ai) => {
         const rc = TV_RC[ab.rarity] ?? '#888';
-        const bw = ab.name.length * MONOGRAM_CELL_W + 6;
-        const ay = ry + 49;
         return (
-          <>
-            <rect x={TV_CONT_ARX - bw} y={ay - 1} width={bw} height={9} rx={2}
+          <g key={ai}>
+            <rect x={x} y={ay - 1} width={bw} height={9} rx={2}
               fill={rc} opacity={0.16} shapeRendering="crispEdges" />
-            <rect x={TV_CONT_ARX - bw} y={ay - 1} width={bw} height={9} rx={2}
+            <rect x={x} y={ay - 1} width={bw} height={9} rx={2}
               fill="none" stroke={rc} strokeWidth={1} opacity={0.50} />
-            <PixelText text={ab.name} x={TV_CONT_ARX - bw + 3} y={ay}
-              scale={1} fill={rc} outline={null} />
-          </>
+            <PixelText text={ab.name} x={x + 3} y={ay} scale={1} fill={rc} outline={null} />
+          </g>
         );
-      })() : null}
+      })}
     </g>
   );
 }
@@ -841,9 +866,8 @@ function cxName(sec) {
 
 // ─── Debug Console (HTML overlay, renders outside SVG) ────────────────────
 
-export function DebugConsole({ logs, onCommand }) {
+export function DebugConsole({ logs, onCommand, showDebug, onToggleDebug }) {
   const [input, setInput] = React.useState('');
-  const [showDebug, setShowDebug] = React.useState(false);
   const logRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -852,22 +876,22 @@ export function DebugConsole({ logs, onCommand }) {
 
   React.useEffect(() => {
     const handler = (e) => {
-      if (e.key === '`' && e.target.tagName !== 'INPUT') { e.preventDefault(); setShowDebug(d => !d); }
+      if (e.key === '`' && e.target.tagName !== 'INPUT') { e.preventDefault(); onToggleDebug(); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [onToggleDebug]);
 
   const handleKey = (e) => {
     if (e.key === 'Enter' && input.trim()) { onCommand(input.trim()); setInput(''); }
-    if (e.key === 'Escape') setShowDebug(false);
+    if (e.key === 'Escape') onToggleDebug();
   };
 
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 20, fontFamily: 'monospace', fontSize: '18px' }}>
       {/* DBG toggle */}
       <div
-        onClick={() => setShowDebug(d => !d)}
+        onClick={onToggleDebug}
         style={{
           position: 'absolute', top: 4, left: 4,
           width: 44, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -906,14 +930,12 @@ export function DebugConsole({ logs, onCommand }) {
 
 // ─── Component ────────────────────────────────────────────────────────────
 
-export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, players, possession, awayTeamName = 'AWAY', homeRoster = [], awayRoster = [], onOptions }) {
+export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, players, possession, awayTeamName = 'AWAY', homeRoster = [], awayRoster = [], onOptions, showTeams = false, onShowTeams, showDebug = false, totalCredits = 0 }) {
   const mins = Math.floor(time / 60), secs = time % 60;
   const timeStr = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
   const qStr    = `Q${quarter}`;
   const hStr    = String(homeScore);
   const aStr    = String(awayScore);
-
-  const [showTeams, setShowTeams] = React.useState(false);
 
   const carrier = players.find(p => p.hasBall) ?? players[0];
   const g1 = svgToGrid(carrier.cx, carrier.cy);
@@ -926,27 +948,45 @@ export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time
     <g>
       {/* ── TOP MENU ───────────────────────────────────────── */}
 
-      {/* Debug coords — single line, top centre */}
-      <text x={204} y={10} textAnchor="middle" fontSize={8} fontFamily="monospace"
-        fill="#4af">{`x:${g1.x} y:${g1.y}`}</text>
+      {/* User profile — avatar circle (above buttons), username + credits to the right */}
+      <defs>
+        <clipPath id="user-avatar-clip">
+          <circle cx={179} cy={15} r={8} />
+        </clipPath>
+      </defs>
+      <circle cx={179} cy={15} r={9} fill="#0a1828" stroke="#ffe060" strokeWidth={1} />
+      <image
+        href="/jxts5wo9u41e1.png"
+        x={167} y={3} width={24} height={31}
+        clipPath="url(#user-avatar-clip)"
+        preserveAspectRatio="xMidYMid meet"
+      />
+      <PixelText text="u/test" x={191} y={9} scale={1} fill="#aac8e0" outline={null} />
+      <text x={191} y={23} fontSize={6} fontFamily="monospace" fill="#ffe060">{totalCredits} CREDITS</text>
+
+      {/* Debug coords — overlay only when console is open */}
+      {showDebug && (
+        <text x={204} y={33} textAnchor="middle" fontSize={8} fontFamily="monospace"
+          fill="#4af">{`x:${g1.x} y:${g1.y}`}</text>
+      )}
 
       {/* Teams button — left of centre pair */}
-      <g onClick={() => setShowTeams(s => !s)} style={{ cursor: 'pointer' }}>
-        <rect x={158} y={13} width={44} height={10} rx={1}
+      <g onClick={() => onShowTeams(s => !s)} style={{ cursor: 'pointer' }}>
+        <rect x={158} y={30} width={44} height={10} rx={1}
           fill={showTeams ? '#14283c' : '#0c1420'} shapeRendering="crispEdges" />
-        <rect x={158} y={13} width={44} height={10} rx={1}
+        <rect x={158} y={30} width={44} height={10} rx={1}
           fill="none" stroke={showTeams ? '#3060a0' : '#1e3050'} strokeWidth={1} />
-        <PixelTextC text="TEAMS" cx={180} y={15}
+        <PixelTextC text="TEAMS" cx={180} y={32}
           scale={1} fill={showTeams ? '#5898d8' : '#2a4060'} outline={null} />
       </g>
 
       {/* Options button — right of centre pair */}
       <g data-testid="hud-options-btn" onClick={onOptions} style={{ cursor: 'pointer' }}>
-        <rect x={206} y={13} width={44} height={10} rx={1}
+        <rect x={206} y={30} width={44} height={10} rx={1}
           fill="#0c1420" shapeRendering="crispEdges" />
-        <rect x={206} y={13} width={44} height={10} rx={1}
+        <rect x={206} y={30} width={44} height={10} rx={1}
           fill="none" stroke="#1e3050" strokeWidth={1} />
-        <PixelTextC text="OPT" cx={228} y={15}
+        <PixelTextC text="OPT" cx={228} y={32}
           scale={1} fill="#2a4060" outline={null} />
       </g>
 
@@ -1004,7 +1044,7 @@ export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time
           awayRoster={awayRoster}
           homeTeamName={homeTeamName}
           awayTeamName={awayTeamName}
-          onClose={() => setShowTeams(false)}
+          onClose={() => onShowTeams(false)}
         />
       )}
     </g>

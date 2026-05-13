@@ -1,6 +1,6 @@
 import { JERSEY_BASE } from '../constants.js';
 
-// Fadeaway shot animation frames (~16×20 bounding box, 12 frames)
+// Fadeaway shot animation frames (~16×20 bounding box, 13 frames)
 // SVG origin offset applied: x-10, y-18
 // Frames 1–7: wind-up and lean-back release
 // Frames 8–12: follow-through and landing
@@ -196,5 +196,22 @@ export const FADEAWAY_FRAMES = [
     [6,17,'#D9A066'],[12,17,'#D9A066'],
     [5,18,'#14171C'],[6,18,'#14171C'],[12,18,'#14171C'],[13,18,'#14171C'],
     [4,19,'#D9FFE2'],[5,19,'#D9FFE2'],[6,19,'#D9FFE2'],[12,19,'#D9FFE2'],[13,19,'#D9FFE2'],[14,19,'#D9FFE2'],
+  ],
+  [ // frame 13 — idle frame 1 (return to upright stance)
+    [8,5,'#3E2525'],[9,5,'#3E2525'],
+    [8,6,'#D9A066'],[9,6,'#D9A066'],
+    [8,7,'#B17F4C'],[9,7,'#B17F4C'],
+    [9,8,'#B17F4C'],
+    [7,9,'#D9A066'],[8,9,JERSEY_BASE],[9,9,'#D9A066'],[10,9,JERSEY_BASE],[11,9,'#D9A066'],
+    [7,10,'#D9A066'],[8,10,JERSEY_BASE],[9,10,'#D9A066'],[10,10,JERSEY_BASE],[11,10,'#D9A066'],
+    [6,11,'#D9A066'],[7,11,'#D9A066'],[8,11,JERSEY_BASE],[9,11,JERSEY_BASE],[10,11,JERSEY_BASE],[11,11,'#D9A066'],[12,11,'#D9A066'],
+    [6,12,'#D9FFE2'],[8,12,JERSEY_BASE],[9,12,JERSEY_BASE],[10,12,JERSEY_BASE],[12,12,'#D9FFE2'],
+    [5,13,'#D9A066'],[6,13,'#D9A066'],[8,13,'#E8D110'],[9,13,'#E8D110'],[10,13,'#E8D110'],[12,13,'#D9A066'],[13,13,'#D9A066'],
+    [8,14,'#D9FFE2'],[9,14,'#D9FFE2'],[10,14,'#D9FFE2'],
+    [7,15,'#D9FFE2'],[8,15,'#D9FFE2'],[10,15,'#D9FFE2'],[11,15,'#D9FFE2'],
+    [7,16,'#D9A066'],[11,16,'#D9A066'],
+    [7,17,'#D9A066'],[11,17,'#D9A066'],
+    [7,18,'#D9A066'],[11,18,'#D9A066'],
+    [6,19,'#14171C'],[7,19,'#14171C'],[11,19,'#14171C'],[12,19,'#14171C'],
   ],
 ];

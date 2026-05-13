@@ -28,6 +28,7 @@ export default function App() {
 
   React.useEffect(() => {
     if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'collection') {
+      bgMusic.stop();
       titleMusic.start();
     } else {
       titleMusic.stop();
@@ -54,6 +55,15 @@ export default function App() {
   );
 
   const gameState = useGame({ homeRoster, awayRoster: awayTeam.players });
+
+  const withAbilities = (roster, baseId) =>
+    roster.map((r, i) => {
+      const extras = gameState.abilityOverridesRef.current.get(baseId + i) ?? [];
+      const abilities = [r.ability, ...extras].filter(Boolean);
+      return { ...r, abilities };
+    });
+  const homeRosterFull = withAbilities(homeRoster, 1);
+  const awayRosterFull = withAbilities(awayTeam.players, 6);
 
   return (
     <div data-testid="game-root"
@@ -122,10 +132,11 @@ export default function App() {
           {...gameState}
           homeTeamName={homeTeamName}
           awayTeamName={awayTeam.name}
-          homeRoster={homeRoster}
-          awayRoster={awayTeam.players}
+          homeRoster={homeRosterFull}
+          awayRoster={awayRosterFull}
           gameTip={gameTip}
           onDismissGameTip={() => { gameState.handleCommand('testGamePlay'); setGameTip(null); }}
+          onDismissGameOver={() => setScene('title')}
           showOptions={showInGameOptions}
           onShowOptions={setShowInGameOptions}
           musicVol={musicVol}     sfxVol={sfxVol}

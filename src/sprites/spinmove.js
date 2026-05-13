@@ -1,6 +1,6 @@
 import { JERSEY_BASE } from '../constants.js';
 
-// Spin move animation frames (~21×19 bounding box, 11 frames)
+// Spin move animation frames (~21×19 bounding box, 12 frames)
 // No offset applied: raw SVG coordinates used
 // Frames 1–4: player pivots, body rotating with ball held low
 // Frames 5–7: mid-spin hold (defender contact on right side)
@@ -190,5 +190,22 @@ export const SPIN_MOVE_FRAMES = [
     [17,36,"#FF0000"],[20,36,"#D9A066"],[21,36,"#D9A066"],[25,36,"#14171C"],[26,36,"#D9FFE2"],
     [19,37,"#14171C"],[20,37,"#14171C"],[21,37,"#14171C"],[25,37,"#D9FFE2"],
     [18,38,"#D9FFE2"],[19,38,"#D9FFE2"],[20,38,"#D9FFE2"],[21,38,"#D9FFE2"],
+  ],
+  [ // frame 12 — settle, back to dribble stance (dribble sprite mapped to spin coordinate space)
+    [20,23,"#3E2525"],[21,23,"#3E2525"],
+    [20,24,"#D9A066"],[21,24,"#D9A066"],
+    [20,25,"#B17F4C"],[21,25,"#B17F4C"],[21,26,"#B17F4C"],
+    [19,27,"#D9A066"],[20,27,JERSEY_BASE],[21,27,"#D9A066"],[22,27,JERSEY_BASE],[23,27,"#D9A066"],
+    [19,28,"#D9A066"],[20,28,JERSEY_BASE],[21,28,"#D9A066"],[22,28,JERSEY_BASE],[23,28,"#D9A066"],
+    [18,29,"#D9A066"],[19,29,"#D9A066"],[20,29,JERSEY_BASE],[21,29,JERSEY_BASE],[22,29,JERSEY_BASE],[23,29,"#D9A066"],[24,29,"#D9A066"],
+    [18,30,"#D9FFE2"],[20,30,JERSEY_BASE],[21,30,JERSEY_BASE],[22,30,JERSEY_BASE],[24,30,"#D9FFE2"],
+    [17,31,"#D9A066"],[18,31,"#D9A066"],[20,31,"#E8D110"],[21,31,"#E8D110"],[22,31,"#E8D110"],[24,31,"#D9A066"],[25,31,"#D9A066"],
+    [20,32,"#D9FFE2"],[21,32,"#D9FFE2"],[22,32,"#D9FFE2"],
+    [19,33,"#D9FFE2"],[20,33,"#D9FFE2"],[22,33,"#D9FFE2"],[23,33,"#D9FFE2"],
+    [19,34,"#D9A066"],[23,34,"#D9A066"],
+    [19,35,"#D9A066"],[23,35,"#D9A066"],
+    [19,36,"#D9A066"],[23,36,"#D9A066"],
+    [18,37,"#14171C"],[19,37,"#14171C"],[23,37,"#14171C"],[24,37,"#14171C"],
+    [17,38,"#D9FFE2"],[18,38,"#D9FFE2"],[19,38,"#D9FFE2"],[23,38,"#D9FFE2"],[24,38,"#D9FFE2"],[25,38,"#D9FFE2"],
   ],
 ];

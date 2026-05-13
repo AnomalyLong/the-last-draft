@@ -1,13 +1,13 @@
 import React from 'react';
 import { JERSEY_HOME, JERSEY_BASE, JERSEY_DARK_BASE, SHOOT_JUMP_OFFSETS, BLOCK_JUMP_OFFSETS, JUMP_BALL_JUMP_OFFSETS } from '../constants.js';
-import { SPRITE_PIXELS, IDLE_FRAMES, RUN_FRAMES, RUN_BALL_FRAMES, SHOOT_CHAR_FRAMES, DUNK_FRAMES, DUNK_BALL_OFFSETS, BALL_FRAMES, BLOCK_JUMP_FRAMES, JUMP_BALL_FRAMES, STEAL_FRAMES, SPIN_MOVE_FRAMES, DASH_FRAMES, FADEAWAY_FRAMES } from '../sprites/index.js';
+import { SPRITE_PIXELS, IDLE_FRAMES, RUN_FRAMES, RUN_BALL_FRAMES, SHOOT_CHAR_FRAMES, DUNK_FRAMES, DUNK_BALL_OFFSETS, BALL_FRAMES, BLOCK_JUMP_FRAMES, IRON_BLOCK_FRAMES, JUMP_BALL_FRAMES, STEAL_FRAMES, PICKPOCKET_FRAMES, SPIN_MOVE_FRAMES, DASH_FRAMES, FADEAWAY_FRAMES } from '../sprites/index.js';
 
-export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isBlocking = false, isJumpBall = false, isStealing = false, isSpinning = false, isDashing = false, isFadingAway = false, facingRight = false }) {
+export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isBlocking = false, isIronBlocking = false, isJumpBall = false, isStealing = false, isPickPocketing = false, isSpinning = false, isDashing = false, isFadingAway = false, facingRight = false }) {
   const [frameIdx, setFrameIdx] = React.useState(0);
   const rafRef = React.useRef(null);
 
   React.useEffect(() => {
-    if (hasBall && !isMoving && !isShooting && !isDunking && !isBlocking && !isJumpBall && !isStealing && !isSpinning && !isDashing && !isFadingAway) return;
+    if (hasBall && !isMoving && !isShooting && !isDunking && !isBlocking && !isIronBlocking && !isJumpBall && !isStealing && !isPickPocketing && !isSpinning && !isDashing && !isFadingAway) return;
     cancelAnimationFrame(rafRef.current);
     if (isJumpBall) {
       const start = performance.now();
@@ -63,11 +63,29 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall =
       rafRef.current = requestAnimationFrame(tick);
       return () => cancelAnimationFrame(rafRef.current);
     }
+    if (isPickPocketing) {
+      const start = performance.now();
+      const tick = (now) => {
+        const f = Math.floor((now - start) / 107);
+        if (f < PICKPOCKET_FRAMES.length) { setFrameIdx(f); rafRef.current = requestAnimationFrame(tick); }
+      };
+      rafRef.current = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(rafRef.current);
+    }
     if (isStealing) {
       const start = performance.now();
       const tick = (now) => {
         const f = Math.floor((now - start) / 20);
         if (f < STEAL_FRAMES.length) { setFrameIdx(f); rafRef.current = requestAnimationFrame(tick); }
+      };
+      rafRef.current = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(rafRef.current);
+    }
+    if (isIronBlocking) {
+      const start = performance.now();
+      const tick = (now) => {
+        const f = Math.floor((now - start) / 80);
+        if (f < IRON_BLOCK_FRAMES.length) { setFrameIdx(f); rafRef.current = requestAnimationFrame(tick); }
       };
       rafRef.current = requestAnimationFrame(tick);
       return () => cancelAnimationFrame(rafRef.current);
@@ -90,7 +108,7 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall =
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(rafRef.current); setFrameIdx(0); };
-  }, [hasBall, isMoving, isShooting, isDunking, isBlocking, isJumpBall, isStealing, isSpinning, isDashing, isFadingAway]);
+  }, [hasBall, isMoving, isShooting, isDunking, isBlocking, isIronBlocking, isJumpBall, isStealing, isPickPocketing, isSpinning, isDashing, isFadingAway]);
 
   const jerseyDark = jerseyColor + '99';
 
@@ -167,11 +185,32 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall =
     );
   }
 
+  if (isPickPocketing) {
+    const fi = Math.min(frameIdx, PICKPOCKET_FRAMES.length - 1);
+    const pixels = PICKPOCKET_FRAMES[fi] || PICKPOCKET_FRAMES[0];
+    return (
+      <g transform={`translate(${cx - 9 * scale}, ${cy - 17 * scale})`} shapeRendering="crispEdges">
+        {applyColors(pixels)}
+      </g>
+    );
+  }
+
   if (isStealing) {
     const fi = Math.min(frameIdx, STEAL_FRAMES.length - 1);
     const pixels = STEAL_FRAMES[fi] || STEAL_FRAMES[0];
     return (
       <g transform={`translate(${cx - 9 * scale}, ${cy - 17 * scale})`} shapeRendering="crispEdges">
+        {applyColors(pixels)}
+      </g>
+    );
+  }
+
+  if (isIronBlocking) {
+    const fi = Math.min(frameIdx, IRON_BLOCK_FRAMES.length - 1);
+    const pixels = IRON_BLOCK_FRAMES[fi] || IRON_BLOCK_FRAMES[0];
+    const jumpY = BLOCK_JUMP_OFFSETS[fi] ?? 0;
+    return (
+      <g transform={`translate(${cx - 6 * scale}, ${cy - 17 * scale - jumpY})`} shapeRendering="crispEdges">
         {applyColors(pixels)}
       </g>
     );

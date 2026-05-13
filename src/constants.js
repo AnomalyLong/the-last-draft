@@ -105,3 +105,19 @@ export const BLOCK_JUMP_OFFSETS = [0, 3, 10, 18, 20, 20, 20, 14, 6, 0, 0];
 // ─── Jump Ball Jump Offsets ───────────────────────────────────────────────────
 // 9 frames peaking at frame 4 (midpoint of reversed-dunk arc) — 8px max rise.
 export const JUMP_BALL_JUMP_OFFSETS = [0, 2, 4, 6, 8, 6, 4, 2, 0];
+
+// ─── Jump Ball Formation ──────────────────────────────────────────────────────
+// Centers face each other at the circle; others face toward center.
+// Home players left of circle, away players right.
+export const JUMP_BALL_FORMATION = [
+  { id: 1,  gx: 41, gy: 20, facingRight: true  }, // Home PG  — left half, faces right
+  { id: 2,  gx: 41, gy: 30, facingRight: true  }, // Home SG  — left half, faces right
+  { id: 3,  gx: 34, gy: 25, facingRight: true  }, // Home SF  — far left
+  { id: 4,  gx: 38, gy: 16, facingRight: true  }, // Home PF  — left-top
+  { id: 5,  gx: 46, gy: 25, facingRight: true  }, // Home C   — jumper, left of circle
+  { id: 6,  gx: 53, gy: 20, facingRight: false }, // Away PG  — right half, faces left
+  { id: 7,  gx: 53, gy: 30, facingRight: false }, // Away SG  — right half, faces left
+  { id: 8,  gx: 60, gy: 25, facingRight: false }, // Away SF  — far right
+  { id: 9,  gx: 56, gy: 16, facingRight: false }, // Away PF  — right-top
+  { id: 10, gx: 48, gy: 25, facingRight: false }, // Away C   — jumper, right of circle
+];
