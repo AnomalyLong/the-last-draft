@@ -1,7 +1,7 @@
 {
   "private": true,
   "name": "the-last-draft",
-  "version": "0.0.0",
+  "version": "0.0.3.1788",
   "license": "BSD-3-Clause",
   "type": "module",
   "scripts": {

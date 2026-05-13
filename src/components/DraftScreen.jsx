@@ -432,7 +432,7 @@ function DiagBeam({ x, color, w, opacity }) {
 function DraftRainbowBurst({ rarity, age }) {
   if (!rarity || age <= 0) return null;
 
-  const BURST_DUR = rarity === 3 ? 130 : rarity === 2 ? 90 : 60;
+  const BURST_DUR = rarity === 3 ? 190 : rarity === 2 ? 150 : 120;
   if (age >= BURST_DUR) return null;
 
   const t       = age / BURST_DUR;
@@ -565,7 +565,7 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
     setBurstRarity(rarity);
     setBurstAge(0);
     let t = 0;
-    const DUR = rarity === 3 ? 115 : rarity === 2 ? 78 : 50;
+    const DUR = rarity === 3 ? 175 : rarity === 2 ? 138 : 110;
     const loop = () => {
       t++;
       setBurstAge(t);

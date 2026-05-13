@@ -635,7 +635,7 @@ const TV_TAB_GAP = 4;
 const TV_TABS    = [['stats', 'STATS'], ['roles', 'ROLES']];
 const TV_TAB_X0  = Math.round(ZOOM_W / 2 - (TV_TABS.length * TV_TAB_W + (TV_TABS.length - 1) * TV_TAB_GAP) / 2);
 
-function TeamViewer({ homeRoster, awayRoster, homeTeamName, awayTeamName, onClose }) {
+export function TeamViewer({ homeRoster, awayRoster, homeTeamName, awayTeamName, onClose }) {
   const [tvTab, setTvTab] = React.useState('stats');
   const [primaryShooter, setPrimaryShooter] = React.useState(null);
   const [guardMap, setGuardMap] = React.useState(
@@ -930,7 +930,7 @@ export function DebugConsole({ logs, onCommand, showDebug, onToggleDebug }) {
 
 // ─── Component ────────────────────────────────────────────────────────────
 
-export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, players, possession, awayTeamName = 'AWAY', homeRoster = [], awayRoster = [], onOptions, showTeams = false, onShowTeams, showDebug = false, totalCredits = 0 }) {
+export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, players, possession, awayTeamName = 'AWAY', homeRoster = [], awayRoster = [], onOptions, showTeams = false, onShowTeams, showDebug = false, totalCredits = 0, isMobile = false }) {
   const mins = Math.floor(time / 60), secs = time % 60;
   const timeStr = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
   const qStr    = `Q${quarter}`;
@@ -1002,6 +1002,8 @@ export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time
       <text data-testid="quarter"    visibility="hidden">{qStr}</text>
 
       {/* ── SCOREBOARD ─────────────────────────────────────── */}
+      {/* On mobile: shift down 15 units and scale 1.15× around the scoreboard centre (204, 322.5) */}
+      <g transform={isMobile ? 'translate(204,362.5) scale(1.20) translate(-204,-322.5)' : undefined}>
 
       {/* 3-D shelf */}
       <polygon shapeRendering="crispEdges" fill="#5a5a5a"
@@ -1038,15 +1040,8 @@ export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time
       <text textAnchor="middle" x={cx(S.cl)} y={MID_Y + 7}
         fontSize={6} fontFamily="monospace" fill="#707880">{qStr}</text>
 
-      {showTeams && (
-        <TeamViewer
-          homeRoster={homeRoster}
-          awayRoster={awayRoster}
-          homeTeamName={homeTeamName}
-          awayTeamName={awayTeamName}
-          onClose={() => onShowTeams(false)}
-        />
-      )}
+      </g>{/* end scoreboard mobile transform */}
+
     </g>
   );
 }

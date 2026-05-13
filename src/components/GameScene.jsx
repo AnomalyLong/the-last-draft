@@ -8,7 +8,7 @@ import { Ball } from './Ball.jsx';
 import { ShotBall } from './ShotBall.jsx';
 import { SpecialPassBall } from './SpecialPassBall.jsx';
 import { Player } from './Player.jsx';
-import { HUD, DebugConsole, PlayerPortrait, LP_X, LP_W, RP_X, RP_W } from './HUD.jsx';
+import { HUD, DebugConsole, PlayerPortrait, LP_X, LP_W, RP_X, RP_W, TeamViewer } from './HUD.jsx';
 import { Shadow } from './Shadow.jsx';
 import { PowerBar } from './PowerBar.jsx';
 import { ScorePopup } from './ScorePopup.jsx';
@@ -95,14 +95,18 @@ export function GameScene({
   const homeHasBall   = carrier.team === 'home';
 
   const anyOverlay = !!(levelUpState || quarterSummary || gameOver || showOptions || showTeams || playPickState || gameTip);
+  // Overlays that live in the separate overlay SVG (full ZOOM_W×TOTAL_H, not zoomed)
+  const anyModalOverlay = !!(levelUpState || quarterSummary || gameOver || showOptions || playPickState || gameTip || showTeams);
 
   // Measure the container to compute pixel-accurate panel height and viewBox extension.
   // CSS cqw/cqh resolve against the browser viewport in some contexts (devtools phone frame),
   // so we use JS instead.
   const containerRef = React.useRef(null);
   const [extraViewH, setExtraViewH] = React.useState(0);
+  const [overlayExtraH, setOverlayExtraH] = React.useState(0);
   const [mobileZoom, setMobileZoom] = React.useState(1);
   const [panelH, setPanelH] = React.useState('0px');
+  const [isMobile, setIsMobile] = React.useState(false);
   React.useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -112,11 +116,17 @@ export function GameScene({
       setMobileZoom(zoom);
       setViewportW?.(Math.round(ZOOM_W / zoom));
       const scale = (width * zoom) / ZOOM_W;
-      const widthConstrained = (width / ZOOM_W) <= (height / TOTAL_H);
-      setPanelH(`${Math.round(TOP_BAR * (width / ZOOM_W) * (widthConstrained ? 1.0 : 0.62))}px`);
-      // Extend viewBox down to fill ~65% of leftover vertical space (in zoomed SVG units)
-      const naturalH = TOTAL_H / zoom * scale; // = TOTAL_H * width / ZOOM_W (zoom cancels)
-      setExtraViewH(naturalH < height ? Math.round((height - naturalH) * 0.65 / scale) : 0);
+      const widthConstrained = width < height;
+      setIsMobile(widthConstrained);
+      const ph = Math.round(TOP_BAR * scale * (widthConstrained ? 1.0 : 0.62));
+      setPanelH(`${ph}px`);
+      const svgH = widthConstrained ? height - ph : height;
+      const naturalH = TOTAL_H / zoom * scale;
+      setExtraViewH(naturalH < svgH ? Math.round((svgH - naturalH) * 0.65 / scale) : 0);
+      // Overlay SVG uses unzoomed scale — compute its extra height separately
+      const ovScale = width / ZOOM_W;
+      const ovNaturalH = TOTAL_H * ovScale;
+      setOverlayExtraH(ovNaturalH < height ? Math.round((height - ovNaturalH) * 0.65 / ovScale) : 0);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -131,8 +141,19 @@ export function GameScene({
         height="100%"
         viewBox={`${cameraX} 0 ${ZOOM_W / mobileZoom} ${TOTAL_H / mobileZoom + extraViewH}`}
         preserveAspectRatio="xMidYMin meet"
-        style={{ imageRendering: 'pixelated', display: 'block' }}
         {...svgProps}
+        style={{
+          imageRendering: 'pixelated',
+          display: 'block',
+          ...(svgProps?.style ?? {}),
+          ...(isMobile ? {
+            position: 'absolute',
+            top: panelH,
+            left: 0,
+            width: '100%',
+            height: `calc(100% - ${panelH})`,
+          } : {}),
+        }}
       >
         <defs>
           <clipPath id="left-arc-clip">
@@ -145,7 +166,6 @@ export function GameScene({
 
         <rect x={0} y={0} width={W} height={TOTAL_H} fill="#111" />
         <Court />
-        <rect x={0} y={0} width={W} height={TOP_BAR} fill="#111" />
         <rect x={0} y={336} width={W} height={BOT_BAR} fill="#111" />
 
         <g opacity={playerAlpha}>
@@ -212,16 +232,7 @@ export function GameScene({
         {(() => { const dp = players.find(p => p.isDashing);    return dp ? <SpecialMoveCard key={`dash-${dp.id}`}  player={dp} frames={DASH_FRAMES}      label="SPEED BURST!" jerseyColor={dp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={60} accentColor="#44AAFF" bgColor="#C8E8FF" anchorX={9}  anchorY={17} /> : null; })()}
         {(() => { const fp = players.find(p => p.isFadingAway); return fp ? <SpecialMoveCard key={`fade-${fp.id}`} player={fp} frames={FADEAWAY_FRAMES}  label="FADEAWAY!"    jerseyColor={fp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#FF8C00" bgColor="#FFF0CC" anchorX={9}  anchorY={12} /> : null; })()}
 
-        <g transform={`translate(${cameraX}, 0)`}>
-          {gameTip && (
-            <BballTip
-              text={gameTip}
-              charX={TIP_CHAR_X} charY={TIP_CHAR_Y} scale={TIP_SCALE}
-              dlgX={TIP_DLG_X} dlgY={TIP_DLG_Y} dlgW={TIP_DLG_W} dlgH={TIP_DLG_H}
-              textX={TIP_TEXT_X} textY={TIP_TEXT_Y}
-              onClick={onDismissGameTip}
-            />
-          )}
+        <g transform={`translate(${cameraX + (isMobile ? Math.round(ZOOM_W * (1 / mobileZoom - 1) / 2) : 0)}, 0)`}>
           <HUD
             homeScore={homeScore} awayScore={awayScore}
             homeTeamName={homeTeamName} awayTeamName={awayTeamName}
@@ -231,53 +242,81 @@ export function GameScene({
             onOptions={onShowOptions}
             showTeams={showTeams} onShowTeams={setShowTeams}
             showDebug={showDebug} totalCredits={totalCredits}
+            isMobile={isMobile}
           />
         </g>
 
         <QuarterBanner text={quarterAnnouncement} cameraX={cameraX} />
 
-        {playPickState && <PlayPickerOverlay cameraX={cameraX} onPick={onPickPlay} />}
-
-        {levelUpState && (
-          <LevelUpOverlay
-            player={levelUpState.player}
-            abilities={levelUpState.abilities}
-            cameraX={cameraX}
-            onPick={onPickLevelUp}
-          />
-        )}
-
-        {quarterSummary && (
-          <QuarterSummary
-            quarterSummary={quarterSummary}
-            homeTeamName={homeTeamName}
-            awayTeamName={awayTeamName}
-            cameraX={cameraX}
-            onDismiss={onDismissQuarterSummary}
-          />
-        )}
-
-        {gameOver && (
-          <GameOverScreen
-            gameOver={gameOver}
-            homeTeamName={homeTeamName}
-            awayTeamName={awayTeamName}
-            cameraX={cameraX}
-            onDismiss={onDismissGameOver}
-          />
-        )}
-
-        {showOptions && (
-          <OptionsOverlay
-            musicVol={musicVol}   sfxVol={sfxVol}
-            onMusicVol={onMusicVol} onSfxVol={onSfxVol}
-            scanlines={scanlines} vignette={vignette}
-            onScanlines={onScanlines} onVignette={onVignette}
-            onClose={() => onShowOptions(false)}
-            cameraX={cameraX}
-          />
-        )}
       </svg>
+
+      {/* Overlay layer — full-screen dim + centered SVG so dialogs are never clipped by mobile zoom */}
+      {anyModalOverlay && (
+        <>
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)' }} />
+          <svg
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', display: 'block' }}
+            viewBox={`0 0 ${ZOOM_W} ${TOTAL_H}`}
+            preserveAspectRatio="xMidYMid meet"
+          >
+            {gameTip && (
+              <BballTip
+                text={gameTip}
+                charX={TIP_CHAR_X} charY={TIP_CHAR_Y} scale={TIP_SCALE}
+                dlgX={TIP_DLG_X} dlgY={TIP_DLG_Y} dlgW={TIP_DLG_W} dlgH={TIP_DLG_H}
+                textX={TIP_TEXT_X} textY={TIP_TEXT_Y}
+                onClick={onDismissGameTip}
+              />
+            )}
+            {showTeams && (
+              <TeamViewer
+                homeRoster={homeRoster}
+                awayRoster={awayRoster}
+                homeTeamName={homeTeamName}
+                awayTeamName={awayTeamName}
+                onClose={() => setShowTeams(false)}
+              />
+            )}
+            {playPickState && <PlayPickerOverlay cameraX={0} onPick={onPickPlay} />}
+            {levelUpState && (
+              <LevelUpOverlay
+                player={{ ...levelUpState.player, cx: levelUpState.player.cx - cameraX }}
+                abilities={levelUpState.abilities}
+                cameraX={0}
+                onPick={onPickLevelUp}
+              />
+            )}
+            {quarterSummary && (
+              <QuarterSummary
+                quarterSummary={quarterSummary}
+                homeTeamName={homeTeamName}
+                awayTeamName={awayTeamName}
+                cameraX={0}
+                onDismiss={onDismissQuarterSummary}
+              />
+            )}
+            {gameOver && (
+              <GameOverScreen
+                gameOver={gameOver}
+                homeTeamName={homeTeamName}
+                awayTeamName={awayTeamName}
+                cameraX={0}
+                onDismiss={onDismissGameOver}
+              />
+            )}
+            {showOptions && (
+              <OptionsOverlay
+                musicVol={musicVol}   sfxVol={sfxVol}
+                onMusicVol={onMusicVol} onSfxVol={onSfxVol}
+                scanlines={scanlines} vignette={vignette}
+                onScanlines={onScanlines} onVignette={onVignette}
+                onClose={() => onShowOptions(false)}
+                cameraX={0}
+              />
+            )}
+          </svg>
+        </>
+      )}
 
       {/* Debug console — always on top */}
       <DebugConsole logs={logs} onCommand={handleCommand} showDebug={showDebug} onToggleDebug={() => setShowDebug(d => !d)} />
