@@ -3,6 +3,23 @@ export const STEAL_RATE = 0.10; // probability a pass is stolen (0–1)
 export const DUNK_RATE  = 0.20; // probability a shot attempt becomes a dunk (0–1)
 export const BLOCK_RATE = 0.20; // probability the closest defender blocks a shot (0–1)
 
+export const ABILITY_LEVELUP_RATE = 0.10; // probability a level-up grants an ability vs a stat upgrade (0–1)
+
+// ─── Play Rates ───────────────────────────────────────────────────────────────
+// Motion Offense — pass count range before shooting
+export const MOTION_MIN_PASSES = 1;
+export const MOTION_MAX_PASSES = 3;
+
+// Isolation — equal 1/3 chance to feed SG or SF (PG keeps the rest)
+export const ISO_PASS_RATE  = 1 / 3;
+// Isolation — 75% dunk vs kick-out on ISO finish
+export const ISO_DUNK_RATE  = 0.75;
+
+// Pick & Roll — 60% PG drives vs passing to C
+export const PICKROLL_DRIVE_RATE   = 0.60;
+// Pick & Roll — 50% C dunks vs shoots after receiving the roll pass
+export const PICKROLL_C_DUNK_RATE  = 0.50;
+
 export const MISS_REBOUND_MIN_FT  = 5;  // grid-ft: nearest rebound lands from basket on a miss
 export const MISS_REBOUND_MAX_FT  = 15; // grid-ft: farthest rebound lands from basket on a miss
 export const BLOCK_REBOUND_MIN_FT = 5;  // grid-ft: nearest rebound lands from basket on a block
@@ -19,6 +36,7 @@ export const COURT_Y = TOP_BAR;
 export const COURT_MID_Y = COURT_Y + COURT_H / 2;
 
 // ─── Quarter Break ────────────────────────────────────────────────────────────
+export const NUM_PERIODS = 2; // total quarters per game (set to 2 for faster debug builds)
 export const QUARTER_END_ALPHA = 0; // opacity target for players and ball when a quarter ends
 
 // ─── Jersey Colors ────────────────────────────────────────────────────────────

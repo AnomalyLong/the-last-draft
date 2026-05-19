@@ -18,5 +18,12 @@ export default defineConfig({
   server: {
     port: 5174,
     open: true,
+    proxy: {
+      // Forward /dev-admin to the Devvit server (WEBBIT_PORT, default 3000)
+      '/dev-admin': {
+        target: `http://localhost:${process.env.WEBBIT_PORT ?? 3000}`,
+        changeOrigin: true,
+      },
+    },
   },
 });

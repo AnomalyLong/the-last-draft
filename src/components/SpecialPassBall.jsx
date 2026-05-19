@@ -19,12 +19,12 @@ export function SpecialPassBall({ shot, scale = 1 }) {
   return (
     <g transform={`translate(${shot.cx - S / 2}, ${shot.cy - S / 2})`} shapeRendering="crispEdges">
       <defs>
-        <filter id={glowId} x="-80%" y="-80%" width="260%" height="260%">
-          <feColorMatrix type="matrix" values="0 0 0 0 0  0 1 0 0 0.6  0 0 0 0 0  0 0 0 1 0" result="green" />
-          <feGaussianBlur in="green" stdDeviation="2" result="blur" />
+        <filter id={glowId} x="-100%" y="-100%" width="300%" height="300%">
+          <feColorMatrix type="matrix" values="0 0 0 0 0  0.6 1 0 0 0.5  0 0 0 0 0  0 0 0 1 0" result="tinted" />
+          <feGaussianBlur in="tinted" stdDeviation="4" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
+            <feMergeNode in="tinted" />
           </feMerge>
         </filter>
       </defs>

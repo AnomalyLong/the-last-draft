@@ -4,9 +4,11 @@ import { PhoneFrameInline } from './PhoneFrame.jsx';
 
 // Wraps SVG-based screen components in a scaled preview frame.
 // Children should be SVG elements sized to ZOOM_W × TOTAL_H.
-export default function StoryFrame({ title, children, controls }) {
+export default function StoryFrame({ title, children, controls, mobile: mobileProp, onMobile }) {
   const [zoom, setZoom] = useState(1.5);
-  const [mobile, setMobile] = useState(false);
+  const [mobileInner, setMobileInner] = useState(false);
+  const mobile = mobileProp !== undefined ? mobileProp : mobileInner;
+  const setMobile = onMobile ?? setMobileInner;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

@@ -27,7 +27,7 @@ import { DASH_FRAMES, FADEAWAY_FRAMES, SPIN_MOVE_FRAMES, PICKPOCKET_FRAMES, IRON
 
 // BballTip layout constants (game-screen space, inside cameraX group)
 const TIP_CHAR_X = 10;
-const TIP_CHAR_Y = 96;
+const TIP_CHAR_Y = 60;
 const TIP_SCALE  = 0.30;
 const TIP_CHAR_W = Math.round(150 * TIP_SCALE); // 45
 const TIP_DLG_X  = TIP_CHAR_X + 22;
@@ -59,13 +59,16 @@ export function GameScene({
   // from useGame
   players, shot, logs, handleCommand, cameraX,
   possession, homeScore, awayScore, quarter, time,
-  scorePopup, levelUpState, onPickLevelUp,
+  scorePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade,
   playPickState, onPickPlay,
   quarterAnnouncement, playerAlpha,
   xpFlyup, stealFlyup, blockFlyup,
   quarterSummary, onDismissQuarterSummary,
   gameOver, onDismissGameOver,
   totalCredits,
+
+  // User identity (from server)
+  username, serverCredits,
 
   // Team / roster info
   homeTeamName, awayTeamName,
@@ -107,6 +110,11 @@ export function GameScene({
   const [mobileZoom, setMobileZoom] = React.useState(1);
   const [panelH, setPanelH] = React.useState('0px');
   const [isMobile, setIsMobile] = React.useState(false);
+  // Y offset to convert game-space cy → overlay SVG coordinate space.
+  // Accounts for: (1) portrait panel pushing the game SVG down on mobile,
+  // (2) xMidYMid centering of the overlay SVG in tall containers.
+  // Formula: (gameSvgTopOffset * ZOOM_W/w) - (containerH * ZOOM_W/w - TOTAL_H) / 2
+  const [overlayYOffset, setOverlayYOffset] = React.useState(0);
   React.useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -127,6 +135,13 @@ export function GameScene({
       const ovScale = width / ZOOM_W;
       const ovNaturalH = TOTAL_H * ovScale;
       setOverlayExtraH(ovNaturalH < height ? Math.round((height - ovNaturalH) * 0.65 / ovScale) : 0);
+      // Correct y-transform for game-space → overlay-space.
+      // overlayScale = actual xMidYMid meet scale factor (min of x and y axes).
+      // overlayOffsetY = vertical centering gap in CSS pixels (0 on landscape where y constrains).
+      const gameSvgTop = widthConstrained ? ph : 0;
+      const overlayScl  = Math.min(width / ZOOM_W, height / TOTAL_H);
+      const overlayOffY = (height - TOTAL_H * overlayScl) / 2;
+      setOverlayYOffset((gameSvgTop - overlayOffY) / overlayScl);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -227,7 +242,7 @@ export function GameScene({
         {blockFlyup && <BlockFlyup key={blockFlyup.id}  fromCx={blockFlyup.fromCx} fromCy={blockFlyup.fromCy} toCx={blockFlyup.toCx} toCy={blockFlyup.toCy} color={blockFlyup.color} />}
 
         {(() => { const ib = players.find(p => p.isIronBlocking); return ib ? <SpecialMoveCard key={`ib-${ib.id}`} player={ib} frames={IRON_BLOCK_FRAMES} label="IRON BLOCK!" jerseyColor={ib.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#CC3333" bgColor="#FFD0D0" anchorX={6} anchorY={17} /> : null; })()}
-        {(() => { const pp = players.find(p => p.isPickPocketing); return pp ? <SpecialMoveCard key={`pp-${pp.id}`} player={pp} frames={PICKPOCKET_FRAMES} label="PICK POCKET!" jerseyColor={pp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={107} accentColor="#00FF44" bgColor="#C8FFD8" anchorX={9} anchorY={17} /> : null; })()}
+        {(() => { const pp = players.find(p => p.isPickPocketing); return pp ? <SpecialMoveCard key={`pp-${pp.id}`} player={pp} frames={PICKPOCKET_FRAMES} label="PICK POCKET!" jerseyColor={pp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={133} accentColor="#00FF44" bgColor="#C8FFD8" anchorX={9} anchorY={17} /> : null; })()}
         {(() => { const sp = players.find(p => p.isSpinning);   return sp ? <SpecialMoveCard key={`spin-${sp.id}`}  player={sp} frames={SPIN_MOVE_FRAMES} label="SPIN MOVE!"   jerseyColor={sp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#F5C800" bgColor="#F5E6C8" anchorX={21} anchorY={28} /> : null; })()}
         {(() => { const dp = players.find(p => p.isDashing);    return dp ? <SpecialMoveCard key={`dash-${dp.id}`}  player={dp} frames={DASH_FRAMES}      label="SPEED BURST!" jerseyColor={dp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={60} accentColor="#44AAFF" bgColor="#C8E8FF" anchorX={9}  anchorY={17} /> : null; })()}
         {(() => { const fp = players.find(p => p.isFadingAway); return fp ? <SpecialMoveCard key={`fade-${fp.id}`} player={fp} frames={FADEAWAY_FRAMES}  label="FADEAWAY!"    jerseyColor={fp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#FF8C00" bgColor="#FFF0CC" anchorX={9}  anchorY={12} /> : null; })()}
@@ -241,7 +256,8 @@ export function GameScene({
             homeRoster={homeRoster} awayRoster={awayRoster}
             onOptions={onShowOptions}
             showTeams={showTeams} onShowTeams={setShowTeams}
-            showDebug={showDebug} totalCredits={totalCredits}
+            showDebug={showDebug} totalCredits={serverCredits ?? totalCredits}
+            username={username}
             isMobile={isMobile}
           />
         </g>
@@ -270,6 +286,7 @@ export function GameScene({
             )}
             {showTeams && (
               <TeamViewer
+                players={players}
                 homeRoster={homeRoster}
                 awayRoster={awayRoster}
                 homeTeamName={homeTeamName}
@@ -280,10 +297,17 @@ export function GameScene({
             {playPickState && <PlayPickerOverlay cameraX={0} onPick={onPickPlay} />}
             {levelUpState && (
               <LevelUpOverlay
-                player={{ ...levelUpState.player, cx: levelUpState.player.cx - cameraX }}
+                type={levelUpState.type ?? 'ability'}
+                player={{
+                  ...levelUpState.player,
+                  cx: (levelUpState.player.cx - cameraX) * mobileZoom,
+                  cy: levelUpState.player.cy * mobileZoom + overlayYOffset,
+                }}
+                rosterEntry={(levelUpState.player.team === 'home' ? homeRoster : awayRoster)[POS_ORDER.indexOf(levelUpState.player.role)] ?? null}
                 abilities={levelUpState.abilities}
+                statGained={levelUpState.statGained}
                 cameraX={0}
-                onPick={onPickLevelUp}
+                onPick={levelUpState.type === 'stat' ? onDismissStatUpgrade : onPickLevelUp}
               />
             )}
             {quarterSummary && (

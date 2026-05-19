@@ -1,6 +1,8 @@
 import React from 'react';
-import { ZOOM_W, TOTAL_H } from '../constants.js';
-import { PixelTextC } from './PixelText.jsx';
+import { ZOOM_W, TOTAL_H, JERSEY_BASE, JERSEY_HOME, JERSEY_AWAY } from '../constants.js';
+import { PixelText, PixelTextC } from './PixelText.jsx';
+import { BballTip } from './BballTip.jsx';
+import { CELEBRATION_FRAMES, HEAD_PORTRAIT } from '../sprites/index.js';
 
 const RARITY_COLORS = { 1: '#20c8a0', 2: '#c060e0', 3: '#e8c060' };
 const RARITY_LABELS = { 1: 'UNCOMMON', 2: 'RARE', 3: 'LEGENDARY' };
@@ -9,6 +11,9 @@ const RARITY_TINTS  = {
   2: 'rgba(192,96,224,0.16)',
   3: 'rgba(232,192,96,0.20)',
 };
+
+const STAT_COLORS = { spd: '#20c8e0', dex: '#9860e0', jmp: '#30d060', acc: '#e09030' };
+const STAT_LABELS = { spd: 'SPD', dex: 'DEX', jmp: 'JMP', acc: 'ACC' };
 
 const SWIRL_N     = 14;
 const SWIRL_H     = 46;  // vertical range of helix (px)
@@ -454,9 +459,246 @@ function AbilityPickerDialog({ abilities, cameraX, onPick }) {
   );
 }
 
+// ─── FTUE intro dialogue ──────────────────────────────────────────────────────
+
+// BballTip layout — bottom of screen, matches GameScene tip conventions
+const FTUE_SCALE   = 0.30;
+const FTUE_CHAR_W  = Math.round(150 * FTUE_SCALE); // 45
+const FTUE_CHAR_X  = 20;                           // indent from left edge
+const FTUE_CHAR_Y  = Math.round(TOTAL_H / 3);      // ~116 — 1/3 down the screen
+const FTUE_DLG_X   = FTUE_CHAR_X + 22;            // dialog left edge (under char overlap)
+const FTUE_DLG_Y   = FTUE_CHAR_Y + 13;
+const FTUE_DLG_H   = 19;
+const FTUE_DLG_W   = ZOOM_W - FTUE_DLG_X - 4;    // extends to near right edge
+
+// Messages must fit within ~56 chars (FTUE_DLG_W minus left/right padding)
+const FTUE_MESSAGES = [
+  "First time? Giving your characters a level up ability!",
+  "These are usually really rare - I'll make it special!",
+  "You can have up to 3 abilities per hero. Good luck!",
+];
+
+function FtueIntroDialog({ cameraX, onDone }) {
+  const [page, setPage] = React.useState(0);
+  const isLast = page === FTUE_MESSAGES.length - 1;
+  const advance = () => isLast ? onDone() : setPage(p => p + 1);
+
+  return (
+    <g>
+      <rect x={cameraX} y={0} width={ZOOM_W} height={TOTAL_H} fill="#000" opacity={0.55} />
+      <BballTip
+        text={FTUE_MESSAGES[page]}
+        charX={cameraX + FTUE_CHAR_X} charY={FTUE_CHAR_Y} scale={FTUE_SCALE}
+        dlgX={cameraX + FTUE_DLG_X} dlgY={FTUE_DLG_Y} dlgW={FTUE_DLG_W} dlgH={FTUE_DLG_H}
+        onClick={advance}
+      />
+    </g>
+  );
+}
+
+// ─── Stat gain display (auto-dismissing, no choice) ──────────────────────────
+
+const SDLG_W    = 180;
+const SDLG_H    = 170;
+const SDLG_Y    = Math.round((TOTAL_H - SDLG_H) / 2);
+const CEL_TICKS_PER_FRAME = 10; // ~160ms per frame (half speed)
+const CEL_SCALE = 2;
+
+function StatGainDisplay({ statGained, cameraX, onDismiss }) {
+  const [tick, setTick] = React.useState(0);
+  const [hover, setHover] = React.useState(false);
+  React.useEffect(() => {
+    let rafId;
+    const loop = () => { setTick(t => t + 1); rafId = requestAnimationFrame(loop); };
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  const dlgX    = cameraX + Math.round((ZOOM_W - SDLG_W) / 2);
+  const panelCX = cameraX + ZOOM_W / 2;
+
+  const fadeIn  = Math.min(tick / 10, 1);
+  const opacity = fadeIn;
+
+  const bPulse = (Math.sin(tick * 0.055) + 1) / 2;
+  const bWidth = 1 + bPulse * 2;
+  const bOp    = 0.35 + bPulse * 0.55;
+  const hFlash = Math.floor(tick / 16) % 2 === 0 ? '#20c8e0' : '#ffffff';
+  const hBob   = Math.round(Math.sin(tick * 0.07) * 1);
+
+  // Celebration sprite — centered horizontally, feet at fixed y below header
+  const feetCx  = panelCX;
+  const feetCy  = SDLG_Y + 80;
+  const anchorX = feetCx - 14 * CEL_SCALE;
+  const anchorY = feetCy - 32 * CEL_SCALE;
+  const frameIdx = Math.floor(tick / CEL_TICKS_PER_FRAME) % CELEBRATION_FRAMES.length;
+  const frame    = CELEBRATION_FRAMES[frameIdx];
+
+  const lines = Object.entries(statGained).filter(([, v]) => v > 0);
+
+  return (
+    <g opacity={opacity}>
+      {/* Dim backdrop */}
+      <rect x={cameraX} y={0} width={ZOOM_W} height={TOTAL_H} fill="#000" opacity={0.55} />
+
+      {/* Dialog shadow */}
+      <rect x={dlgX + 3} y={SDLG_Y + 3} width={SDLG_W} height={SDLG_H} rx={4}
+        fill="#000" opacity={0.55} shapeRendering="crispEdges" />
+      {/* Dialog body */}
+      <rect x={dlgX} y={SDLG_Y} width={SDLG_W} height={SDLG_H} rx={4}
+        fill="#111e32" shapeRendering="crispEdges" />
+      {/* Header bar */}
+      <rect x={dlgX} y={SDLG_Y} width={SDLG_W} height={26} rx={4}
+        fill="#0e2030" shapeRendering="crispEdges" />
+
+      {/* Pulsating border */}
+      <rect x={dlgX} y={SDLG_Y} width={SDLG_W} height={SDLG_H} rx={4}
+        fill="none" stroke="#20c8e0" strokeWidth={bWidth} opacity={bOp} />
+
+      {/* Header */}
+      <PixelTextC text="STAT UPGRADE" cx={panelCX} y={SDLG_Y + 9 + hBob}
+        scale={1} fill={hFlash} outline={null} />
+
+      {/* Celebration sprite — centered */}
+      {frame.map(([px, py, col], i) => (
+        <rect key={i}
+          x={anchorX + px * CEL_SCALE} y={anchorY + py * CEL_SCALE}
+          width={CEL_SCALE} height={CEL_SCALE}
+          fill={col === JERSEY_BASE ? JERSEY_HOME : col}
+          shapeRendering="crispEdges" />
+      ))}
+
+      {/* Stat lines — centered, below sprite */}
+      {lines.map(([stat, val], i) => (
+        <PixelTextC key={stat}
+          text={`+${val} ${STAT_LABELS[stat]}`}
+          cx={panelCX} y={SDLG_Y + 102 + i * 14}
+          scale={1} fill={STAT_COLORS[stat]} outline={null} />
+      ))}
+
+      {/* OK button */}
+      <g onClick={onDismiss} style={{ cursor: 'pointer' }}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+        <rect x={dlgX + 50} y={SDLG_Y + SDLG_H - 26} width={SDLG_W - 100} height={20} rx={3}
+          fill={hover ? '#20c8e0' : '#1a3060'} shapeRendering="crispEdges" />
+        <PixelTextC text="OK" cx={panelCX} y={SDLG_Y + SDLG_H - 21}
+          scale={1} fill={hover ? '#000' : '#20c8e0'} outline={null} />
+      </g>
+    </g>
+  );
+}
+
+// ─── Player info card (shown above ability/stat picker) ───────────────────────
+
+const POS_COLORS_LU = { PG: '#2a7adf', SG: '#6a5ade', SF: '#28b050', PF: '#d07030', C: '#c03838' };
+const STAT_DEFS_LU = [
+  { key: 'spd', label: 'SPD', color: '#20c8e0' },
+  { key: 'dex', label: 'DEX', color: '#9860e0' },
+  { key: 'jmp', label: 'JMP', color: '#30d060' },
+  { key: 'acc', label: 'ACC', color: '#e09030' },
+];
+
+const PIC_PORT_SCALE = 4;
+const PIC_PORT_W = 5 * PIC_PORT_SCALE; // 20
+const PIC_PORT_H = 6 * PIC_PORT_SCALE; // 24
+const PIC_W      = 204;
+const PIC_H      = 68;
+const PIC_Y      = 7;
+const PIC_BAR_W  = 76;
+
+function PicHeadPortrait({ x, y, jerseyColor, flip = false }) {
+  const inner = (
+    <g shapeRendering="crispEdges">
+      {HEAD_PORTRAIT.map(([px, py, col], i) => (
+        <rect key={i}
+          x={x + px * PIC_PORT_SCALE} y={y + py * PIC_PORT_SCALE}
+          width={PIC_PORT_SCALE} height={PIC_PORT_SCALE}
+          fill={col === JERSEY_BASE ? jerseyColor : col} />
+      ))}
+    </g>
+  );
+  if (!flip) return inner;
+  return (
+    <g transform={`scale(-1,1) translate(-${2 * x + PIC_PORT_W}, 0)`}>{inner}</g>
+  );
+}
+
+function PlayerInfoCard({ player, rosterEntry, cameraX }) {
+  if (!rosterEntry) return null;
+  const cardX   = cameraX + Math.round((ZOOM_W - PIC_W) / 2);
+  const portX   = cardX + 6;
+  const portY   = PIC_Y + 4;
+  const contX   = portX + PIC_PORT_W + 8; // 34px from card left
+  const jerseyColor = player.team === 'home' ? JERSEY_HOME : JERSEY_AWAY;
+  const pc      = POS_COLORS_LU[player.role] ?? '#888';
+  const name    = (rosterEntry.lastName ?? rosterEntry.name ?? '').slice(0, 7);
+
+  return (
+    <g>
+      {/* Card background */}
+      <rect x={cardX + 3} y={PIC_Y + 3} width={PIC_W} height={PIC_H} rx={4}
+        fill="#000" opacity={0.5} shapeRendering="crispEdges" />
+      <rect x={cardX} y={PIC_Y} width={PIC_W} height={PIC_H} rx={4}
+        fill="#09152a" shapeRendering="crispEdges" />
+      <rect x={cardX} y={PIC_Y} width={PIC_W} height={PIC_H} rx={4}
+        fill="none" stroke="#2a4870" strokeWidth={1} />
+
+      {/* Portrait frame */}
+      <rect x={portX - 1} y={portY - 1} width={PIC_PORT_W + 2} height={PIC_PORT_H + 2} rx={2}
+        fill="#060e1a" shapeRendering="crispEdges" />
+      <rect x={portX - 1} y={portY - 1} width={PIC_PORT_W + 2} height={PIC_PORT_H + 2} rx={2}
+        fill="none" stroke={pc} strokeWidth={1} opacity={0.55} />
+      <PicHeadPortrait x={portX} y={portY} jerseyColor={jerseyColor} flip={player.team !== 'home'} />
+
+      {/* Level transition + XP pips below portrait */}
+      <PixelTextC text={`Lv.${player.prevLevel ?? player.level - 1}`} cx={portX + PIC_PORT_W / 2} y={portY + PIC_PORT_H + 3}
+        scale={1} fill="#506880" outline={null} />
+      <PixelTextC text={`->${player.level}`} cx={portX + PIC_PORT_W / 2} y={portY + PIC_PORT_H + 13}
+        scale={1} fill="#ffe060" outline={null} />
+      {[0,1,2,3,4].map(pip => (
+        <rect key={pip}
+          x={portX + pip * 4} y={portY + PIC_PORT_H + 24}
+          width={3} height={4}
+          fill={player.xpMax > 0 && (player.xp / player.xpMax) * 5 > pip ? '#00ff44' : '#1a3820'}
+          shapeRendering="crispEdges" />
+      ))}
+
+      {/* Role badge + name */}
+      <rect x={contX} y={portY} width={20} height={9} rx={1}
+        fill={pc} shapeRendering="crispEdges" />
+      <PixelTextC text={player.role ?? ''} cx={contX + 10} y={portY + 1}
+        scale={1} fill="#fff" outline={null} />
+      {name && (
+        <PixelText text={name} x={contX + 23} y={portY}
+          scale={1} fill="#b0ccec" outline={null} />
+      )}
+
+      {/* Stat bars */}
+      {STAT_DEFS_LU.map(({ key, label, color }, si) => {
+        const val    = rosterEntry[key] ?? 0;
+        const filled = Math.round((val / 99) * PIC_BAR_W);
+        const sy     = portY + 11 + si * 8;
+        return (
+          <g key={key}>
+            <PixelText text={label} x={contX} y={sy} scale={1} fill={color} outline={null} />
+            <rect x={contX + 20} y={sy + 2} width={PIC_BAR_W} height={5} rx={1}
+              fill="#060e1a" shapeRendering="crispEdges" />
+            {filled > 0 && (
+              <rect x={contX + 20} y={sy + 2} width={filled} height={5} rx={1}
+                fill={color} opacity={0.88} shapeRendering="crispEdges" />
+            )}
+            <PixelText text={String(val)} x={contX + 20 + PIC_BAR_W + 3} y={sy}
+              scale={1} fill="#c8e4ff" outline={null} />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function LevelUpOverlay({ player, abilities, cameraX, onPick }) {
+export function LevelUpOverlay({ player, abilities, statGained, rosterEntry, type = 'ability', cameraX, onPick }) {
   const [phase, setPhase] = React.useState('swirl');
   const [tick,  setTick]  = React.useState(0);
   const iRef = React.useRef(null);
@@ -472,7 +714,7 @@ export function LevelUpOverlay({ player, abilities, cameraX, onPick }) {
       if (t >= SWIRL_TICKS) {
         clearInterval(iRef.current);
         iRef.current = null;
-        setPhase('pick');
+        setPhase(type === 'ftue-intro' ? 'dialog' : 'pick');
       }
     }, 16);
     return () => { if (iRef.current) clearInterval(iRef.current); };
@@ -482,11 +724,23 @@ export function LevelUpOverlay({ player, abilities, cameraX, onPick }) {
     return <SwirlEffect tick={tick} px={player.cx} py={player.cy - 10} />;
   }
 
+  if (phase === 'dialog') {
+    return <FtueIntroDialog cameraX={cameraX} onDone={() => setPhase('pick')} />;
+  }
+
+  if (type === 'stat') {
+    return (
+      <g>
+        <StatGainDisplay statGained={statGained} cameraX={cameraX} onDismiss={onPick} />
+        <PlayerInfoCard player={player} rosterEntry={rosterEntry} cameraX={cameraX} />
+      </g>
+    );
+  }
+
   return (
-    <AbilityPickerDialog
-      abilities={abilities}
-      cameraX={cameraX}
-      onPick={onPick}
-    />
+    <g>
+      <AbilityPickerDialog abilities={abilities} cameraX={cameraX} onPick={onPick} />
+      <PlayerInfoCard player={player} rosterEntry={rosterEntry} cameraX={cameraX} />
+    </g>
   );
 }

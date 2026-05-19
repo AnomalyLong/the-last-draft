@@ -267,7 +267,7 @@ export function QuarterSummary({ quarterSummary, homeTeamName, cameraX, onDismis
 
       {/* Credits row — totals stats + win bonus */}
       {tick >= SCORE_START && (() => {
-        const hStatCredits = (home.shots + home.dunks + home.blocks + home.steals) * 100;
+        const hStatCredits = (home.shots + home.dunks + home.blocks + home.steals) * 100 + (quarterSummary.winBonus ?? 0);
         return (
           <g>
             <PixelTextC text="CREDITS:"

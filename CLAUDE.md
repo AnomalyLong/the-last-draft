@@ -189,6 +189,107 @@ Adding a new command = add it to `handleCommand` in `useGame.js` + add to `help`
 
 ---
 
+## PixelText — How to Use
+
+Two components in `src/components/PixelText.jsx`:
+
+### `PixelText` — left-aligned
+```jsx
+<PixelText text="HELLO" x={10} y={20} scale={1} fill="#fff" outline="#000" thick={false} />
+```
+- `x, y` — top-left of the first character
+- `scale` — pixel size (1 = 1px per pixel, 2 = 2px, etc.)
+- `outline` — pass `null` to disable; default is `'#000'`
+- `thick` — `true` adds 8-direction outline (bolder), default is 4-direction
+
+### `PixelTextC` — centered on `cx`
+```jsx
+<PixelTextC text="HELLO" cx={204} y={20} scale={1} fill="#fff" outline={null} />
+```
+- Same props as `PixelText` except `cx` (center x) instead of `x`
+- Internally computes `x = cx - textWidth / 2`
+
+### Glyph dimensions (important for layout math)
+| Property | Value |
+|----------|-------|
+| Cell width per character | 6px × scale (5px glyph + 1px gap) |
+| Glyph height | 9px × scale |
+| Total text width | `text.length * 6 * scale` |
+
+So at `scale=1`: a 5-char string is 30px wide, 9px tall.
+At `scale=2`: a 5-char string is 60px wide, 18px tall.
+
+### Common patterns
+```jsx
+// Label above a button (vertically centered in 26px button)
+<PixelTextC text="START" cx={btnX + btnW/2} y={btnY + Math.floor((26 - 7) / 2)} scale={1} fill="#fff" outline={null} />
+// (use glyph height 7 for scale=1 when centering in a box — 9px includes descenders)
+
+// Two lines stacked (scale=1, 11px apart)
+<PixelTextC text="LINE 1" cx={cx} y={baseY}      scale={1} fill="#1eb8d8" outline={null} />
+<PixelTextC text="LINE 2" cx={cx} y={baseY + 11} scale={1} fill="#3a5878" outline={null} />
+```
+
+---
+
+## Mobile Zoom & Coordinate Spaces
+
+The game has two coordinate spaces that must not be confused.
+
+### Game space
+Full court: `W` wide (≈680) × `TOTAL_H` tall (348). All `player.cx`, `player.cy`, basket positions, etc. live here.
+
+### Viewport space (`ZOOM_W = 408`)
+What the game SVG's viewBox shows. On desktop the game SVG shows `ZOOM_W × TOTAL_H` = `408 × 348` game units. On mobile (`width < height`) a `mobileZoom = 1.25` is applied:
+
+```
+Game SVG viewBox = `${cameraX} 0 ${ZOOM_W / mobileZoom} ${TOTAL_H / mobileZoom}`
+                 = `${cameraX} 0 326.4 278.4`  (on mobile)
+```
+
+This means 1 game unit = 1.25 visual pixels on mobile (zoomed in 25%).
+
+### Overlay SVG space
+Dialogs (LevelUpOverlay, QuarterSummary, etc.) render in a **separate** overlay SVG with:
+```
+viewBox = `0 0 ${ZOOM_W} ${TOTAL_H}` = `0 0 408 348`
+preserveAspectRatio = "xMidYMid meet"
+```
+The overlay SVG is `inset:0` (covers the full container), but `xMidYMid` means the 408×348 content is vertically **centered** inside it. On a tall phone this adds a large y-offset (~213px for a 390×760 viewport) that must be subtracted out.
+
+**Do not use `gameCy * mobileZoom` alone** — it ignores two offsets:
+1. Portrait panel pushes the game SVG down by `panelH` pixels (mobile only)
+2. `xMidYMid` centering shifts the overlay content down
+
+The correct transforms are:
+```
+overlayX = (gameCx - cameraX) * mobileZoom        // x: no vertical shifts, still correct
+
+// overlayYOffset is pre-computed in GameScene.measure() and stored as state:
+// overlayScale = Math.min(containerW / ZOOM_W, containerH / TOTAL_H)  ← xMidYMid meet scale
+// overlayOffsetY = (containerH - TOTAL_H * overlayScale) / 2           ← vertical centering gap
+// gameSvgTop = panelH (mobile) or 0 (desktop)
+overlayYOffset = (gameSvgTop - overlayOffsetY) / overlayScale
+
+overlayY = gameCy * mobileZoom + overlayYOffset
+```
+
+On desktop the container is exactly the game aspect ratio → `overlayYOffset = 0`.
+
+Example from `GameScene.jsx` — passing a player position to `LevelUpOverlay`:
+```jsx
+player={{
+  ...levelUpState.player,
+  cx: (levelUpState.player.cx - cameraX) * mobileZoom,
+  cy: levelUpState.player.cy * mobileZoom + overlayYOffset,
+}}
+```
+
+### DraftScreen / non-game screens
+These render directly in the game's root SVG (no second overlay SVG, no camera). They use their own layout variables (`ZOOM_W`, `TOTAL_H`) directly. The `isMobile` flag (`width < height`) is used for layout changes; `mobileZoom` does not apply here because the DraftScreen SVG is not zoomed — scale transforms on individual elements are used instead.
+
+---
+
 ## Local Dev Tools
 
 A standalone Vite app at `dev-tools/` for debugging without Reddit/Devvit.
@@ -220,9 +321,102 @@ The `toFrames()` helper normalises all three sprite shapes automatically:
 ## Devvit-Specific Notes
 
 - This game runs inside a Reddit post iframe — no browser storage APIs available
-- Reddit user identity and Redis persistence will be added via `src/server/` (not yet built)
+- Reddit user identity comes from `devvitContext.username` (client-side, via `@devvit/web/client`)
+- `@devvit/web-view-scripts/fetch.js` patches global `fetch` to inject `Authorization: Bearer <token>` for same-origin `/api/` requests automatically — no manual auth headers needed in the client
 - Keep the viewport responsive — `width="100%"` on the SVG, `viewBox` handles scaling
 - The Devvit iframe size varies — do not hardcode pixel heights in CSS
+
+---
+
+## Backend Architecture
+
+### Stack
+- **Server:** Hono + `@hono/node-server`, entry at `src/server/index.ts`
+- **API:** tRPC v11 via `@hono/trpc-server`, mounted at `/api/trpc`
+- **DB:** Devvit Redis (accessed via `redis` from `@devvit/web/server`)
+- **Client:** `src/trpc.ts` — `createTRPCClient` with `httpBatchLink` (not streaming — `fetchRequestHandler` doesn't support it)
+- **Auth:** `requireUsername()` calls `reddit.getCurrentUsername()` — throws `UNAUTHORIZED` if not logged in
+
+### Server port
+`getServerPort()` reads `process.env.WEBBIT_PORT`, defaults to `3000`. Set by `devvit playtest` at runtime.
+
+### Key Redis namespaces
+| Key pattern | Contents |
+|---|---|
+| `user:{username}` | User hash: credits, energy, freeDrafts, firstSeen, lastSeen |
+| `user:games:{username}` | Sorted set of completed game IDs (score = timestamp) |
+| `user:ledger:{username}` | Credit earn/spend audit log |
+| `user:roster:{username}` | Sorted set of owned player IDs |
+| `user:lineup:{username}` | Hash of position → playerId assignments |
+| `game:{id}` | Game hash: score, verifiedScore, creditsEarned, status |
+| `game:{id}:plays` | Sorted set of play events (score = sequence number) |
+| `game:session:{token}` | `{username}:{gameId}`, TTL 1 hour |
+| `games:pending` / `games:flagged` | Sorted sets of game IDs awaiting admin review |
+
+### Game session flow (wired in `App.jsx` + `useGame.js`)
+1. **`trpc.game.start`** — called on tip dismiss; deducts 1 energy, returns `{ gameId, token }` stored in `gameSessionRef`
+2. **`trpc.game.recordPlay`** — called for every home-team made basket (shoot/dunk/fadeaway) with `{ gameId, token, sequence, play }`
+3. **`trpc.game.end`** — called on game-over dismiss with `{ gameId, token, score: homeScore }`; server replays stored plays to compute `verifiedScore`, awards credits if they match and game lasted ≥ 60s
+4. Credit formula: `min(floor(verifiedScore / 5), 500)` credits per game
+
+### FTUE detection
+`UserData.gamesPlayed` = `ZCARD user:games:{username}` — fetched on `user.init`. In `App.jsx`:
+```js
+setIsFtue(user.gamesPlayed === 0);  // true only on first session before any completed game
+```
+After the first `game.end` completes, `user:games:{username}` has 1 entry → next session `isFtue = false`.
+
+### Core modules
+| File | Responsibility |
+|---|---|
+| `src/server/core/user.ts` | User CRUD, energy deduction, credit award/spend |
+| `src/server/core/game.ts` | Game session lifecycle, play recording, score verification |
+| `src/server/core/player.ts` | Player minting, roster/lineup management |
+| `src/server/core/draft.ts` | Free and credit draft flows |
+| `src/server/core/admin.ts` | Admin checks, game approval/rejection, credit adjustments |
+
+### Dev admin panel
+Available at `http://localhost:5174` → **🔧 Admin** nav item when running `npm run dev:tools` alongside `devvit playtest`.
+- Proxies `/dev-admin/*` to the Hono server (`WEBBIT_PORT` || 3000)
+- Routes only registered when `NODE_ENV !== 'production'`
+- Operations: load user data, reset user (wipes all Redis keys for that user), restore energy, set credits, view/clear pending and flagged game queues
+
+---
+
+## Visual Verification with agent-browser
+
+`agent-browser` is installed globally (`~/.nvm/.../bin/agent-browser`). Use it to take live screenshots of the dev tools for visual verification. Always save screenshots to `dev-tools/tmp/`.
+
+### Typical workflow
+
+```bash
+# 1. Start the dev server if not running
+npm run dev:tools   # http://localhost:5174
+
+# 2. Open the page and get element refs
+agent-browser open "http://localhost:5174" && agent-browser wait 2000 && agent-browser snapshot
+
+# 3. Navigate — refs change each page load, always snapshot first
+agent-browser click "e8"   # e.g. click "Court (Live)" sidebar item
+agent-browser wait 1500
+
+# 4. Get updated refs after navigation
+agent-browser snapshot
+
+# 5. Interact (e.g. toggle Mobile mode)
+agent-browser click "e9"   # e.g. click "Mobile" button
+agent-browser wait 2000
+
+# 6. Screenshot — always save to dev-tools/tmp/
+agent-browser screenshot --full dev-tools/tmp/my-check.png
+```
+
+### Key notes
+- `snapshot` returns the accessibility tree with `[ref=eN]` handles — use these for clicks, not text selectors
+- Refs are re-assigned on every page load/navigation — always `snapshot` before clicking
+- Use `--full` for full-page screenshots (captures the phone frame + content below fold)
+- Use `--annotate` to get numbered element overlays for debugging layout
+- The dev tools server runs on **port 5175** (not 5174 — that port is for the main Devvit app)
 
 ---
 

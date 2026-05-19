@@ -156,7 +156,7 @@ function TradeOverlay({ player, onClose }) {
       <rect x={56} y={118} width={ZOOM_W - 112} height={88} rx={4}
         fill="none" stroke="#2a4070" strokeWidth={1.5} />
       <PixelTextC text="TRADE PLAYER?" cx={cx} y={128} scale={2} fill="#e8c060" outline="#000" />
-      <PixelTextC text={player.name} cx={cx} y={150} scale={1} fill="#e0e8ff" outline={null} />
+      <PixelTextC text={player.lastName ?? player.name} cx={cx} y={150} scale={1} fill="#e0e8ff" outline={null} />
       <PixelTextC text="TRADING COMING IN A FUTURE UPDATE" cx={cx} y={164} scale={1} fill="#4888b0" outline={null} />
       <g onClick={() => { playCancel(); onClose(); }} style={{ cursor: 'pointer' }}
         data-testid="trade-cancel">

@@ -258,7 +258,7 @@ function TVStatAway({ rx, y, label, val, oppVal, color }) {
   );
 }
 
-function TVHome({ ry, player, opp, pc }) {
+function TVHome({ ry, player, opp, pc, livePlayer }) {
   const abilities = player?.abilities ?? (player?.ability ? [player.ability] : []);
   const ay = ry + 49;
   const abPos = [];
@@ -282,10 +282,25 @@ function TVHome({ ry, player, opp, pc }) {
         fill={pc} shapeRendering="crispEdges" />
       <PixelTextC text={player.role ?? player.pos ?? ''} cx={TV_CONT_HX + 10} y={ry + 5}
         scale={1} fill="#fff" outline={null} />
-      <PixelText text={(player.name ?? '').slice(0, 7)} x={TV_CONT_HX + 23} y={ry + 4}
+      <PixelText text={(player.lastName ?? player.name ?? '').slice(0, 7)} x={TV_CONT_HX + 23} y={ry + 4}
         scale={1} fill="#b0ccec" outline={null} />
       <PixelText text={String(player.ovr)} x={TV_SEP_X - TV_VW - 4} y={ry + 4}
         scale={1} fill="#e8c060" outline={null} />
+
+      {/* Level + XP pips below portrait */}
+      {livePlayer && (
+        <g>
+          <PixelTextC text={`Lv.${livePlayer.level}`} cx={TV_HX + PORT_W / 2} y={ry + 31}
+            scale={1} fill="#c8d8e0" outline={null} />
+          {[0,1,2,3,4].map(pip => (
+            <rect key={pip}
+              x={TV_HX + pip * 4} y={ry + 40}
+              width={3} height={4}
+              fill={livePlayer.xpMax > 0 && (livePlayer.xp / livePlayer.xpMax) * 5 > pip ? '#00ff44' : '#1a3820'}
+              shapeRendering="crispEdges" />
+          ))}
+        </g>
+      )}
 
       {/* Stat bars */}
       {STAT_DEFS.map(({ key, label, color }, si) => (
@@ -313,7 +328,7 @@ function TVHome({ ry, player, opp, pc }) {
   );
 }
 
-function TVAway({ ry, player, opp, pc }) {
+function TVAway({ ry, player, opp, pc, livePlayer }) {
   const abilities = player?.abilities ?? (player?.ability ? [player.ability] : []);
   const ay = ry + 49;
   const abPos = [];
@@ -330,7 +345,7 @@ function TVAway({ ry, player, opp, pc }) {
       {/* OVR + name (left of away column) */}
       <PixelText text={String(player.ovr)} x={TV_AX + 2} y={ry + 4}
         scale={1} fill="#e8c060" outline={null} />
-      <PixelText text={(player.name ?? '').slice(0, 7)} x={TV_AX + TV_VW + 6} y={ry + 4}
+      <PixelText text={(player.lastName ?? player.name ?? '').slice(0, 7)} x={TV_AX + TV_VW + 6} y={ry + 4}
         scale={1} fill="#b0ccec" outline={null} />
 
       {/* Pos badge — right-aligned to content edge */}
@@ -345,6 +360,21 @@ function TVAway({ ry, player, opp, pc }) {
       <rect x={TV_PORT_AX - 1} y={ry + 3} width={PORT_W + 2} height={PORT_H + 2} rx={2}
         fill="none" stroke={pc} strokeWidth={1} opacity={0.55} />
       <HeadPortrait x={TV_PORT_AX} y={ry + 4} jerseyColor={JERSEY_AWAY} flip />
+
+      {/* Level + XP pips below portrait */}
+      {livePlayer && (
+        <g>
+          <PixelTextC text={`Lv.${livePlayer.level}`} cx={TV_PORT_AX + PORT_W / 2} y={ry + 31}
+            scale={1} fill="#c8d8e0" outline={null} />
+          {[0,1,2,3,4].map(pip => (
+            <rect key={pip}
+              x={TV_PORT_AX + pip * 4} y={ry + 40}
+              width={3} height={4}
+              fill={livePlayer.xpMax > 0 && (livePlayer.xp / livePlayer.xpMax) * 5 > pip ? '#00ff44' : '#1a3820'}
+              shapeRendering="crispEdges" />
+          ))}
+        </g>
+      )}
 
       {/* Stat bars (mirrored, right-aligned to content edge) */}
       {STAT_DEFS.map(({ key, label, color }, si) => (
@@ -635,7 +665,7 @@ const TV_TAB_GAP = 4;
 const TV_TABS    = [['stats', 'STATS'], ['roles', 'ROLES']];
 const TV_TAB_X0  = Math.round(ZOOM_W / 2 - (TV_TABS.length * TV_TAB_W + (TV_TABS.length - 1) * TV_TAB_GAP) / 2);
 
-export function TeamViewer({ homeRoster, awayRoster, homeTeamName, awayTeamName, onClose }) {
+export function TeamViewer({ players = [], homeRoster, awayRoster, homeTeamName, awayTeamName, onClose }) {
   const [tvTab, setTvTab] = React.useState('stats');
   const [primaryShooter, setPrimaryShooter] = React.useState(null);
   const [guardMap, setGuardMap] = React.useState(
@@ -778,6 +808,8 @@ export function TeamViewer({ homeRoster, awayRoster, homeTeamName, awayTeamName,
         TV_POS.map((pos, i) => {
           const home = homeRoster?.[i] ?? null;
           const away = awayRoster?.[i] ?? null;
+          const liveHome = players.find(p => p.id === i + 1) ?? null;
+          const liveAway = players.find(p => p.id === i + 6) ?? null;
           const ry   = TV_ROWS_Y + i * TV_ROW_H;
           const pc   = POS_COLORS[pos];
           return (
@@ -792,8 +824,8 @@ export function TeamViewer({ homeRoster, awayRoster, homeTeamName, awayTeamName,
                 cx={TV_SEP_X + TV_SEP_W / 2}
                 y={ry + Math.floor((TV_ROW_H - MONOGRAM_GLYPH_H) / 2)}
                 scale={1} fill={pc} outline={null} />
-              {home && <TVHome ry={ry} player={home} opp={away} pc={pc} />}
-              {away && <TVAway ry={ry} player={away} opp={home} pc={pc} />}
+              {home && <TVHome ry={ry} player={home} opp={away} pc={pc} livePlayer={liveHome} />}
+              {away && <TVAway ry={ry} player={away} opp={home} pc={pc} livePlayer={liveAway} />}
               {i < 4 && (
                 <rect x={TV_PX + 1} y={ry + TV_ROW_H} width={TV_PW - 2} height={1}
                   fill="#14253a" shapeRendering="crispEdges" />
@@ -930,7 +962,7 @@ export function DebugConsole({ logs, onCommand, showDebug, onToggleDebug }) {
 
 // ─── Component ────────────────────────────────────────────────────────────
 
-export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, players, possession, awayTeamName = 'AWAY', homeRoster = [], awayRoster = [], onOptions, showTeams = false, onShowTeams, showDebug = false, totalCredits = 0, isMobile = false }) {
+export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, players, possession, awayTeamName = 'AWAY', homeRoster = [], awayRoster = [], onOptions, showTeams = false, onShowTeams, showDebug = false, totalCredits = 0, username = '', isMobile = false }) {
   const mins = Math.floor(time / 60), secs = time % 60;
   const timeStr = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
   const qStr    = `Q${quarter}`;
@@ -948,21 +980,22 @@ export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time
     <g>
       {/* ── TOP MENU ───────────────────────────────────────── */}
 
-      {/* User profile — avatar circle (above buttons), username + credits to the right */}
+      {/* User profile — avatar + text centered as a unit over the buttons (x=158–250, mid=204)
+          Group: 18px avatar + 4px gap + 66px text zone = 88px → left=160, avatar cx=169, text cx=215 */}
       <defs>
         <clipPath id="user-avatar-clip">
-          <circle cx={179} cy={15} r={8} />
+          <circle cx={169} cy={15} r={8} />
         </clipPath>
       </defs>
-      <circle cx={179} cy={15} r={9} fill="#0a1828" stroke="#ffe060" strokeWidth={1} />
+      <circle cx={169} cy={15} r={9} fill="#0a1828" stroke="#ffe060" strokeWidth={1} />
       <image
         href="/jxts5wo9u41e1.png"
-        x={167} y={3} width={24} height={31}
+        x={157} y={3} width={24} height={31}
         clipPath="url(#user-avatar-clip)"
         preserveAspectRatio="xMidYMid meet"
       />
-      <PixelText text="u/test" x={191} y={9} scale={1} fill="#aac8e0" outline={null} />
-      <text x={191} y={23} fontSize={6} fontFamily="monospace" fill="#ffe060">{totalCredits} CREDITS</text>
+      <PixelTextC text={(() => { const t = username ? `u/${username}` : 'u/...'; return t.length > 11 ? t.slice(0, 9) + '..' : t; })()} cx={215} y={9} scale={1} fill="#aac8e0" outline={null} />
+      <text x={182} y={23} textAnchor="start" fontSize={6} fontFamily="monospace" fill="#ffe060">{totalCredits} CREDITS</text>
 
       {/* Debug coords — overlay only when console is open */}
       {showDebug && (

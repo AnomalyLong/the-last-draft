@@ -8,6 +8,7 @@ export default function DraftStory() {
   const [teamName, setTeamName] = useState('BULLS');
   const [key, setKey] = useState(0); // remount to reset draft state
   const [log, setLog] = useState([]);
+  const [mobile, setMobile] = useState(false);
   const push = (msg) => setLog((l) => [`${new Date().toLocaleTimeString()} ${msg}`, ...l].slice(0, 10));
 
   const controls = (
@@ -33,10 +34,11 @@ export default function DraftStory() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <StoryFrame title="Draft Screen" controls={controls}>
+      <StoryFrame title="Draft Screen" controls={controls} mobile={mobile} onMobile={setMobile}>
         <DraftScreen
           key={`${key}-${teamName}`}
           homeTeamName={teamName}
+          isMobile={mobile}
           onStart={(roster) => push(`onStart (${roster?.length ?? 0} players)`)}
           onBack={() => push('onBack')}
         />

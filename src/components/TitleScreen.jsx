@@ -26,7 +26,7 @@ function MenuButton({ x, y, w, h = 26, label, color, scale = 1, onClick }) {
   );
 }
 
-export function TitleScreen({ onPlay, onOptions, onCollections }) {
+export function TitleScreen({ onPlay, onOptions, onCollections, username = '', credits = 0 }) {
   const ROW_W = 316;
   const bx = Math.round(CX - ROW_W / 2); // 46
   const btnY = 258;
@@ -35,6 +35,30 @@ export function TitleScreen({ onPlay, onOptions, onCollections }) {
     <g>
       {/* ── Background ── */}
       <rect x={0} y={0} width={ZOOM_W} height={TOTAL_H} fill="#0d1220" />
+
+      {/* ── User profile — top-right corner ── */}
+      {(() => {
+        const full = username ? `u/${username}` : 'u/...';
+        const displayUsername = full.length > 11 ? full.slice(0, 9) + '..' : full;
+        const avatarCx = 390, avatarCy = 16;
+        const textCx = 313;
+        return (
+          <>
+            <rect x={244} y={4} width={158} height={28} rx={2} fill="#0a1828" opacity={0.85} shapeRendering="crispEdges" />
+            <rect x={244} y={4} width={158} height={28} rx={2} fill="none" stroke="#1e3050" strokeWidth={1} shapeRendering="crispEdges" />
+            <defs>
+              <clipPath id="title-avatar-clip">
+                <circle cx={avatarCx} cy={avatarCy} r={8} />
+              </clipPath>
+            </defs>
+            <circle cx={avatarCx} cy={avatarCy} r={9} fill="#0a1828" stroke="#ffe060" strokeWidth={1} />
+            <image href="/jxts5wo9u41e1.png" x={avatarCx - 12} y={avatarCy - 12} width={24} height={31}
+              clipPath="url(#title-avatar-clip)" preserveAspectRatio="xMidYMid meet" />
+            <PixelTextC text={displayUsername} cx={textCx} y={9} scale={1} fill="#aac8e0" outline={null} />
+            <text x={textCx} y={23} textAnchor="middle" fontSize={6} fontFamily="monospace" fill="#ffe060">{credits} CREDITS</text>
+          </>
+        );
+      })()}
 
       {/* ── Player silhouette ── scaled to fill screen, centered */}
       <g transform="translate(44, 18) scale(2.46)" opacity={0.72}>

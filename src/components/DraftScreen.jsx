@@ -6,6 +6,7 @@ import { BballTip } from './BballTip.jsx';
 import { ABILITIES } from '../abilities.js';
 import { playSlide, playCursor, playSelect, playCancel, playFlip, playMenuMove3, playMenuSelect2 } from '../sound/ui.js';
 import { playRare, playRare2, playRare3 } from '../sound/basketball.js';
+import { trpc } from '../trpc.js';
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
@@ -81,25 +82,81 @@ const STAT_DEFS = [
   { key: 'acc', label: 'ACC', color: '#e09030' },
 ];
 
-const PLAYERS = [
-  { id:  1, pos: 'PG', name: 'RIVERS', ovr: 72, spd: 78, dex: 75, jmp: 62, acc: 72, round: 1 },
-  { id:  2, pos: 'SG', name: 'BANKS',  ovr: 69, spd: 69, dex: 67, jmp: 59, acc: 81, round: 1 },
-  { id:  3, pos: 'SF', name: 'WELLS',  ovr: 70, spd: 74, dex: 71, jmp: 67, acc: 68, round: 1 },
-  { id:  4, pos: 'PF', name: 'STONE',  ovr: 62, spd: 61, dex: 61, jmp: 69, acc: 58, round: 1 },
-  { id:  5, pos: 'C',  name: 'GRANT',  ovr: 61, spd: 55, dex: 53, jmp: 75, acc: 62, round: 1 },
-  { id:  6, pos: 'PG', name: 'HAYES',  ovr: 66, spd: 76, dex: 69, jmp: 55, acc: 64, round: 2 },
-  { id:  7, pos: 'SG', name: 'CROSS',  ovr: 71, spd: 71, dex: 73, jmp: 61, acc: 78, round: 2 },
-  { id:  8, pos: 'SF', name: 'FORD',   ovr: 66, spd: 67, dex: 67, jmp: 65, acc: 65, round: 2 },
-  { id:  9, pos: 'PF', name: 'MASON',  ovr: 64, spd: 59, dex: 65, jmp: 71, acc: 60, round: 2 },
-  { id: 10, pos: 'C',  name: 'KING',   ovr: 60, spd: 52, dex: 51, jmp: 78, acc: 58, round: 2 },
-  { id: 11, pos: 'PG', name: 'SHAW',   ovr: 62, spd: 72, dex: 63, jmp: 51, acc: 61, round: 3 },
-  { id: 12, pos: 'SG', name: 'BELL',   ovr: 66, spd: 66, dex: 71, jmp: 57, acc: 70, round: 3 },
-  { id: 13, pos: 'SF', name: 'JAMES',  ovr: 66, spd: 70, dex: 68, jmp: 63, acc: 62, round: 3 },
-  { id: 14, pos: 'PF', name: 'WADE',   ovr: 60, spd: 58, dex: 58, jmp: 67, acc: 56, round: 3 },
-  { id: 15, pos: 'C',  name: 'HILL',   ovr: 56, spd: 50, dex: 48, jmp: 73, acc: 52, round: 3 },
+// ─── Procedural player generation ─────────────────────────────────────────────
+
+const FIRST_NAMES = [
+  'KAEL', 'ZEX',  'JAX',  'REX',   'ACE',
+  'NOVA', 'ZEPH', 'AXEL', 'RYX',   'LYRA',
+  'THOR', 'KADE', 'CRIX', 'ZEN',   'NUX',
+  'RYZE', 'SKAR', 'TYX',  'BRIX',  'MAVE',
+  'WREN', 'CROW', 'NERO', 'VAEL',  'GRIX',
+  'VOSS', 'XION', 'LORE', 'DRACE', 'FLUX',
 ];
 
-const ROUND_COLORS = { 1: '#e8c060', 2: '#30c0e0', 3: '#b0b8c8' };
+const LAST_NAMES = [
+  'THORNE', 'STEELE', 'FROST',  'STRAND', 'VORN',
+  'KRIX',   'VOLKOV', 'MORKOV', 'FERRON', 'KRUXX',
+  'NEXUS',  'BLADE',  'SURGE',  'DRIFT',  'ECHO',
+  'CROSS',  'MARCH',  'NACHT',  'CRANE',  'PHASE',
+  'VALE',   'QUILL',  'STORR',  'VANCE',  'GALE',
+  'BLAZE',  'WARD',   'AEON',   'FREY',   'ZORN',
+];
+
+// Stat min/max per position — reflects real positional archetypes
+const STAT_RANGES = {
+  PG: { spd: [68, 88], dex: [63, 80], jmp: [48, 70], acc: [62, 82] },
+  SG: { spd: [58, 78], dex: [63, 83], jmp: [52, 72], acc: [68, 88] },
+  SF: { spd: [58, 75], dex: [58, 77], jmp: [58, 77], acc: [58, 77] },
+  PF: { spd: [48, 65], dex: [52, 70], jmp: [63, 83], acc: [52, 70] },
+  C:  { spd: [42, 58], dex: [42, 58], jmp: [68, 88], acc: [48, 65] },
+};
+
+// OVR = weighted average of stats, weights reflect each position's key attributes
+const OVR_WEIGHTS = {
+  PG: { spd: 0.35, dex: 0.30, jmp: 0.10, acc: 0.25 },
+  SG: { spd: 0.20, dex: 0.30, jmp: 0.15, acc: 0.35 },
+  SF: { spd: 0.25, dex: 0.25, jmp: 0.25, acc: 0.25 },
+  PF: { spd: 0.15, dex: 0.25, jmp: 0.35, acc: 0.25 },
+  C:  { spd: 0.10, dex: 0.20, jmp: 0.45, acc: 0.25 },
+};
+
+function randInt(lo, hi) { return lo + Math.floor(Math.random() * (hi - lo + 1)); }
+
+function generateStats(pos) {
+  const r = STAT_RANGES[pos];
+  return {
+    spd: randInt(r.spd[0], r.spd[1]),
+    dex: randInt(r.dex[0], r.dex[1]),
+    jmp: randInt(r.jmp[0], r.jmp[1]),
+    acc: randInt(r.acc[0], r.acc[1]),
+  };
+}
+
+function calcOvr(pos, stats) {
+  const w = OVR_WEIGHTS[pos];
+  return Math.round(stats.spd * w.spd + stats.dex * w.dex + stats.jmp * w.jmp + stats.acc * w.acc);
+}
+
+function generateDraftPool() {
+  const firsts = [...FIRST_NAMES].sort(() => Math.random() - 0.5);
+  const lasts  = [...LAST_NAMES].sort(() => Math.random() - 0.5);
+  let i = 0;
+  let id = 1;
+  return POS_ORDER.flatMap(pos =>
+    Array.from({ length: 3 }, () => {
+      const stats = generateStats(pos);
+      const ovr   = calcOvr(pos, stats);
+      const lastName = lasts[i++];
+      return { id: id++, pos, name: `${firsts[i - 1]} ${lastName}`, lastName, ...stats, ovr };
+    })
+  );
+}
+
+// Tier based on OVR: gold ≥ 71, blue 64–70, silver < 64
+const TIER_COLORS = { 1: '#e8c060', 2: '#30c0e0', 3: '#b0b8c8' };
+const TIER_LABELS = { 1: 'GOLD',    2: 'BLUE',    3: 'SILVER'  };
+function getPlayerTier(ovr) { return ovr >= 71 ? 1 : ovr >= 64 ? 2 : 3; }
+function tierToRarity(ovr) { return ovr >= 75 ? 'legendary' : ovr >= 71 ? 'rare' : 'common'; }
 
 // ─── Ability data ─────────────────────────────────────────────────────────────
 
@@ -110,12 +167,15 @@ const RARITY_TINTS  = {
   3: 'rgba(232,192,96,0.18)',
 };
 
-const ABILITY_POOL = ABILITIES.flatMap(a =>
-  Array(a.rarity === 3 ? 5 : a.rarity === 2 ? 20 : 40).fill(a)
-);
-
-function rollAbility() {
-  return ABILITY_POOL[Math.floor(Math.random() * ABILITY_POOL.length)];
+// Ability roll: chance scales with OVR; rarity weights skew toward legendary for elite players
+function rollAbilityForPlayer(ovr) {
+  const bonus  = Math.max(0, Math.floor((ovr - 65) / 5)) * 0.05;
+  const chance = Math.min(0.55, 0.25 + bonus);
+  if (Math.random() >= chance) return null;
+  const lw = ovr >= 75 ? 15 : ovr >= 70 ? 8 : 3;
+  const ew = ovr >= 70 ? 25 : 18;
+  const pool = ABILITIES.flatMap(a => Array(a.rarity === 3 ? lw : a.rarity === 2 ? ew : 40).fill(a));
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 // ─── Mini idle sprite ─────────────────────────────────────────────────────────
@@ -168,7 +228,7 @@ function RunningGhost({ player, cx, cy }) {
       {/* Ground shadow at feet */}
       <ellipse cx={cx} cy={feetY + 3} rx={20} ry={5} fill="rgba(0,0,0,0.30)" />
       {/* Name tag below feet */}
-      <PixelTextC text={player.name} cx={cx} y={feetY + 10}
+      <PixelTextC text={player.lastName ?? player.name} cx={cx} y={feetY + 10}
         scale={1} fill="#e8c060" outline="#000" />
     </g>
   );
@@ -267,7 +327,8 @@ function PlayerCard({ player, x, y, phase, onClick, autoHighlight = false }) {
   const clipId = `card-clip-${player.id}`;
 
   const posColor   = POS_COLORS[player.pos] || '#888';
-  const roundColor = ROUND_COLORS[player.round] || '#888';
+  const tier       = getPlayerTier(player.ovr);
+  const roundColor = TIER_COLORS[tier];
   const bg           = autoHighlight ? '#1a3820'
     : ability ? (hover ? '#1e3828' : '#172030') : (hover ? '#263c60' : '#1e3050');
   const borderStroke = autoHighlight ? '#40ff80'
@@ -311,7 +372,7 @@ function PlayerCard({ player, x, y, phase, onClick, autoHighlight = false }) {
       {/* Round badge */}
       <rect x={x + 9} y={y - 14} width={CARD_W - 18} height={11} rx={5}
         fill="#1e3460" shapeRendering="crispEdges" />
-      <PixelTextC text={`R${player.round} PICK`} cx={x + CARD_W / 2} y={y - 12}
+      <PixelTextC text={`${TIER_LABELS[tier]} PICK`} cx={x + CARD_W / 2} y={y - 12}
         scale={1} fill={roundColor} outline={null} />
 
       {/* Card shadow + body */}
@@ -541,7 +602,8 @@ function getDlgLine(state, tick) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) {
+export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu, isMobile: isMobileProp }) {
+  const [draftPool, setDraftPool] = React.useState(() => generateDraftPool());
   const [roster,   setRoster]   = React.useState([]);
   const [rolled,   setRolled]   = React.useState(null);
   const [animTick,    setAnimTick]    = React.useState(0);
@@ -558,6 +620,9 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
   const [hoverId,   setHoverId]   = React.useState(null);
   const [burstRarity, setBurstRarity] = React.useState(0);
   const [burstAge,    setBurstAge]    = React.useState(0);
+  const [saving,      setSaving]      = React.useState(false);
+  const [isMobileAuto, setIsMobileAuto] = React.useState(() => window.innerWidth < window.innerHeight);
+  const isMobile = isMobileProp !== undefined ? isMobileProp : isMobileAuto;
   const burstRafRef     = React.useRef(null);
   const triggerBurstRef = React.useRef(null);
   triggerBurstRef.current = (rarity) => {
@@ -585,6 +650,12 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
   React.useEffect(() => {
     const id = setInterval(() => setBannerTick(t => t + 1), 33);
     return () => clearInterval(id);
+  }, []);
+
+  React.useEffect(() => {
+    const update = () => setIsMobileAuto(window.innerWidth < window.innerHeight);
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
   }, []);
 
   React.useEffect(() => {
@@ -624,14 +695,62 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
     };
   }, [dragId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pool     = PLAYERS.filter(p => !roster.find(r => r.id === p.id));
+  const pool     = draftPool.filter(p => !roster.find(r => r.id === p.id));
   const canStart = phase === 'assign' && POS_ORDER.every(pos => assignments[pos]);
+
+  const saveRosterToServer = async (lineup) => {
+    const saves = await Promise.allSettled(
+      lineup.map(player => trpc.draft.free.mutate({
+        name: player.name,
+        rarity: tierToRarity(player.ovr),
+        spd: player.spd, dex: player.dex, jmp: player.jmp, acc: player.acc,
+        ability: player.ability ?? null,
+      }))
+    );
+    const withServerIds = lineup.map((player, i) => ({
+      ...player,
+      serverId: saves[i].status === 'fulfilled' ? saves[i].value.id : null,
+    }));
+    await Promise.allSettled(
+      withServerIds
+        .filter(p => p.serverId)
+        .map(p => trpc.user.setLineupSlot.mutate({ role: p.role, playerId: p.serverId }))
+    );
+    return withServerIds;
+  };
+
+  const handleStartGame = async () => {
+    if (!canStart || saving) return;
+    const lineup = POS_ORDER.map(pos => ({ ...assignments[pos], role: pos }));
+    setSaving(true);
+    try {
+      const enriched = await saveRosterToServer(lineup);
+      onStart(enriched);
+    } catch {
+      onStart(lineup);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveMenu = async () => {
+    if (!canStart || saving) return;
+    const lineup = POS_ORDER.map(pos => ({ ...assignments[pos], role: pos }));
+    setSaving(true);
+    try {
+      await saveRosterToServer(lineup);
+    } catch {} finally {
+      setSaving(false);
+    }
+    playCancel();
+    onMenu?.(lineup);
+  };
 
   const roll = () => {
     const shuffled = [...pool].sort(() => Math.random() - 0.5);
     const enriched = shuffled.slice(0, 3).map(p => ({
       ...p,
-      ability: Math.random() < 0.24 ? rollAbility() : null,
+      ability: rollAbilityForPlayer(p.ovr),
     }));
     setRolled(enriched);
     setAnimDone(false);
@@ -685,11 +804,11 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
       setPhase('assign');
       return;
     }
-    const currentPool = PLAYERS.filter(p => !currentRoster.find(r => r.id === p.id));
+    const currentPool = draftPool.filter(p => !currentRoster.find(r => r.id === p.id));
     const shuffled    = [...currentPool].sort(() => Math.random() - 0.5);
     const enriched    = shuffled.slice(0, 3).map(p => ({
       ...p,
-      ability: Math.random() < 0.24 ? rollAbility() : null,
+      ability: rollAbilityForPlayer(p.ovr),
     }));
     const best = enriched.reduce((b, p) => p.ovr > b.ovr ? p : b, enriched[0]);
 
@@ -805,8 +924,29 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
     setHoverId(null);
   };
 
-  const panelCX = MP_X + MP_W / 2;
-  const panelCY = MP_Y + MP_H / 2 - 50;
+  // Mobile collapses left panel into a bottom bar
+  const BB_H        = 62;
+  const BB_Y        = TOTAL_H - BB_H - 2;
+  const activeMPX   = isMobile ? 2             : MP_X;
+  const activeMPY   = isMobile ? 4             : MP_Y;
+  const activeMPW   = isMobile ? ZOOM_W - 4    : MP_W;
+  const activeMPH   = isMobile ? BB_Y - activeMPY - 4 : MP_H;
+  const panelCX     = activeMPX + activeMPW / 2;
+  const panelCY     = activeMPY + activeMPH / 2 - 50;
+  // Draft cards: 3 cards centered on mobile, scaled up to fill available width
+  const mobileCardScale = isMobile ? 1.31 : 1;
+  const mobileCardGap   = isMobile ? 14 : CARD_GAP;
+  const mobileCW = Math.round(CARD_W * mobileCardScale);
+  const draftGridX  = isMobile
+    ? Math.round((ZOOM_W - (3 * mobileCW + 2 * mobileCardGap)) / 2)
+    : GRID_X;
+  // Assign slots/cards: 5 items scaled up proportionally on mobile
+  const mobileSLW    = isMobile ? Math.round(54 * 1.3) : 54;  // 70 on mobile
+  const mobileSLH    = isMobile ? Math.round(72 * 1.3) : 72;  // 94 on mobile
+  const mobileCScale = mobileSLW / CARD_W;                     // 0.778 on mobile, 0.6 desktop
+  const assignGridX  = isMobile
+    ? Math.round((ZOOM_W - (5 * mobileSLW + 4 * 5)) / 2)
+    : GRID_X;
 
   const dlgState = autoDrafting ? 'auto'
     : phase === 'assign'    ? (canStart ? 'done' : 'assign')
@@ -817,7 +957,8 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
     <g style={{ touchAction: 'none' }}>
       <rect ref={bgRef} x={0} y={0} width={ZOOM_W} height={TOTAL_H} fill="#1c2e4a" />
 
-      {/* ── LEFT PANEL ───────────────────────────────────── */}
+      {/* ── LEFT PANEL (desktop only) ────────────────────── */}
+      {!isMobile && (<>
       <rect x={LP_X} y={2} width={LP_W} height={LP_H} rx={3}
         fill="#243660" shapeRendering="crispEdges" />
 
@@ -888,7 +1029,7 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
             <PixelTextC text={badgeLabel} cx={18} y={slotY + 5}
               scale={1} fill={badgeText} outline={null} />
             {player ? (
-              <PixelText text={player.name} x={30} y={slotY + 5} scale={1}
+              <PixelText text={player.lastName ?? player.name} x={30} y={slotY + 5} scale={1}
                 fill={player.ability ? RARITY_COLORS[player.ability.rarity] : '#40c870'} outline={null} />
             ) : (
               <PixelText text="EMPTY" x={30} y={slotY + 5}
@@ -906,21 +1047,22 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
         cx={CX_LP} y={195} scale={1}
         fill={canStart ? '#40c870' : '#1eb8d8'} outline={null} />
 
-      <DraftButton x={6} y={212} w={LP_W - 8} label="START GAME"
-        color="#1a7a38" disabled={!canStart}
-        onClick={() => canStart && onStart(POS_ORDER.map(pos => ({ ...assignments[pos], role: pos })))} />
+      <DraftButton x={6} y={212} w={LP_W - 8} label={saving ? 'SAVING...' : 'START GAME'}
+        color="#1a7a38" disabled={!canStart || saving}
+        onClick={handleStartGame} />
       <DraftButton x={6} y={248} w={LP_W - 8}
         label={phase === 'assign' ? 'REDRAFT' : 'BACK'}
         color="#385090"
         onClick={() => { phase === 'assign' ? resetDraft() : (playCancel(), onBack()); }} />
       {canStart && (
-        <DraftButton x={6} y={284} w={LP_W - 8} label="SAVE & MENU"
-          color="#2a5070"
-          onClick={() => { playCancel(); onMenu?.(POS_ORDER.map(pos => ({ ...assignments[pos], role: pos }))); }} />
+        <DraftButton x={6} y={284} w={LP_W - 8} label={saving ? 'SAVING...' : 'SAVE & MENU'}
+          color="#2a5070" disabled={saving}
+          onClick={handleSaveMenu} />
       )}
+      </>)}
 
       {/* ── MAIN PANEL ───────────────────────────────────── */}
-      <rect x={MP_X} y={MP_Y} width={MP_W} height={MP_H} rx={4}
+      <rect x={activeMPX} y={activeMPY} width={activeMPW} height={activeMPH} rx={4}
         fill="#1e3050" shapeRendering="crispEdges" />
 
       {/* Rainbow burst — after both panel bg rects so it covers them, but cards render on top */}
@@ -928,8 +1070,8 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
 
       <PixelTextC
         text={phase === 'assign' ? 'ASSIGN POSITIONS' : 'AVAILABLE PLAYERS'}
-        cx={panelCX} y={MP_Y + 10} scale={1} fill="#1eb8d8" outline={null} />
-      <rect x={MP_X + 8} y={MP_Y + 22} width={MP_W - 16} height={1}
+        cx={panelCX} y={activeMPY + 10} scale={1} fill="#1eb8d8" outline={null} />
+      <rect x={activeMPX + 8} y={activeMPY + 22} width={activeMPW - 16} height={1}
         fill="#2e4870" shapeRendering="crispEdges" />
 
       {/* Draft phase: roll prompt */}
@@ -937,50 +1079,69 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
         <g>
           <PixelTextC
             text={`PICK ${roster.length + 1} OF ${ROSTER_SIZE}`}
-            cx={panelCX} y={panelCY - 24}
+            cx={panelCX} y={isMobile ? panelCY - 42 : panelCY - 24}
             scale={1} fill="#1eb8d8" outline={null} />
           <PixelTextC
             text={`${pool.length} PLAYERS IN POOL`}
-            cx={panelCX} y={panelCY - 12}
+            cx={panelCX} y={isMobile ? panelCY - 30 : panelCY - 12}
             scale={1} fill="#3a5878" outline={null} />
-          <DraftButton
-            x={panelCX - 96} y={panelCY}
-            w={92} h={32}
-            label="ROLL PICKS"
-            color="#1a7ac8"
-            onClick={roll}
-          />
-          <DraftButton
-            x={panelCX + 4} y={panelCY}
-            w={92} h={32}
-            label="AUTO DRAFT"
-            color="#1a7050"
-            onClick={startAutoDraft}
-          />
+          {isMobile ? (<>
+            <DraftButton
+              x={panelCX - 70} y={panelCY - 14}
+              w={140} h={36}
+              label="ROLL PICKS"
+              color="#1a7ac8"
+              onClick={roll}
+            />
+            <DraftButton
+              x={panelCX - 70} y={panelCY + 30}
+              w={140} h={34}
+              label="AUTO DRAFT"
+              color="#1a7050"
+              onClick={startAutoDraft}
+            />
+          </>) : (<>
+            <DraftButton
+              x={panelCX - 96} y={panelCY}
+              w={92} h={32}
+              label="ROLL PICKS"
+              color="#1a7ac8"
+              onClick={roll}
+            />
+            <DraftButton
+              x={panelCX + 4} y={panelCY}
+              w={92} h={32}
+              label="AUTO DRAFT"
+              color="#1a7050"
+              onClick={startAutoDraft}
+            />
+          </>)}
         </g>
       )}
 
       {/* Assign phase UI */}
       {phase === 'assign' && (() => {
-        const SLW = 54, SLH = 72, SLG = 5;
-        const CSCALE = 0.6;
-        const slotsY = MP_Y + 30;
-        const cardsY = slotsY + SLH + 40;
+        const SLW = mobileSLW, SLH = mobileSLH, SLG = 5;
+        const CSCALE = mobileCScale;
+        const slotsY = activeMPY + 30;
+        const cardsY = slotsY + SLH + (isMobile ? 20 : 40);
         const draggedPlayer = roster.find(r => r.id === dragId) ?? null;
         slotBoundsRef.current = POS_ORDER.map((pos, i) => ({
-          pos, x: GRID_X + i * (SLW + SLG), y: slotsY, w: SLW, h: SLH,
+          pos, x: assignGridX + i * (SLW + SLG), y: slotsY, w: SLW, h: SLH,
         }));
         return (
           <g>
-            {/* Instruction */}
-            <PixelTextC
-              text={dragId ? `PLACING ${draggedPlayer?.name ?? ''}` : 'DRAG A PLAYER TO A POSITION'}
-              cx={panelCX} y={slotsY + SLH + 12} scale={1}
-              fill={dragId ? '#e8c060' : '#3a6080'} outline={null} />
+            {/* Instruction — desktop only; mobile uses the hint below the cards */}
+            {!isMobile && (
+              <PixelTextC
+                text={dragId ? `PLACING ${draggedPlayer?.lastName ?? draggedPlayer?.name ?? ''}` : 'DRAG A PLAYER TO A POSITION'}
+                cx={panelCX} y={slotsY + SLH + 12} scale={1}
+                fill={dragId ? '#e8c060' : '#3a6080'} outline={null} />
+            )}
 
             {/* Position drop slots */}
             {POS_ORDER.map((pos, i) => {
-              const sx       = GRID_X + i * (SLW + SLG);
+              const sx       = assignGridX + i * (SLW + SLG);
               const assigned = assignments[pos] ?? null;
               const posColor = POS_COLORS[pos];
               const isOver   = dropTarget === pos && !!dragId;
@@ -1011,7 +1172,7 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
                     scale={1} fill="#fff" outline={null} />
                   {assigned ? (
                     <>
-                      <PixelTextC text={assigned.name} cx={sx + SLW / 2} y={slotsY + 23}
+                      <PixelTextC text={assigned.lastName ?? assigned.name} cx={sx + SLW / 2} y={slotsY + 23}
                         scale={1} fill="#40c870" outline={null} />
                       <PixelTextC text="OVR" cx={sx + SLW / 2} y={slotsY + 35}
                         scale={1} fill="#3a6080" outline={null} />
@@ -1037,7 +1198,7 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
 
             {/* Player cards tray — full PlayerCard at 0.6 scale */}
             {roster.map((player, i) => {
-              const sx          = GRID_X + i * (SLW + SLG);
+              const sx          = assignGridX + i * (SLW + SLG);
               const assignedPos = POS_ORDER.find(pos => assignments[pos]?.id === player.id) ?? null;
               const isBeingDragged = dragId === player.id;
               const isHovered = hoverId === player.id && !isBeingDragged && !dragId;
@@ -1101,14 +1262,22 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
               );
             })}
 
-            {/* Bottom-center START GAME button */}
-            {canStart && !dragId && (
+            {/* Hint below cards — mobile only */}
+            {isMobile && (
+              <PixelTextC
+                text={dragId ? `PLACING ${draggedPlayer?.lastName ?? draggedPlayer?.name ?? ''}` : 'DRAG A PLAYER TO A ROLE ABOVE'}
+                cx={panelCX} y={cardsY + Math.round(CARD_H * CSCALE) + 12}
+                scale={1} fill={dragId ? '#e8c060' : '#2a5070'} outline={null} />
+            )}
+
+            {/* Bottom-center START GAME button — desktop only; mobile uses bottom bar */}
+            {!isMobile && canStart && !dragId && (
               <DraftButton
                 x={panelCX - 70} y={MP_Y + MP_H - 62}
                 w={140} h={30}
                 label="START GAME"
                 color="#1a7a38"
-                onClick={() => onStart(POS_ORDER.map(pos => ({ ...assignments[pos], role: pos })))}
+                onClick={handleStartGame}
               />
             )}
 
@@ -1126,10 +1295,21 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
 
       {/* Player cards (draft phase only) */}
       {phase === 'draft' && rolled && rolled.map((player, i) => {
-        const cardX  = GRID_X + i * (CARD_W + CARD_GAP);
+        const cardX  = draftGridX + i * (mobileCW + mobileCardGap);
         const cardCX = cardX + CARD_W / 2;
 
         if (animDone) {
+          if (isMobile) {
+            return (
+              <g key={player.id} transform={`translate(${cardX} ${GRID_Y}) scale(${mobileCardScale})`}>
+                <PlayerCard
+                  player={player} x={0} y={0}
+                  phase={i * 2}
+                  autoHighlight={autoPickId === player.id}
+                  onClick={autoDrafting ? undefined : () => pick(player)} />
+              </g>
+            );
+          }
           return (
             <PlayerCard key={player.id}
               player={player} x={cardX} y={GRID_Y}
@@ -1144,6 +1324,20 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
 
         const cardY = GRID_Y - Math.round(60 * (1 - dealY));
 
+        if (isMobile) {
+          const localCardY = -Math.round(60 * (1 - dealY));
+          const localCX = CARD_W / 2;
+          return (
+            <g key={player.id}
+              transform={`translate(${cardX} ${GRID_Y}) scale(${mobileCardScale}) translate(${localCX} 0) scale(${scaleX} 1) translate(${-localCX} 0)`}>
+              {showFront
+                ? <PlayerCard player={player} x={0} y={localCardY} phase={i * 2} onClick={undefined} />
+                : <CardBack x={0} y={localCardY} cardId={player.id} />
+              }
+            </g>
+          );
+        }
+
         return (
           <g key={player.id}
             transform={`translate(${cardCX} 0) scale(${scaleX} 1) translate(${-cardCX} 0)`}>
@@ -1156,12 +1350,102 @@ export function DraftScreen({ homeTeamName = 'HOME', onStart, onBack, onMenu }) 
       })}
 
       {/* ── DIALOGUE BAR ─────────────────────────────────── */}
-      <BballTip
-        text={getDlgLine(dlgState, bannerTick)}
-        charX={CHAR_X} charY={CHAR_Y} scale={CHAR_SCALE}
-        dlgX={DLG_X} dlgY={DLG_Y} dlgW={DLG_W} dlgH={DLG_H}
-        textX={TEXT_X} textY={TEXT_Y}
-      />
+      {!isMobile && (
+        <BballTip
+          text={getDlgLine(dlgState, bannerTick)}
+          charX={CHAR_X} charY={CHAR_Y} scale={CHAR_SCALE}
+          dlgX={DLG_X} dlgY={DLG_Y} dlgW={DLG_W} dlgH={DLG_H}
+          textX={TEXT_X} textY={TEXT_Y}
+        />
+      )}
+
+      {/* ── MOBILE BOTTOM BAR ────────────────────────────── */}
+      {isMobile && (() => {
+        const BX       = 2;
+        const CHIP_W   = 46;
+        const CHIP_GAP = 3;
+        const CHIPS_X  = BX + 56;
+        const BTN_X    = CHIPS_X + 5 * CHIP_W + 4 * CHIP_GAP + 6;
+        const BTN_W    = ZOOM_W - BTN_X - 6;
+        const chipY    = BB_Y + 4;
+        const chipH    = BB_H - 8;
+
+        const phaseLabel = phase === 'assign' ? 'ROSTER' : 'PICKS';
+        const counter    = phase === 'assign'
+          ? `${Object.keys(assignments).length}/${ROSTER_SIZE}`
+          : `${roster.length}/${ROSTER_SIZE}`;
+
+        return (
+          <g>
+            {/* Bar background */}
+            <rect x={BX} y={BB_Y} width={ZOOM_W - BX * 2} height={BB_H} rx={3}
+              fill="#243660" shapeRendering="crispEdges" />
+            <rect x={BX} y={BB_Y} width={ZOOM_W - BX * 2} height={1}
+              fill="#3a5080" shapeRendering="crispEdges" />
+
+            {/* Phase label + counter */}
+            <PixelTextC text={phaseLabel} cx={BX + 28} y={BB_Y + 14}
+              scale={1} fill="#1eb8d8" outline={null} />
+            <PixelTextC text={counter} cx={BX + 28} y={BB_Y + 28}
+              scale={1} fill={canStart ? '#40c870' : '#a0c8e0'} outline={null} />
+
+            {/* Slot chips */}
+            {Array.from({ length: ROSTER_SIZE }, (_, i) => {
+              const cx      = CHIPS_X + i * (CHIP_W + CHIP_GAP);
+              const slotPos = POS_ORDER[i];
+              const player  = phase === 'assign' ? (assignments[slotPos] ?? null) : (roster[i] ?? null);
+              const label   = phase === 'assign' ? slotPos : String(i + 1);
+              const filled  = !!player;
+              const badgeFill = filled
+                ? (phase === 'assign' ? POS_COLORS[slotPos] : '#2a5090')
+                : '#1a2e50';
+              return (
+                <g key={i}>
+                  <rect x={cx} y={chipY} width={CHIP_W} height={chipH} rx={2}
+                    fill={filled ? '#1a3428' : '#182038'} shapeRendering="crispEdges" />
+                  <rect x={cx} y={chipY} width={CHIP_W} height={chipH} rx={2}
+                    fill="none" stroke={filled ? '#2a6040' : '#243060'} strokeWidth={1} />
+                  {/* Badge */}
+                  <rect x={cx} y={chipY} width={CHIP_W} height={14} rx={2}
+                    fill={badgeFill} shapeRendering="crispEdges" />
+                  <rect x={cx} y={chipY + 8} width={CHIP_W} height={6}
+                    fill={badgeFill} shapeRendering="crispEdges" />
+                  <PixelTextC text={label} cx={cx + CHIP_W / 2} y={chipY + 4}
+                    scale={1} fill={filled ? '#fff' : '#3a6080'} outline={null} />
+                  {/* Player name or empty */}
+                  {player ? (
+                    <PixelTextC
+                      text={(player.lastName ?? player.name).slice(0, 5)}
+                      cx={cx + CHIP_W / 2} y={chipY + 22}
+                      scale={1}
+                      fill={player.ability ? RARITY_COLORS[player.ability.rarity] : '#40c870'}
+                      outline={null} />
+                  ) : (
+                    <PixelTextC text="—" cx={cx + CHIP_W / 2} y={chipY + 22}
+                      scale={1} fill="#2a4060" outline={null} />
+                  )}
+                </g>
+              );
+            })}
+
+            {/* Action buttons */}
+            {canStart && (
+              <DraftButton
+                x={BTN_X} y={BB_Y + 4} w={BTN_W} h={24}
+                label="START"
+                color="#1a7a38"
+                onClick={handleStartGame}
+              />
+            )}
+            <DraftButton
+              x={BTN_X} y={BB_Y + (canStart ? 32 : 20)} w={BTN_W} h={24}
+              label={phase === 'assign' ? 'REDRAFT' : 'BACK'}
+              color="#385090"
+              onClick={() => { phase === 'assign' ? resetDraft() : (playCancel(), onBack()); }}
+            />
+          </g>
+        );
+      })()}
     </g>
   );
 }

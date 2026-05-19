@@ -32,6 +32,7 @@
     ]
   },
   "permissions": {
+    "redis": true,
     "reddit": {
       "enable": true,
       "asUser": [

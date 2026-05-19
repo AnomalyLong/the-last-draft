@@ -66,7 +66,7 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall =
     if (isPickPocketing) {
       const start = performance.now();
       const tick = (now) => {
-        const f = Math.floor((now - start) / 107);
+        const f = Math.floor((now - start) / (1200 / PICKPOCKET_FRAMES.length));
         if (f < PICKPOCKET_FRAMES.length) { setFrameIdx(f); rafRef.current = requestAnimationFrame(tick); }
       };
       rafRef.current = requestAnimationFrame(tick);

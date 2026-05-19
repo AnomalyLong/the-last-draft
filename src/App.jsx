@@ -1,6 +1,6 @@
 import React from 'react';
 import { ZOOM_W, TOTAL_H } from './constants.js';
-import { requestExpandedMode, getWebViewMode } from '@devvit/web/client';
+import { requestExpandedMode, getWebViewMode, context as devvitContext } from '@devvit/web/client';
 
 // Safe wrappers — devvit globals aren't present outside the Reddit app
 function getMode() {
@@ -10,11 +10,12 @@ function tryExpand(nativeEvent) {
   try { requestExpandedMode(nativeEvent, 'game'); } catch {}
 }
 
-import { TitleScreen, TeamSelect, DraftScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen } from './components/index.js';
+import { TitleScreen, TeamSelect, DraftScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen2, DebugConsole, AdminOverlay, MatchmakingScreen } from './components/index.js';
 import { titleMusic, bgMusic, bounceBall } from './sound/basketball.js';
 import { audioSettings } from './sound/audioSettings.js';
 import { useGame } from './useGame.js';
 import OPPONENTS from './opponents.json';
+import { trpc } from './trpc';
 
 export default function App() {
   const isInline = React.useMemo(() => getMode() === 'inline', []);
@@ -27,7 +28,7 @@ export default function App() {
   const [showInGameOptions, setShowInGameOptions] = React.useState(false);
 
   React.useEffect(() => {
-    if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'collection') {
+    if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'collection' || scene === 'matchmaking') {
       bgMusic.stop();
       titleMusic.start();
     } else {
@@ -47,23 +48,119 @@ export default function App() {
     setSfxVol(v);
   };
 
+  const [username] = React.useState(() => {
+    try { return devvitContext?.username ?? ''; } catch { return ''; }
+  });
+  const [serverCredits, setServerCredits] = React.useState(0);
+
+  React.useEffect(() => {
+    trpc.user.init.query().then((user) => {
+      setServerCredits(user.credits);
+      setIsFtue(user.gamesPlayed === 0);
+    }).catch(() => {});
+
+    // Load saved roster + lineup so returning players can skip the draft
+    Promise.all([trpc.user.roster.query(), trpc.user.lineup.query()])
+      .then(([roster, lineup]) => {
+        if (!roster?.length) return;
+        const byId = new Map(roster.map(p => [p.id, p]));
+        const ORDER = ['PG', 'SG', 'SF', 'PF', 'C'];
+        const built = ORDER.map(pos => {
+          const pid = lineup?.[pos];
+          if (!pid) return null;
+          const p = byId.get(Number(pid));
+          if (!p) return null;
+          const sb = p.statBonuses ?? {};
+          return {
+            pos, name: p.name,
+            spd: (p.spd ?? 60) + (sb.spd ?? 0),
+            dex: (p.dex ?? 60) + (sb.dex ?? 0),
+            jmp: (p.jmp ?? 60) + (sb.jmp ?? 0),
+            acc: (p.acc ?? 60) + (sb.acc ?? 0),
+            rarity: p.rarity, ability: p.ability,
+            abilities: p.abilities ?? [],
+            level: p.level ?? 1, xp: p.xp ?? 0,
+            serverId: p.id,
+          };
+        }).filter(Boolean);
+        if (built.length === 5) setHomeRoster(built);
+      })
+      .catch(() => {});
+  }, []);
+
+  const [titleLogs, setTitleLogs] = React.useState([]);
+  const [showTitleDebug, setShowTitleDebug] = React.useState(false);
+  const [showAdminOverlay, setShowAdminOverlay] = React.useState(false);
+
+  const handleMatchmakingReady = () => {
+    trpc.game.start.mutate()
+      .then(result => {
+        if (result?.gameId) {
+          gameSessionRef.current = { gameId: result.gameId, token: result.token, seq: 0 };
+        }
+      })
+      .catch(() => {});
+    gameState.handleCommand('testGamePlay');
+    setScene('game');
+  };
+
+  const handleTitleCommand = (cmd) => {
+    const trimmed = cmd.trim();
+    if (trimmed === 'admin') {
+      trpc.admin.isAdmin.query()
+        .then(result => {
+          if (result.isAdmin) setShowAdminOverlay(true);
+        })
+        .catch(() => {});
+    }
+  };
+
   const [gameTip, setGameTip] = React.useState(null);
   const [homeTeamName, setHomeTeamName] = React.useState('HOME');
   const [homeRoster, setHomeRoster] = React.useState([]);
+  const [isFtue, setIsFtue] = React.useState(true); // true until persisted completion flag is received
   const [awayTeam] = React.useState(
     () => OPPONENTS[Math.floor(Math.random() * OPPONENTS.length)]
   );
 
-  const gameState = useGame({ homeRoster, awayRoster: awayTeam.players });
+  const gameSessionRef = React.useRef(null); // { gameId, token, seq }
+  const clientScoreRef = React.useRef(0);    // tracks only post-session-ready makes
 
-  const withAbilities = (roster, baseId) =>
+  const onPlayEvent = (play) => {
+    const session = gameSessionRef.current;
+    if (!session) return; // session not ready yet — skip recording and counting
+    if (play.type === 'shoot' && play.result === 'made' && play.points) {
+      clientScoreRef.current += play.points;
+    } else if (play.type === 'dunk') {
+      clientScoreRef.current += 2;
+    }
+    const seq = session.seq++;
+    trpc.game.recordPlay.mutate({ gameId: session.gameId, token: session.token, sequence: seq, play }).catch(() => {});
+  };
+
+  const gameState = useGame({ homeRoster, awayRoster: awayTeam.players, isFtue, onPlayEvent });
+
+  const withLevelUpBonuses = (roster, baseId) =>
     roster.map((r, i) => {
-      const extras = gameState.abilityOverridesRef.current.get(baseId + i) ?? [];
-      const abilities = [r.ability, ...extras].filter(Boolean);
-      return { ...r, abilities };
+      const id = baseId + i;
+      const extras = gameState.abilityOverridesRef.current.get(id) ?? [];
+      const abilities = [r.ability, ...(r.abilities ?? []), ...extras].filter(Boolean);
+      const bonus = gameState.statBonuses.get(id) ?? {};
+      const progress = gameState.playerProgressRef.current.get(id);
+      return {
+        ...r,
+        abilities,
+        spd: (r.spd ?? 0) + (bonus.spd ?? 0),
+        dex: (r.dex ?? 0) + (bonus.dex ?? 0),
+        jmp: (r.jmp ?? 0) + (bonus.jmp ?? 0),
+        acc: (r.acc ?? 0) + (bonus.acc ?? 0),
+        level: progress?.level ?? r.level ?? 1,
+        xp: progress?.xp ?? r.xp ?? 0,
+        xpMax: progress?.xpMax ?? r.xpMax,
+      };
     });
-  const homeRosterFull = withAbilities(homeRoster, 1);
-  const awayRosterFull = withAbilities(awayTeam.players, 6);
+  const homeRosterFull = withLevelUpBonuses(homeRoster, 1);
+  const awayRosterFull = withLevelUpBonuses(awayTeam.players, 6);
 
   return (
     <div data-testid="game-root"
@@ -80,16 +177,24 @@ export default function App() {
           style={{ imageRendering: 'pixelated', display: 'block' }}
         >
           {isInline && (
-            <TitleScreen onPlay={() => {}} onOptions={() => {}} onCollections={() => {}} />
+            <TitleScreen onPlay={() => {}} onOptions={() => {}} onCollections={() => {}} username={username} credits={serverCredits} />
           )}
           {!isInline && scene === 'loading' && (
             <LoadingScreen onDone={() => setScene('title')} />
           )}
           {!isInline && scene === 'title' && (
             <TitleScreen
-              onPlay={() => setScene('teamSelect')}
+              onPlay={() => {
+                if (!isFtue && homeRoster.length === 5) {
+                  setScene('matchmaking');
+                } else {
+                  setScene('teamSelect');
+                }
+              }}
               onOptions={() => setScene('options')}
               onCollections={() => setScene('collection')}
+              username={username}
+              credits={serverCredits}
             />
           )}
           {!isInline && scene === 'options' && (
@@ -108,9 +213,19 @@ export default function App() {
             />
           )}
           {!isInline && scene === 'collection' && (
-            <CollectionScreen
-              roster={homeRoster}
+            <CollectionScreen2
+              roster={homeRosterFull}
+              username={username}
+              credits={serverCredits}
               onBack={() => setScene('title')}
+            />
+          )}
+          {!isInline && scene === 'matchmaking' && (
+            <MatchmakingScreen
+              homeRoster={homeRoster}
+              homeTeamName={homeTeamName}
+              awayTeam={awayTeam}
+              onReady={handleMatchmakingReady}
             />
           )}
           {!isInline && scene === 'draft' && (
@@ -124,6 +239,16 @@ export default function App() {
         </svg>
       )}
 
+      {/* ── TITLE/MENU DEBUG CONSOLE ─────────────────────────── */}
+      {!isInline && scene !== 'game' && (
+        <DebugConsole
+          logs={titleLogs}
+          onCommand={handleTitleCommand}
+          showDebug={showTitleDebug}
+          onToggleDebug={() => setShowTitleDebug(d => !d)}
+        />
+      )}
+
       {/* ── GAME SCENE ───────────────────────────────────────── */}
       {!isInline && scene === 'game' && (
         <GameScene
@@ -131,13 +256,71 @@ export default function App() {
           svgProps={{ 'data-testid': 'game-court' }}
           setViewportW={gameState.setViewportW}
           {...gameState}
+          onPickLevelUp={(ability) => {
+            const p = gameState.levelUpState?.player;
+            if (p?.team === 'home' && ability) {
+              const serverId = homeRoster[p.id - 1]?.serverId;
+              if (serverId) {
+                trpc.player.progress.mutate({ playerId: serverId, level: p.level, xp: p.xp, addAbility: ability }).catch(() => {});
+              }
+            }
+            gameState.onPickLevelUp(ability);
+          }}
+          onDismissStatUpgrade={() => {
+            const p = gameState.levelUpState?.player;
+            const statGained = gameState.levelUpState?.statGained;
+            if (p?.team === 'home' && statGained) {
+              const serverId = homeRoster[p.id - 1]?.serverId;
+              if (serverId) {
+                trpc.player.progress.mutate({ playerId: serverId, level: p.level, xp: p.xp, statDelta: statGained }).catch(() => {});
+              }
+            }
+            gameState.onDismissStatUpgrade();
+          }}
+          username={username}
+          serverCredits={serverCredits}
           homeTeamName={homeTeamName}
           awayTeamName={awayTeam.name}
           homeRoster={homeRosterFull}
           awayRoster={awayRosterFull}
           gameTip={gameTip}
-          onDismissGameTip={() => { gameState.handleCommand('testGamePlay'); setGameTip(null); }}
-          onDismissGameOver={() => setScene('title')}
+          onDismissGameTip={() => {
+            trpc.game.start.mutate().then((result) => {
+              if (result && 'gameId' in result) {
+                gameSessionRef.current = { gameId: result.gameId, token: result.token, seq: 0 };
+              }
+            }).catch(() => {});
+            gameState.handleCommand('testGamePlay');
+            setGameTip(null);
+          }}
+          onDismissGameOver={() => {
+            const session = gameSessionRef.current;
+            if (session) {
+              const score = clientScoreRef.current;
+              trpc.game.end.mutate({ gameId: session.gameId, token: session.token, score })
+                .then(summary => { setServerCredits(c => c + summary.creditsEarned); })
+                .catch(() => {});
+              gameSessionRef.current = null;
+              clientScoreRef.current = 0;
+            }
+            // Save each home player's progress earned this game
+            homeRoster.forEach((r, i) => {
+              if (!r.serverId) return;
+              const gameId = i + 1;
+              const progress = gameState.playerProgressRef.current.get(gameId);
+              if (!progress) return;
+              const statDelta = gameState.statBonusRef.current.get(gameId);
+              const addAbilities = gameState.abilityOverridesRef.current.get(gameId) ?? [];
+              trpc.player.progress.mutate({
+                playerId: r.serverId,
+                level: progress.level,
+                xp: progress.xp,
+                ...(addAbilities.length ? { addAbilities } : {}),
+                ...(statDelta ? { statDelta } : {}),
+              }).catch(() => {});
+            });
+            setScene('title');
+          }}
           showOptions={showInGameOptions}
           onShowOptions={setShowInGameOptions}
           musicVol={musicVol}     sfxVol={sfxVol}
@@ -145,6 +328,19 @@ export default function App() {
           scanlines={scanlines}   vignette={vignette}
           onScanlines={setScanlines} onVignette={setVignette}
         />
+      )}
+
+      {/* ── ADMIN OVERLAY ────────────────────────────────────── */}
+      {showAdminOverlay && <AdminOverlay onClose={() => setShowAdminOverlay(false)} />}
+
+      {/* Debug: FTUE indicator */}
+      {isFtue && (
+        <div style={{
+          position: 'absolute', bottom: 6, right: 6, zIndex: 20,
+          background: 'rgba(0,0,0,0.75)', color: '#00ff88',
+          fontFamily: 'monospace', fontSize: 10, padding: '2px 5px',
+          borderRadius: 2, pointerEvents: 'none', letterSpacing: 1,
+        }}>FTUE: ON</div>
       )}
 
       {/* CRT scanlines — full window coverage */}

@@ -14,3 +14,4 @@ export { PICKPOCKET_FRAMES } from './pickpocket.js';
 export { SPIN_MOVE_FRAMES } from './spinmove.js';
 export { DASH_FRAMES } from './dash.js';
 export { FADEAWAY_FRAMES } from './fadeaway.js';
+export { CELEBRATION_FRAMES } from './celebration.js';

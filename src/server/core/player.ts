@@ -1,0 +1,208 @@
+import { redis } from '@devvit/web/server';
+
+export type PlayerSource = 'draft' | 'credit' | 'purchase';
+export type PlayerRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export const ROLES = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
+export type Role = (typeof ROLES)[number];
+
+export type PlayerAbility = { name: string; rarity: number; [key: string]: unknown };
+export type PlayerStatBonuses = { spd: number; dex: number; jmp: number; acc: number };
+
+export type PlayerData = {
+  id: number;
+  owner: string;
+  name: string;
+  level: number;
+  xp: number;
+  source: PlayerSource;
+  rarity: PlayerRarity;
+  // Base stats set at mint
+  spd: number;
+  dex: number;
+  jmp: number;
+  acc: number;
+  // Initial ability (may be null)
+  ability: PlayerAbility | null;
+  // Level-up rewards accumulated in-game
+  abilities: PlayerAbility[];
+  statBonuses: PlayerStatBonuses;
+};
+
+const PLAYER_COUNTER_KEY = 'player:id:counter';
+
+export const playerKey = (id: number) => `player:${id}`;
+export const rosterKey = (username: string) => `user:roster:${username}`;
+export const lineupKey = (username: string) => `user:lineup:${username}`;
+
+// Pre-allocates a player ID. Used by draft.ts so the ID can be referenced
+// in the ledger entry before the player hash is written.
+export const allocatePlayerId = async (): Promise<number> => {
+  return await redis.incrBy(PLAYER_COUNTER_KEY, 1);
+};
+
+export const mintPlayer = async (params: {
+  id?: number;
+  owner: string;
+  name: string;
+  source: PlayerSource;
+  rarity: PlayerRarity;
+  spd?: number;
+  dex?: number;
+  jmp?: number;
+  acc?: number;
+  ability?: PlayerAbility | null;
+}): Promise<PlayerData> => {
+  const id = params.id ?? (await redis.incrBy(PLAYER_COUNTER_KEY, 1));
+  const now = Date.now();
+
+  await Promise.all([
+    redis.hSet(playerKey(id), {
+      owner: params.owner,
+      name: params.name,
+      level: '1',
+      xp: '0',
+      source: params.source,
+      rarity: params.rarity,
+      spd: String(params.spd ?? 0),
+      dex: String(params.dex ?? 0),
+      jmp: String(params.jmp ?? 0),
+      acc: String(params.acc ?? 0),
+      ability: params.ability ? JSON.stringify(params.ability) : '',
+    }),
+    redis.zAdd(rosterKey(params.owner), { score: now, member: String(id) }),
+  ]);
+
+  return {
+    id,
+    owner: params.owner,
+    name: params.name,
+    level: 1,
+    xp: 0,
+    source: params.source,
+    rarity: params.rarity,
+    spd: params.spd ?? 0,
+    dex: params.dex ?? 0,
+    jmp: params.jmp ?? 0,
+    acc: params.acc ?? 0,
+    ability: params.ability ?? null,
+    abilities: [],
+    statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 },
+  };
+};
+
+export const getPlayer = async (id: number): Promise<PlayerData | null> => {
+  const raw = await redis.hGetAll(playerKey(id));
+  if (!raw?.owner) return null;
+
+  let ability: PlayerAbility | null = null;
+  try { ability = raw.ability ? JSON.parse(raw.ability) : null; } catch {}
+
+  let abilities: PlayerAbility[] = [];
+  try { abilities = raw.abilities ? JSON.parse(raw.abilities) : []; } catch {}
+
+  let statBonuses: PlayerStatBonuses = { spd: 0, dex: 0, jmp: 0, acc: 0 };
+  try { statBonuses = raw.statBonuses ? JSON.parse(raw.statBonuses) : statBonuses; } catch {}
+
+  return {
+    id,
+    owner: raw.owner,
+    name: raw.name ?? '',
+    level: Number(raw.level ?? 1),
+    xp: Number(raw.xp ?? 0),
+    source: (raw.source as PlayerSource) ?? 'draft',
+    rarity: (raw.rarity as PlayerRarity) ?? 'common',
+    spd: Number(raw.spd ?? 0),
+    dex: Number(raw.dex ?? 0),
+    jmp: Number(raw.jmp ?? 0),
+    acc: Number(raw.acc ?? 0),
+    ability,
+    abilities,
+    statBonuses,
+  };
+};
+
+export const getUserRoster = async (username: string): Promise<number[]> => {
+  const raw: any[] = (await redis.zRange(rosterKey(username), 0, -1)) as any;
+  return raw.map((m: any) => Number(typeof m === 'object' ? m.member : m)).filter(n => !isNaN(n));
+};
+
+export const getUserLineup = async (username: string): Promise<Partial<Record<Role, number>>> => {
+  const raw = await redis.hGetAll(lineupKey(username));
+  const lineup: Partial<Record<Role, number>> = {};
+  for (const role of ROLES) {
+    if (raw?.[role]) lineup[role] = Number(raw[role]);
+  }
+  return lineup;
+};
+
+// Assigns a player to a lineup slot. Verifies ownership, clears any existing
+// slot the player occupies, then sets the new slot atomically.
+export const setLineupSlot = async (
+  username: string,
+  role: Role,
+  playerId: number,
+): Promise<{ success: boolean }> => {
+  const inRoster = await redis.zScore(rosterKey(username), String(playerId));
+  if (inRoster === null) return { success: false };
+
+  const key = lineupKey(username);
+  const currentLineup = await redis.hGetAll(key);
+  const existingRole = Object.entries(currentLineup ?? {}).find(
+    ([, v]) => v === String(playerId),
+  )?.[0];
+
+  if (existingRole) await redis.hDel(key, existingRole);
+  await redis.hSet(key, { [role]: String(playerId) });
+
+  return { success: true };
+};
+
+// Removes a player from the lineup (e.g. after a trade sends them away).
+export const clearPlayerFromLineup = async (username: string, playerId: number): Promise<void> => {
+  const key = lineupKey(username);
+  const raw = await redis.hGetAll(key);
+  const slot = Object.entries(raw ?? {}).find(([, v]) => v === String(playerId))?.[0];
+  if (slot) await redis.hDel(key, slot);
+};
+
+// Persists level-up results: new level/xp, optional earned abilities, and optional stat deltas.
+export const updatePlayerProgress = async (
+  id: number,
+  params: {
+    level: number;
+    xp: number;
+    addAbilities?: PlayerAbility[];
+    statDelta?: Partial<PlayerStatBonuses>;
+  },
+): Promise<void> => {
+  const key = playerKey(id);
+  const updates: Record<string, string> = {
+    level: String(params.level),
+    xp: String(params.xp),
+  };
+
+  if (params.addAbilities?.length) {
+    let abilities: PlayerAbility[] = [];
+    try {
+      const cur = await redis.hGet(key, 'abilities');
+      abilities = cur ? JSON.parse(cur) : [];
+    } catch {}
+    abilities.push(...params.addAbilities);
+    updates.abilities = JSON.stringify(abilities);
+  }
+
+  if (params.statDelta) {
+    let bonuses: PlayerStatBonuses = { spd: 0, dex: 0, jmp: 0, acc: 0 };
+    try {
+      const cur = await redis.hGet(key, 'statBonuses');
+      if (cur) bonuses = JSON.parse(cur);
+    } catch {}
+    for (const stat of ['spd', 'dex', 'jmp', 'acc'] as const) {
+      const delta = params.statDelta[stat];
+      if (delta) bonuses[stat] = (bonuses[stat] ?? 0) + delta;
+    }
+    updates.statBonuses = JSON.stringify(bonuses);
+  }
+
+  await redis.hSet(key, updates);
+};
