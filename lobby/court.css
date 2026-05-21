@@ -1,0 +1,873 @@
+/* ────────────────────────────────────────────────
+   Court page — in-game basketball view
+   Futuristic sports broadcast aesthetic
+   ──────────────────────────────────────────────── */
+
+[data-state="court"] .title-block,
+[data-state="court"] .center-pillar,
+[data-state="court"] .player-panel,
+[data-state="court"] .roster,
+[data-state="court"] .launch-bar,
+[data-state="court"] .planet,
+[data-state="court"] .corner-bracket,
+[data-state="court"] .hud-corner {
+  display: none;
+}
+
+.court {
+  position: absolute;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  grid-template-rows: 196px 1fr 130px;
+  pointer-events: auto;
+  background: linear-gradient(180deg, rgba(2, 6, 10, 0.96) 0%, rgba(2, 6, 10, 0.98) 100%);
+}
+
+.court::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(255, 255, 255, 0.015) 3px 4px);
+  z-index: 1;
+}
+.court > * { position: relative; z-index: 2; }
+
+/* ═════════════════════════════════════════════════
+   TOP HUD — Pilot dossiers + Reddit user
+   ═════════════════════════════════════════════════ */
+
+.court-top {
+  display: grid;
+  grid-template-columns: 1fr 560px 1fr;
+  gap: 16px;
+  padding: 14px 32px 0;
+  align-items: stretch;
+}
+
+/* ── Player dossier (HOLOGRAM) ── */
+.court-pcard {
+  --team-c: #19e6c4;
+  --team-g: #5bf2d4;
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 0;
+  height: 168px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--team-c) 16%, transparent) 0%,
+      color-mix(in srgb, var(--team-c) 7%, transparent) 50%,
+      color-mix(in srgb, var(--team-c) 3%, transparent) 100%);
+  border: 1px solid var(--team-c);
+  border-left: 1px solid var(--team-c);
+  position: relative;
+  overflow: visible;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 24px) 100%, 0 100%);
+  box-shadow:
+    0 0 28px color-mix(in srgb, var(--team-c) 45%, transparent),
+    inset 0 0 32px color-mix(in srgb, var(--team-c) 18%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--team-c) 35%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: holoFlicker 8s ease-in-out infinite;
+}
+.court-pcard.right {
+  --team-c: #ff2d6f;
+  --team-g: #ff6b9a;
+  grid-template-columns: 1fr 140px;
+  border-left: 1px solid var(--team-c);
+  clip-path: polygon(24px 0, 100% 0, 100% 100%, 0 100%);
+}
+.court-pcard.right .cp-portrait { order: 2; }
+.court-pcard.right .cp-body { order: 1; text-align: right; padding-left: 14px; padding-right: 22px; }
+
+/* Hologram interference: animated scan-line bands */
+.court-pcard::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg,
+      transparent 0 3px,
+      color-mix(in srgb, var(--team-c) 12%, transparent) 3px 4px),
+    linear-gradient(180deg,
+      transparent 30%,
+      color-mix(in srgb, var(--team-c) 8%, transparent) 50%,
+      transparent 70%);
+  background-size: 100% 100%, 100% 220%;
+  background-position: 0 0, 0 0;
+  animation: holoBand 5s linear infinite;
+  mix-blend-mode: screen;
+  z-index: 4;
+  clip-path: inherit;
+}
+@keyframes holoBand {
+  0% { background-position: 0 0, 0 -100%; }
+  100% { background-position: 0 0, 0 200%; }
+}
+
+/* Hologram projection base (glowing line under card) */
+.court-pcard::after {
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  left: 8%;
+  right: 28%;
+  height: 2px;
+  background: var(--team-c);
+  box-shadow:
+    0 0 12px var(--team-c),
+    0 0 28px var(--team-c),
+    0 4px 18px color-mix(in srgb, var(--team-c) 60%, transparent);
+  pointer-events: none;
+}
+.court-pcard.right::after { left: 28%; right: 8%; }
+
+/* Flicker animation */
+@keyframes holoFlicker {
+  0%, 88%, 100% { opacity: 1; }
+  90% { opacity: 0.85; filter: hue-rotate(2deg); }
+  91% { opacity: 1; }
+  93% { opacity: 0.72; }
+  94% { opacity: 1; }
+  96% { opacity: 0.92; }
+  97% { opacity: 1; }
+}
+
+/* Active indicator (pulsing) */
+.court-pcard.active {
+  box-shadow:
+    0 0 36px color-mix(in srgb, var(--team-c) 65%, transparent),
+    inset 0 0 36px color-mix(in srgb, var(--team-c) 22%, transparent),
+    inset 0 0 0 1px var(--team-c);
+}
+.court-pcard.active::before {
+  background:
+    repeating-linear-gradient(0deg,
+      transparent 0 3px,
+      color-mix(in srgb, var(--team-c) 18%, transparent) 3px 4px),
+    linear-gradient(180deg,
+      transparent 30%,
+      color-mix(in srgb, var(--team-c) 14%, transparent) 50%,
+      transparent 70%);
+  background-size: 100% 100%, 100% 220%;
+}
+
+/* Status label */
+.court-pcard.active .cp-body::before {
+  content: "● ACTIVE";
+  position: absolute;
+  top: 8px;
+  right: 18px;
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.36em;
+  color: var(--team-c);
+  text-shadow: 0 0 8px var(--team-c), 0 0 16px var(--team-c);
+  z-index: 6;
+  animation: cpcPulse 1.8s ease-in-out infinite;
+}
+.court-pcard.right.active .cp-body::before { right: auto; left: 18px; }
+@keyframes cpcPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* Portrait column */
+.cp-portrait {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 50% 32%, color-mix(in srgb, var(--team-c) 32%, transparent), transparent 70%),
+    linear-gradient(180deg, transparent 55%, color-mix(in srgb, var(--team-c) 14%, transparent) 100%);
+  border-right: 1px solid color-mix(in srgb, var(--team-c) 50%, transparent);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  z-index: 2;
+}
+.court-pcard.right .cp-portrait {
+  border-right: 0;
+  border-left: 1px solid color-mix(in srgb, var(--team-c) 50%, transparent);
+}
+.cp-pos {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-family: var(--f-head);
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--team-c);
+  background: rgba(2, 6, 10, 0.5);
+  border: 1px solid var(--team-c);
+  padding: 2px 7px;
+  line-height: 1.1;
+  z-index: 5;
+  text-shadow: 0 0 6px var(--team-c);
+}
+.court-pcard.right .cp-pos { left: auto; right: 6px; }
+.cp-sprite {
+  width: 78px;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter:
+    drop-shadow(0 0 8px color-mix(in srgb, var(--team-c) 50%, transparent))
+    drop-shadow(0 4px 0 rgba(0, 0, 0, 0.4));
+  position: relative;
+  z-index: 3;
+}
+.cp-name {
+  position: absolute;
+  left: 0; right: 0; bottom: 6px;
+  text-align: center;
+  font-family: var(--f-head);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  color: var(--c-ink);
+  text-shadow:
+    -0.5px 0 0 #ff2d6f,
+    0.5px 0 0 #19e6c4,
+    0 0 8px rgba(0,0,0,0.9);
+  z-index: 5;
+}
+
+/* Body column */
+.cp-body {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 6px;
+  padding: 10px 22px 10px 14px;
+  min-width: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.cp-ovr {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--team-c) 30%, transparent);
+}
+.court-pcard.right .cp-ovr { flex-direction: row-reverse; }
+.cp-ovr-val {
+  font-family: var(--f-head);
+  font-weight: 900;
+  font-size: 30px;
+  letter-spacing: 0.04em;
+  color: var(--c-ink);
+  text-shadow:
+    0 0 4px #fff,
+    0 0 16px var(--team-c),
+    0 0 32px color-mix(in srgb, var(--team-c) 80%, transparent);
+  line-height: 1;
+}
+.cp-ovr-lbl {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  color: color-mix(in srgb, var(--team-c) 70%, var(--c-ink));
+}
+
+.cp-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  align-content: start;
+}
+.cp-stat {
+  display: grid;
+  grid-template-columns: 28px 1fr 24px;
+  align-items: center;
+  gap: 6px;
+  height: 16px;
+}
+.court-pcard.right .cp-stat {
+  grid-template-columns: 24px 1fr 28px;
+  direction: rtl;
+}
+.court-pcard.right .cp-stat-lbl,
+.court-pcard.right .cp-stat-val { direction: ltr; }
+.cp-stat-lbl {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: color-mix(in srgb, var(--team-c) 50%, var(--c-ink-dim));
+}
+.cp-stat-bar {
+  height: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--team-c) 35%, transparent);
+}
+.cp-stat-fill {
+  position: absolute !important;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--team-c) 60%, transparent),
+    var(--team-c)) !important;
+  box-shadow: 0 0 8px var(--team-c) !important;
+}
+.cp-stat-val {
+  font-family: var(--f-head);
+  font-weight: 700;
+  font-size: 11px;
+  text-align: right;
+  color: var(--c-ink);
+  text-shadow: 0 0 4px color-mix(in srgb, var(--team-c) 40%, transparent);
+}
+.court-pcard.right .cp-stat-val { text-align: left; }
+
+.cp-ability {
+  font-family: var(--f-head);
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-align: center;
+  padding: 3px 4px;
+  background: rgba(2, 6, 10, 0.4);
+}
+.cp-ability.has {
+  color: var(--team-c);
+  border-top: 1px solid var(--team-c);
+  border-bottom: 1px solid var(--team-c);
+  text-shadow: 0 0 8px var(--team-c), 0 0 16px var(--team-c);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--team-c) 22%, transparent), transparent);
+}
+.cp-ability.none {
+  color: color-mix(in srgb, var(--team-c) 40%, var(--c-ink-dim));
+  border-top: 1px solid color-mix(in srgb, var(--team-c) 25%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--team-c) 25%, transparent);
+}
+
+/* ── Reddit user center (HOLOGRAM) ── */
+.user-center {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "ava info"
+    "act act";
+  gap: 6px 14px;
+  align-items: center;
+  padding: 18px 24px 14px;
+  background:
+    linear-gradient(180deg,
+      rgba(255, 255, 255, 0.08) 0%,
+      rgba(255, 255, 255, 0.04) 50%,
+      rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  position: relative;
+  clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 100%, 0 100%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow:
+    0 0 24px rgba(255, 255, 255, 0.2),
+    inset 0 0 32px rgba(255, 255, 255, 0.06);
+  animation: holoFlicker 9s ease-in-out infinite;
+}
+.user-center::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,0.06) 3px 4px),
+    linear-gradient(180deg, transparent 30%, rgba(255,255,255,0.04) 50%, transparent 70%);
+  background-size: 100% 100%, 100% 220%;
+  animation: holoBand 6s linear infinite;
+  mix-blend-mode: screen;
+}
+.uc-viewer-tag {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.4em;
+  color: rgba(255, 255, 255, 0.5);
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  z-index: 5;
+}
+/* Projection base */
+.uc-base {
+  position: absolute;
+  bottom: -3px;
+  left: 16%;
+  right: 16%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 0 14px rgba(255, 255, 255, 0.6),
+    0 0 28px rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+
+.uc-avatar {
+  grid-area: ava;
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid #ff4500;
+  box-shadow:
+    0 0 18px rgba(255, 69, 0, 0.6),
+    0 0 36px rgba(255, 69, 0, 0.25),
+    inset 0 0 12px rgba(0, 0, 0, 0.6);
+  background: rgba(2, 6, 10, 0.55);
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+}
+.uc-info {
+  grid-area: info;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  position: relative;
+  z-index: 2;
+}
+.uc-name {
+  font-family: var(--f-mono);
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  color: var(--c-ink);
+  white-space: nowrap;
+  font-weight: 600;
+  text-shadow:
+    -0.5px 0 0 #ff2d6f,
+    0.5px 0 0 #19e6c4,
+    0 0 10px rgba(255,255,255,0.4);
+}
+.uc-credits {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: var(--c-ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.uc-credits .cred-coin {
+  color: #ffd97a;
+  text-shadow: 0 0 8px rgba(255, 215, 130, 0.6);
+  font-size: 14px;
+}
+.uc-credits em { color: var(--c-ink-dim); font-style: normal; font-size: 10px; letter-spacing: 0.32em; }
+.uc-actions {
+  grid-area: act;
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+  position: relative;
+  z-index: 2;
+}
+.uc-btn {
+  flex: 1;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--c-ink);
+  font: 800 11px/1 var(--f-head);
+  letter-spacing: 0.28em;
+  padding: 8px 12px;
+  cursor: pointer;
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+  transition: background 180ms, border-color 180ms;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+}
+.uc-btn:hover {
+  background: var(--c-left);
+  color: #02060a;
+  border-color: var(--c-left);
+  text-shadow: none;
+}
+
+/* ═════════════════════════════════════════════════
+   COURT AREA
+   ═════════════════════════════════════════════════ */
+
+.court-area {
+  position: relative;
+  margin: 0 32px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+  background: #0a1730;
+}
+
+/* Court background — left half + mirrored right half */
+.court-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  background-color: #1d3766;
+  overflow: hidden;
+}
+.cb-half {
+  width: 50%;
+  height: 100%;
+  object-fit: cover;
+  object-position: right center;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+}
+.cb-half.right {
+  transform: scaleX(-1);
+}
+
+/* ── Players on court ── */
+.court-players {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+}
+.court-player {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 70px;
+}
+.cp-label {
+  font-family: var(--f-head);
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 1px 0 rgba(0,0,0,0.8);
+  line-height: 1;
+}
+.cp-aura {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50px;
+  height: 16px;
+  background: radial-gradient(ellipse, var(--team-c) 0%, transparent 70%);
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 0;
+}
+.cpx-sprite {
+  width: 36px;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 3px 0 rgba(0,0,0,0.6));
+  position: relative;
+  z-index: 2;
+}
+.cp-pname {
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--c-ink);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.9);
+  margin-top: 1px;
+}
+
+.court-back {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: rgba(2, 6, 10, 0.78);
+  color: var(--c-ink);
+  font: 800 11px/1 var(--f-head);
+  letter-spacing: 0.22em;
+  padding: 8px 14px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+.court-back:hover { border-color: var(--c-left); color: var(--c-left); }
+
+/* ═════════════════════════════════════════════════
+   SCOREBOARD — futuristic LED broadcast bar
+   ═════════════════════════════════════════════════ */
+
+.court-scoreboard {
+  display: grid;
+  grid-template-columns: 1fr 380px 1fr;
+  gap: 0;
+  padding: 12px 32px 20px;
+  position: relative;
+  align-items: stretch;
+}
+
+/* ── Team blocks ── */
+.sp-team {
+  --c: #19e6c4;
+  --ca: #5bf2d4;
+  position: relative;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+  padding: 0 26px;
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--c) 22%, transparent) 0%,
+      rgba(2, 6, 10, 0.88) 70%,
+      rgba(2, 6, 10, 0.95) 100%);
+  border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  border-right: 0;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 20px) 100%, 0 100%);
+  box-shadow:
+    inset 0 0 28px color-mix(in srgb, var(--c) 12%, transparent);
+}
+.sp-team.away {
+  grid-template-columns: auto 1fr auto auto;
+  background:
+    linear-gradient(270deg,
+      color-mix(in srgb, var(--c) 22%, transparent) 0%,
+      rgba(2, 6, 10, 0.88) 70%,
+      rgba(2, 6, 10, 0.95) 100%);
+  border: 1px solid color-mix(in srgb, var(--c) 60%, transparent);
+  border-left: 0;
+  clip-path: polygon(20px 0, 100% 0, 100% 100%, 0 100%);
+}
+
+/* Jersey block (team abbreviation) */
+.sp-jersey {
+  font-family: var(--f-head);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  color: #02060a;
+  background: linear-gradient(135deg, var(--c), var(--ca));
+  padding: 8px 14px;
+  line-height: 1;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--c) 60%, transparent),
+    inset 0 0 0 1px rgba(255,255,255,0.3);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+.sp-team.away .sp-jersey {
+  clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%);
+}
+
+/* Team meta (name + fouls) */
+.sp-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sp-team.away .sp-meta { text-align: right; align-items: flex-end; }
+.sp-name {
+  font-family: var(--f-head);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 0.14em;
+  color: var(--c-ink);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--c) 50%, transparent);
+  line-height: 1;
+}
+.sp-foul {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: var(--c-ink-dim);
+}
+
+/* Big score */
+.sp-score {
+  font-family: var(--f-head);
+  font-weight: 900;
+  font-size: 56px;
+  letter-spacing: 0.04em;
+  color: var(--c-ink);
+  text-shadow:
+    0 0 4px #fff,
+    0 0 18px var(--c),
+    0 0 36px color-mix(in srgb, var(--c) 65%, transparent);
+  font-variant-numeric: tabular-nums;
+  line-height: 0.9;
+  position: relative;
+  padding: 0 8px;
+}
+/* faint segment-display ghost behind score */
+.sp-score::before {
+  content: "88";
+  position: absolute;
+  inset: 0;
+  padding: 0 8px;
+  color: rgba(255, 255, 255, 0.05);
+  text-shadow: none;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Possession indicator (small triangle dot) */
+.sp-poss {
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  transform: rotate(45deg);
+  flex: none;
+  align-self: flex-end;
+  margin-bottom: 12px;
+  transition: background 200ms, box-shadow 200ms;
+}
+.sp-poss.on {
+  background: var(--c);
+  box-shadow: 0 0 12px var(--c), 0 0 24px color-mix(in srgb, var(--c) 60%, transparent);
+}
+
+/* ── Center timer block ── */
+.sp-timer {
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  align-items: center;
+  justify-items: center;
+  padding: 6px 24px;
+  background:
+    linear-gradient(180deg, rgba(2, 6, 10, 0.95), rgba(0, 0, 0, 0.98));
+  border-top: 2px solid var(--c-ink);
+  border-bottom: 2px solid var(--c-ink);
+  clip-path: polygon(20px 0, calc(100% - 20px) 0, 100% 100%, 0 100%);
+}
+
+.sp-clock-row {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  font-family: var(--f-head);
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.sp-clock-segment {
+  font-size: 56px;
+  color: var(--c-left);
+  letter-spacing: 0.06em;
+  position: relative;
+  text-shadow:
+    0 0 4px #fff,
+    0 0 12px var(--c-left),
+    0 0 28px color-mix(in srgb, var(--c-left) 60%, transparent);
+}
+/* "88" segment ghost behind digits */
+.sp-clock-segment::before {
+  content: "88";
+  position: absolute;
+  inset: 0;
+  color: rgba(25, 230, 196, 0.08);
+  text-shadow: none;
+  pointer-events: none;
+  z-index: -1;
+}
+.sp-clock-colon {
+  font-size: 48px;
+  color: var(--c-left);
+  text-shadow: 0 0 10px var(--c-left);
+  animation: clockBlink 1s steps(2, end) infinite;
+  margin: 0 4px;
+  line-height: 1;
+  align-self: center;
+}
+@keyframes clockBlink {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0.2; }
+}
+
+/* Quarter + shot clock row */
+.sp-q-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 0 2px;
+  width: 100%;
+  justify-content: center;
+}
+.sp-quarter {
+  font-family: var(--f-head);
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.24em;
+  color: var(--c-ink);
+  text-shadow: 0 0 10px rgba(255,255,255,0.2);
+}
+.sp-q-dots {
+  display: flex;
+  gap: 5px;
+}
+.sp-q-dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transform: rotate(45deg);
+}
+.sp-q-dot.past {
+  background: rgba(255, 255, 255, 0.32);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.sp-q-dot.on {
+  background: var(--c-left);
+  border-color: var(--c-left);
+  box-shadow: 0 0 10px var(--c-left);
+}
+.sp-shotclock {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--c-right);
+  background: rgba(255, 45, 111, 0.08);
+  margin-left: 4px;
+}
+.sp-shotclock em {
+  font-family: var(--f-mono);
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  color: var(--c-ink-dim);
+}
+.sp-shotclock b {
+  font-family: var(--f-head);
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--c-right);
+  text-shadow: 0 0 10px var(--c-right);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Entrance animations ── */
+[data-state="court"] .court-top { animation: courtDrop 500ms ease both; }
+[data-state="court"] .court-area { animation: courtFade 600ms ease 100ms both; }
+[data-state="court"] .court-player { animation: courtPlayerIn 400ms ease both; }
+[data-state="court"] .court-player:nth-child(odd) { animation-delay: 300ms; }
+[data-state="court"] .court-player:nth-child(even) { animation-delay: 360ms; }
+[data-state="court"] .court-scoreboard { animation: courtUp 500ms ease 300ms both; }
+
+@keyframes courtDrop {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes courtFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes courtUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes courtPlayerIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}

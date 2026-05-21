@@ -10,7 +10,7 @@ function tryExpand(nativeEvent) {
   try { requestExpandedMode(nativeEvent, 'game'); } catch {}
 }
 
-import { TitleScreen, TeamSelect, DraftScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen2, DebugConsole, AdminOverlay, MatchmakingScreen } from './components/index.js';
+import { TitleScreen, TeamSelect, DraftScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreenNew, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen } from './components/index.js';
 import { titleMusic, bgMusic, bounceBall } from './sound/basketball.js';
 import { audioSettings } from './sound/audioSettings.js';
 import { useGame } from './useGame.js';
@@ -30,6 +30,7 @@ export default function App() {
   React.useEffect(() => {
     if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'collection' || scene === 'matchmaking') {
       bgMusic.stop();
+      bounceBall.stop();
       titleMusic.start();
     } else {
       titleMusic.stop();
@@ -63,6 +64,8 @@ export default function App() {
     Promise.all([trpc.user.roster.query(), trpc.user.lineup.query()])
       .then(([roster, lineup]) => {
         if (!roster?.length) return;
+        setRawRoster(roster);
+        setRawLineup(lineup ?? {});
         const byId = new Map(roster.map(p => [p.id, p]));
         const ORDER = ['PG', 'SG', 'SF', 'PF', 'C'];
         const built = ORDER.map(pos => {
@@ -118,6 +121,8 @@ export default function App() {
   const [gameTip, setGameTip] = React.useState(null);
   const [homeTeamName, setHomeTeamName] = React.useState('HOME');
   const [homeRoster, setHomeRoster] = React.useState([]);
+  const [rawRoster, setRawRoster]   = React.useState([]);
+  const [rawLineup, setRawLineup]   = React.useState({});
   const [isFtue, setIsFtue] = React.useState(true); // true until persisted completion flag is received
   const [awayTeam] = React.useState(
     () => OPPONENTS[Math.floor(Math.random() * OPPONENTS.length)]
@@ -167,8 +172,48 @@ export default function App() {
       style={{ background: '#111', lineHeight: 0, height: '100vh', position: 'relative', cursor: isInline ? 'pointer' : undefined }}
       onClick={isInline ? (e) => tryExpand(e.nativeEvent) : undefined}
     >
-      {/* ── NON-GAME SCENES ──────────────────────────────────── */}
-      {(isInline || scene !== 'game') && (
+      {/* ── LOBBY SCREEN (HTML layer — replaces SVG title scene) ── */}
+      {!isInline && scene === 'title' && (
+        <LobbyScreen
+          username={username}
+          credits={serverCredits}
+          homeRoster={homeRoster}
+          isFtue={isFtue}
+          onPlay={(mode) => {
+            if (!isFtue && homeRoster.length === 5) {
+              setScene('matchmaking');
+            } else {
+              setScene('teamSelect');
+            }
+          }}
+          onCollection={() => setScene('collection')}
+          onDraft={() => { if (homeRoster.length >= 5) return; setScene('teamSelect'); }}
+          onAuction={() => {}}
+          onOptions={() => setScene('options')}
+        />
+      )}
+
+      {!isInline && scene === 'collection' && (
+        <CollectionScreenNew
+          roster={rawRoster}
+          lineup={rawLineup}
+          username={username}
+          credits={serverCredits}
+          onBack={() => setScene('title')}
+        />
+      )}
+
+      {!isInline && scene === 'draft' && (
+        <DraftScreen
+          homeTeamName={homeTeamName}
+          onStart={(r) => { setHomeRoster(r); setGameTip("Welcome to your first game!"); setScene('game'); }}
+          onBack={() => setScene('teamSelect')}
+          onMenu={(r) => { setHomeRoster(r); setScene('title'); }}
+        />
+      )}
+
+      {/* ── NON-GAME SCENES (SVG — excludes title + collection + draft) ── */}
+      {(isInline || (scene !== 'game' && scene !== 'title' && scene !== 'collection' && scene !== 'draft')) && (
         <svg
           data-testid="game-court"
           width="100%"
@@ -182,21 +227,6 @@ export default function App() {
           {!isInline && scene === 'loading' && (
             <LoadingScreen onDone={() => setScene('title')} />
           )}
-          {!isInline && scene === 'title' && (
-            <TitleScreen
-              onPlay={() => {
-                if (!isFtue && homeRoster.length === 5) {
-                  setScene('matchmaking');
-                } else {
-                  setScene('teamSelect');
-                }
-              }}
-              onOptions={() => setScene('options')}
-              onCollections={() => setScene('collection')}
-              username={username}
-              credits={serverCredits}
-            />
-          )}
           {!isInline && scene === 'options' && (
             <OptionsScreen
               musicVol={musicVol}   sfxVol={sfxVol}
@@ -208,15 +238,7 @@ export default function App() {
           )}
           {!isInline && scene === 'teamSelect' && (
             <TeamSelect
-              onStart={(name) => { setHomeTeamName(name); setScene('draft'); }}
-              onBack={() => setScene('title')}
-            />
-          )}
-          {!isInline && scene === 'collection' && (
-            <CollectionScreen2
-              roster={homeRosterFull}
-              username={username}
-              credits={serverCredits}
+              onStart={(name) => { if (homeRoster.length >= 5) { setScene('title'); return; } setHomeTeamName(name); setScene('draft'); }}
               onBack={() => setScene('title')}
             />
           )}
@@ -226,14 +248,6 @@ export default function App() {
               homeTeamName={homeTeamName}
               awayTeam={awayTeam}
               onReady={handleMatchmakingReady}
-            />
-          )}
-          {!isInline && scene === 'draft' && (
-            <DraftScreen
-              homeTeamName={homeTeamName}
-              onStart={(r) => { setHomeRoster(r); setGameTip("Welcome to your first game!"); setScene('game'); }}
-              onBack={() => setScene('teamSelect')}
-              onMenu={(r) => { setHomeRoster(r); setScene('title'); }}
             />
           )}
         </svg>
@@ -346,14 +360,14 @@ export default function App() {
       {/* CRT scanlines — full window coverage */}
       {scanlines > 0 && (
         <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 10,
+          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 90,
           backgroundImage: `repeating-linear-gradient(to bottom, transparent 0px, transparent 1px, rgba(0,0,0,${(scanlines * 0.35).toFixed(3)}) 1px, rgba(0,0,0,${(scanlines * 0.35).toFixed(3)}) 2px)`,
         }} />
       )}
       {/* CRT vignette — full window coverage */}
       {vignette > 0 && (
         <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 11,
+          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 91,
           background: `radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,${(vignette * 0.80).toFixed(3)}) 100%)`,
         }} />
       )}

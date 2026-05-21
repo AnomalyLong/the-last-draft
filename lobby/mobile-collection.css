@@ -1,0 +1,227 @@
+/* ────────────────────────────────────────────────
+   Collection mobile overrides
+   ──────────────────────────────────────────────── */
+
+body.is-mobile [data-state="collection"] {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+body.is-mobile .collection {
+  overflow-y: visible;
+}
+body.is-mobile [data-state="collection"] .stage {
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+}
+
+body.is-mobile .collection {
+  position: relative;
+  inset: auto;
+  padding: 14px 14px 80px;
+  gap: 12px;
+}
+
+/* Top nav */
+body.is-mobile .col-topnav {
+  height: auto;
+  gap: 10px;
+}
+body.is-mobile .col-topnav .back-btn,
+body.is-mobile .col-topnav .filter-btn {
+  padding: 8px 10px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  gap: 5px;
+}
+body.is-mobile .col-topnav .back-btn span:nth-child(2),
+body.is-mobile .col-topnav .filter-btn span:nth-child(2) {
+  display: none;
+}
+body.is-mobile .ct-big { font-size: 22px; letter-spacing: 0.22em; }
+body.is-mobile .ct-sub { font-size: 10px; letter-spacing: 0.16em; }
+
+/* Squad bar mobile */
+body.is-mobile .squad-bar {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  padding: 12px 14px 32px;
+}
+body.is-mobile .sqb-l {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+body.is-mobile .party-tag {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 8px;
+  padding-right: 0;
+  border-right: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.18);
+}
+body.is-mobile .pt-h { font-size: 9px; letter-spacing: 0.24em; }
+body.is-mobile .pt-n { font-size: 22px; }
+
+body.is-mobile .squad-row {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  max-width: none;
+}
+body.is-mobile .squad-slot { height: 123px; }
+body.is-mobile .px-sprite { width: 28px; }
+body.is-mobile .leader-banner {
+  font-size: 7px;
+  padding: 2px 8px;
+  top: -10px;
+  letter-spacing: 0.18em;
+}
+body.is-mobile .squad-info {
+  font-size: 10px;
+  bottom: 14px;
+  padding: 0 4px;
+}
+body.is-mobile .squad-info .squad-class {
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+}
+body.is-mobile .squad-slot .stars .star { font-size: 7px; }
+
+body.is-mobile .sqb-r {
+  padding-left: 0;
+  border-left: 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  justify-content: space-between;
+}
+body.is-mobile .pw-lbl { font-size: 9px; letter-spacing: 0.18em; }
+body.is-mobile .pw-val { font-size: 22px; }
+body.is-mobile .party-cycle { padding: 8px 12px; }
+body.is-mobile .pc-num { font-size: 18px; }
+body.is-mobile .pc-lbl { font-size: 9px; letter-spacing: 0.18em; }
+
+body.is-mobile .sqb-buff {
+  position: static;
+  transform: none;
+  margin-top: 8px;
+  left: auto;
+  right: auto;
+  padding: 6px 10px;
+}
+body.is-mobile .buff-tag { font-size: 8px; padding: 2px 6px; }
+body.is-mobile .buff-txt { font-size: 10px; letter-spacing: 0.04em; }
+
+/* Grid mobile — 3 cols horizontal scroll-friendly */
+body.is-mobile .cgw-hint {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+body.is-mobile .collection-grid {
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 200px;
+  gap: 6px;
+  overflow: visible;
+}
+body.is-mobile .player-band { min-width: 42px; }
+body.is-mobile .px-band { width: 78%; max-width: 59px; min-width: 28px; }
+body.is-mobile .band-vlevel { display: none; }
+body.is-mobile .band-badge { width: 18px; height: 18px; font-size: 10px; top: 4px; right: 4px; }
+
+/* Detail panel mobile — portrait sits LEFT of stats/info, actions wrap below */
+body.is-mobile .detail-panel {
+  grid-template-columns: 220px 1fr;
+  grid-template-areas:
+    "portrait l"
+    "r r";
+  padding: 14px 14px 14px;
+  gap: 12px 14px;
+  min-height: 0;
+}
+body.is-mobile .detail-portrait {
+  grid-area: portrait;
+  min-height: 220px;
+  align-self: stretch;
+}
+body.is-mobile .detail-portrait .dp-sprite { width: 120px; }
+body.is-mobile .detail-portrait .dp-floor { top: calc(50% + 74px); }
+body.is-mobile .detail-portrait .dp-tag { font-size: 12px; letter-spacing: 0.2em; top: 10px; }
+body.is-mobile .detail-portrait .dp-id { font-size: 9px; letter-spacing: 0.2em; bottom: 8px; }
+body.is-mobile .detail-l {
+  grid-area: l;
+  gap: 10px;
+  min-width: 0;
+  align-self: stretch;
+}
+body.is-mobile .detail-r { grid-area: r; }
+body.is-mobile .detail-head { gap: 10px; flex-wrap: wrap; }
+body.is-mobile .dl-lvl { font-size: 14px; }
+body.is-mobile .dl-role { font-size: 9px; letter-spacing: 0.18em; padding: 2px 8px; }
+body.is-mobile .dl-class { font-size: 16px; }
+body.is-mobile .dl-class em { font-size: 8px; }
+body.is-mobile .detail-name { flex-wrap: wrap; gap: 8px; }
+body.is-mobile .dn-en { font-size: 22px; letter-spacing: 0.06em; }
+body.is-mobile .dn-jp { font-size: 16px; }
+
+body.is-mobile .stat-line {
+  grid-template-columns: 38px 1fr 46px;
+  gap: 6px;
+  height: 20px;
+}
+body.is-mobile .sl-lbl { font-size: 10px; letter-spacing: 0.1em; }
+body.is-mobile .sl-val { font-size: 12px; overflow: hidden; }
+body.is-mobile .ds-h { font-size: 10px; letter-spacing: 0.18em; }
+body.is-mobile .ds-body { font-size: 12px; }
+
+body.is-mobile .detail-r { gap: 10px; }
+
+body.is-mobile .actions {
+  gap: 6px;
+}
+body.is-mobile .act-btn {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  padding: 9px 10px;
+  gap: 6px;
+}
+body.is-mobile .ab-glyph { width: 18px; height: 18px; font-size: 10px; }
+
+/* Lobby button (collection link) — keep visible on mobile lobby */
+body.is-mobile .lobby-nav-btn {
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  padding: 6px 8px;
+}
+
+/* Player detail inline — mobile */
+body.is-mobile .col-detail-inline {
+  border-left: 0;
+  border-right: 0;
+}
+body.is-mobile .col-detail-close {
+  top: 8px;
+  right: 8px;
+  padding: 6px 10px;
+  font-size: 10px;
+}
+body.is-mobile .col-detail-close .cdc-lbl { display: none; }
+
+/* ── Narrow mobile (≤430px container — iPhone 14 / SE): stack portrait above info ── */
+body.is-xs.is-mobile .detail-panel,
+body.is-xs .detail-panel {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "portrait"
+    "l"
+    "r";
+  gap: 10px;
+  padding: 14px 20px 16px;
+}
+body.is-xs .detail-portrait {
+  min-height: 180px;
+  align-self: auto;
+}
+body.is-xs .detail-portrait .dp-sprite { width: 100px; }
+body.is-xs .detail-portrait .dp-floor { top: calc(50% + 50px); }

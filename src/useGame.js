@@ -1996,6 +1996,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         guardActiveRef.current = false;
         stopTimer();
         bgMusic.stop();
+        bounceBall.stop();
         addLog('game loop stopped');
 
       } else if (op === 'reset') {

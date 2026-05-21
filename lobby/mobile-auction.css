@@ -1,0 +1,251 @@
+/* ────────────────────────────────────────────────
+   Auction mobile overrides
+   ──────────────────────────────────────────────── */
+
+body.is-mobile [data-state="auction"] .stage {
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+}
+
+body.is-mobile .auction {
+  position: relative;
+  inset: auto;
+  grid-template-rows: auto auto;
+  padding: 12px 12px 80px;
+  gap: 12px;
+  min-height: 100vh;
+}
+
+/* ── Top nav ── */
+body.is-mobile .auc-topnav {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "back title timer"
+    "share share share";
+  gap: 8px;
+  align-items: center;
+}
+body.is-mobile .auc-topnav .back-btn {
+  grid-area: back;
+  padding: 8px 10px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  gap: 5px;
+}
+body.is-mobile .auc-topnav .back-btn span:nth-child(2) { display: none; }
+
+body.is-mobile .auc-title {
+  grid-area: title;
+  align-items: center;
+}
+body.is-mobile .at-big {
+  font-size: 16px;
+  letter-spacing: 0.22em;
+}
+body.is-mobile .at-sub {
+  font-size: 9px;
+  letter-spacing: 0.22em;
+}
+
+body.is-mobile .auc-topright {
+  grid-area: timer;
+  display: contents;
+}
+body.is-mobile .auc-timer {
+  grid-area: timer;
+  padding: 6px 12px;
+  align-items: flex-end;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+body.is-mobile .aut-lbl { font-size: 8px; letter-spacing: 0.18em; }
+body.is-mobile .aut-val { font-size: 14px; letter-spacing: 0.04em; }
+
+body.is-mobile .auc-share {
+  grid-area: share;
+  justify-self: stretch;
+  padding: 8px 12px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  justify-content: center;
+}
+
+/* ── Main grid: stack ── */
+body.is-mobile .auc-grid {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+/* ── Featured pilot ── */
+body.is-mobile .auc-feature {
+  padding: 14px;
+  gap: 10px;
+}
+body.is-mobile .aft-pill {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  padding: 3px 12px;
+}
+
+body.is-mobile .afeat-stage {
+  min-height: 240px;
+}
+body.is-mobile .afeat-pos {
+  font-size: 16px;
+  padding: 3px 9px;
+  top: 10px;
+  left: 10px;
+}
+body.is-mobile .afeat-ovr {
+  top: 10px;
+  right: 10px;
+  padding: 4px 10px;
+  gap: 4px;
+}
+body.is-mobile .afeat-ovr span { font-size: 26px; }
+body.is-mobile .afeat-ovr em { font-size: 8px; letter-spacing: 0.2em; }
+
+body.is-mobile .afeat-sprite {
+  width: 140px;
+  margin-bottom: 18px;
+}
+body.is-mobile .afeat-shadow {
+  width: 130px;
+  height: 14px;
+}
+
+body.is-mobile .afeat-name {
+  gap: 8px;
+  padding-bottom: 8px;
+}
+body.is-mobile .afn-big {
+  font-size: 24px;
+  letter-spacing: 0.08em;
+}
+body.is-mobile .afn-call {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+body.is-mobile .afeat-stats {
+  grid-template-columns: 1fr;
+  gap: 2px;
+}
+body.is-mobile .auc-stat {
+  grid-template-columns: 36px 1fr 36px;
+  gap: 10px;
+  height: 20px;
+}
+body.is-mobile .auc-stat-lbl { font-size: 10px; letter-spacing: 0.18em; }
+body.is-mobile .auc-stat-val { font-size: 14px; }
+body.is-mobile .auc-stat-bar { height: 5px; }
+
+body.is-mobile .afeat-ability {
+  padding: 8px 12px;
+  gap: 10px;
+}
+body.is-mobile .afa-lbl { font-size: 9px; letter-spacing: 0.24em; }
+body.is-mobile .afa-val { font-size: 14px; letter-spacing: 0.18em; }
+
+body.is-mobile .afeat-meta {
+  grid-template-columns: repeat(2, 1fr);
+}
+body.is-mobile .afm-cell { padding: 6px 10px; }
+body.is-mobile .afm-lbl { font-size: 8px; letter-spacing: 0.2em; }
+body.is-mobile .afm-val { font-size: 14px; letter-spacing: 0.04em; }
+body.is-mobile .afm-val em { font-size: 9px; }
+body.is-mobile .afm-val.small { font-size: 11px; }
+
+/* ── Bid panel ── */
+body.is-mobile .auc-bidpanel {
+  grid-template-rows: auto auto auto auto;
+  gap: 10px;
+}
+
+body.is-mobile .ab-current {
+  padding: 12px 16px;
+}
+body.is-mobile .abc-lbl { font-size: 9px; letter-spacing: 0.24em; }
+body.is-mobile .abc-val {
+  font-size: 30px;
+  gap: 8px;
+}
+body.is-mobile .abc-val .coin { font-size: 22px; }
+body.is-mobile .abc-by { font-size: 10px; letter-spacing: 0.12em; }
+
+body.is-mobile .ab-place {
+  padding: 12px;
+  gap: 8px;
+}
+body.is-mobile .abp-row {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+body.is-mobile .abp-input {
+  font-size: 18px;
+  padding: 10px 14px;
+}
+body.is-mobile .abp-btn {
+  padding: 12px 18px;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  justify-content: center;
+}
+body.is-mobile .abp-shortcuts {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+body.is-mobile .abp-shortcuts button {
+  font-size: 11px;
+  padding: 7px 0;
+  letter-spacing: 0.12em;
+}
+body.is-mobile .abp-bal {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+}
+body.is-mobile .abp-bal b { font-size: 15px; }
+
+/* Feed: collapse to compact, allow internal scroll */
+body.is-mobile .ab-feed {
+  padding: 8px 12px;
+  max-height: 130px;
+  overflow-y: auto;
+}
+body.is-mobile .abf-h {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  gap: 6px;
+}
+body.is-mobile .abf-row {
+  font-size: 11px;
+}
+body.is-mobile .abf-bid { font-size: 12px; }
+body.is-mobile .abf-empty { font-size: 10px; letter-spacing: 0.16em; }
+
+/* History: don't try to fill; cap height + scroll inside */
+body.is-mobile .ab-history {
+  max-height: 360px;
+}
+body.is-mobile .abh-h {
+  padding: 8px 12px;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+}
+body.is-mobile .abh-list {
+  /* override flex:1 (it's already in flex column) so it scrolls within max-height */
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+body.is-mobile .bid-row {
+  grid-template-columns: 26px 1fr auto auto;
+  gap: 8px;
+  padding: 7px 12px;
+}
+body.is-mobile .br-rank { font-size: 10px; }
+body.is-mobile .br-user { font-size: 11px; letter-spacing: 0.04em; }
+body.is-mobile .br-you-chip { font-size: 8px; padding: 1px 4px; letter-spacing: 0.16em; }
+body.is-mobile .br-bid { font-size: 13px; }
+body.is-mobile .br-coin { font-size: 11px; }
+body.is-mobile .br-crown { font-size: 14px; }

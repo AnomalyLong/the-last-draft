@@ -1,5 +1,5 @@
 // ─── Game Rates ───────────────────────────────────────────────────────────────
-export const STEAL_RATE = 0.10; // probability a pass is stolen (0–1)
+export const STEAL_RATE = 0.075; // probability a pass is stolen (0–1)
 export const DUNK_RATE  = 0.20; // probability a shot attempt becomes a dunk (0–1)
 export const BLOCK_RATE = 0.20; // probability the closest defender blocks a shot (0–1)
 

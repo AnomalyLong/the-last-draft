@@ -1,0 +1,68 @@
+/* ────────────────────────────────────────────────
+   Draft mobile overrides
+   ──────────────────────────────────────────────── */
+
+body.is-mobile [data-state="draft"] .stage {
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+}
+body.is-mobile .draft {
+  position: relative;
+  inset: auto;
+  padding: 16px 14px 24px;
+  gap: 14px;
+}
+body.is-mobile .draft-topnav {
+  gap: 8px;
+}
+body.is-mobile .dt-big { font-size: 32px; letter-spacing: 0.18em; }
+body.is-mobile .dt-sub { font-size: 9px; letter-spacing: 0.16em; }
+body.is-mobile .draft-packs {
+  padding: 6px 12px;
+  gap: 8px;
+}
+body.is-mobile .dp-lbl { font-size: 14px; letter-spacing: 0.12em; }
+body.is-mobile .dp-val { font-size: 22px; }
+
+body.is-mobile .available-h { gap: 10px; }
+body.is-mobile .ah-label { font-size: 22px; letter-spacing: 0.22em; }
+body.is-mobile .ah-line { max-width: 80px; }
+
+/* Cards stay in a row on mobile — taking full width */
+body.is-mobile .draft-cards {
+  flex-direction: row;
+  gap: 6px;
+  padding: 8px 4px 20px;
+  justify-content: center;
+  align-items: center;
+}
+body.is-mobile .draft-card,
+body.is-mobile .draft-card-slot {
+  flex: 1 1 0;
+  width: auto;
+  max-width: none;
+  height: auto;
+  aspect-ratio: 340 / 520;
+}
+body.is-mobile .draft-card-anim {
+  width: 100%;
+  height: 100%;
+}
+
+/* Actions */
+body.is-mobile .draft-actions {
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+body.is-mobile .da-btn {
+  font-size: 18px;
+  padding: 10px 22px;
+  letter-spacing: 0.14em;
+  width: 100%;
+  max-width: 280px;
+  justify-content: center;
+}
+body.is-mobile .da-btn.primary.big { font-size: 20px; padding: 12px 28px; }
+body.is-mobile .da-hint { font-size: 16px; letter-spacing: 0.14em; text-align: center; }

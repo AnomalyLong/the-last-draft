@@ -353,6 +353,47 @@ The `toFrames()` helper normalises all three sprite shapes automatically:
 | `game:session:{token}` | `{username}:{gameId}`, TTL 1 hour |
 | `games:pending` / `games:flagged` | Sorted sets of game IDs awaiting admin review |
 
+### Player Data Model
+
+Each player is stored as a Redis hash at `player:{id}` with these fields:
+
+| Field | Type | Notes |
+|---|---|---|
+| `owner` | string | Reddit username |
+| `name` | string | e.g. `"KAEL THORNE"` — generated from `FIRST_NAMES` + `LAST_NAMES` in `DraftScreen.jsx` |
+| `level` | number | Starts at 1; increases via `updatePlayerProgress` |
+| `xp` | number | Starts at 0 |
+| `source` | `'draft' \| 'credit' \| 'purchase'` | How the player was acquired |
+| `rarity` | `'common' \| 'rare' \| 'epic' \| 'legendary'` | Derived from OVR at draft time via `tierToRarity()` |
+| `spd` `dex` `jmp` `acc` | number (0–99) | Base stats set at mint; ranges depend on position archetype in `DraftScreen.jsx` |
+| `ability` | JSON string or `''` | Single ability rolled at draft: `{ name, rarity, desc, id }` — see `src/abilities.js` |
+| `abilities` | JSON string (array) | Abilities earned from level-ups; appended by `updatePlayerProgress` |
+| `statBonuses` | JSON string | `{ spd, dex, jmp, acc }` — cumulative deltas from level-ups |
+
+**Position is NOT stored on the player.** It comes from the lineup hash:
+
+```
+user:lineup:{username}  →  { PG: playerId, SG: playerId, SF: playerId, PF: playerId, C: playerId }
+```
+
+At load time (`App.jsx`), position is reconstructed by joining roster + lineup:
+```js
+const ORDER = ['PG', 'SG', 'SF', 'PF', 'C'];
+const built = ORDER.map(pos => {
+  const pid = lineup?.[pos];           // which player is slotted here
+  const p   = byId.get(Number(pid));   // fetch their PlayerData
+  return { pos, name: p.name, spd: p.spd + sb.spd, ... };
+});
+```
+
+A player has no inherent position — they get one only when assigned via `setLineupSlot` (tRPC) or the drag-to-slot UI in `DraftScreen.jsx`.
+
+**OVR is never persisted.** Compute it client-side with `calcOvr(pos, stats)` using the position-weighted formula in `DraftScreen.jsx` / `CollectionScreen2.jsx`.
+
+**Available abilities** are defined in `src/abilities.js`: DUNK MASTER, IRON BLOCK, SPEEDY, PLAY MAKER, PICK POCKET, SHARPSHOOTER, ANKLE BREAKER.
+
+---
+
 ### Game session flow (wired in `App.jsx` + `useGame.js`)
 1. **`trpc.game.start`** — called on tip dismiss; deducts 1 energy, returns `{ gameId, token }` stored in `gameSessionRef`
 2. **`trpc.game.recordPlay`** — called for every home-team made basket (shoot/dunk/fadeaway) with `{ gameId, token, sequence, play }`

@@ -11,8 +11,10 @@ import Collection2Story from './stories/Collection2Story.jsx';
 import CourtStory from './stories/CourtStory.jsx';
 import AdminStory from './AdminStory.jsx';
 import MatchmakingStory from './stories/MatchmakingStory.jsx';
+import LobbyStory from './stories/LobbyStory.jsx';
 
 const pages = {
+  lobby:        LobbyStory,
   sprites:      SpritePreview,
   title:        TitleStory,
   options:      OptionsStory,

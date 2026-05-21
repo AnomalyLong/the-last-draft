@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 const NAV_W = 180;
 
 const NAV_ITEMS = [
+  { id: 'lobby',       label: '🏙 Lobby Screen' },
   { id: 'sprites',     label: '🎨 Sprites' },
   { id: 'title',       label: '🏠 Title Screen' },
   { id: 'options',     label: '⚙️ Options Screen' },
@@ -10,7 +11,7 @@ const NAV_ITEMS = [
   { id: 'draft',       label: '📋 Draft Screen' },
   { id: 'matchmaking', label: '🔍 Matchmaking' },
   { id: 'collection',  label: '🃏 Collection' },
-  { id: 'collection2', label: '🃏 Collection 2' },
+  { id: 'collection2', label: '🃏 Collection (New)' },
   { id: 'court',       label: '🏟 Court (Live)' },
   { id: 'admin',       label: '🔧 Admin' },
 ];

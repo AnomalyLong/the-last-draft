@@ -27,5 +27,7 @@ export { SpecialMoveCard } from './SpecialMoveCard.jsx';
 export { GameScene } from './GameScene.jsx';
 export { CollectionScreen } from './CollectionScreen.jsx';
 export { CollectionScreen2 } from './CollectionScreen2.jsx';
+export { CollectionScreenNew } from './CollectionScreenNew.jsx';
 export { AdminOverlay } from './AdminOverlay.jsx';
 export { MatchmakingScreen } from './MatchmakingScreen.jsx';
+export { default as LobbyScreen } from './LobbyScreen.jsx';

@@ -916,11 +916,11 @@ export function DebugConsole({ logs, onCommand, showDebug, onToggleDebug }) {
 
   const handleKey = (e) => {
     if (e.key === 'Enter' && input.trim()) { onCommand(input.trim()); setInput(''); }
-    if (e.key === 'Escape') onToggleDebug();
+    if (e.key === 'Escape') { e.stopPropagation(); onToggleDebug(); }
   };
 
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 20, fontFamily: 'monospace', fontSize: '18px' }}>
+    <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 200, fontFamily: 'monospace', fontSize: '18px' }}>
       {/* DBG toggle */}
       <div
         onClick={onToggleDebug}
