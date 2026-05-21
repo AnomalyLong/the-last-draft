@@ -145,9 +145,9 @@ function MiniPlayerSVG({ jerseyColor, phase = 0 }) {
 // ─── Burst overlay ─────────────────────────────────────────────────────────
 function BurstOverlay({ card, originX, originY, startTick, tick }) {
   if (startTick == null) return null;
+  if (!card.ability) return null;
   const tierKey = getPlayerTierKey(card.ovr);
   const def = TIER_DEFS[tierKey];
-  if (def.rarity < 1) return null;
 
   const t = tick - startTick;
   if (t < 0 || t > def.burstDur) return null;
@@ -1036,6 +1036,22 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
       {phase === 'draft' && (
         <>
           <div className="draft-cards">
+            {/* Burst overlays — rendered first so cards sit on top */}
+            <div className="burst-stack" aria-hidden="true">
+              {cards.map((c,i) => {
+                if (!c.ability || flipTicks[i]==null) return null;
+                const burstStart = flipTicks[i]+FLIP_HALF+BURST_DELAY;
+                return (
+                  <BurstOverlay
+                    key={`${seqKey}-burst-${i}`}
+                    card={c}
+                    originX={burstCenters[i].x} originY={burstCenters[i].y}
+                    startTick={burstStart} tick={tick}
+                  />
+                );
+              })}
+            </div>
+
             {/* Cards */}
             {cards.map((c,i) => {
               const anim = getCardPhase(tick, i, flipTicks[i]);
@@ -1066,27 +1082,9 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
 
             {/* Anomaly scan overlay */}
             {started && <AnomalyScan tick={tick} universeId={universeId} />}
-            {started && <AcquireBeams tick={tick} />}
 
             {/* Planet orbit */}
             {started && <PlanetOrbit tick={tick} lockedPlanetIdx={planetIdx} universeId={universeId} />}
-
-            {/* Burst overlays */}
-            <div className="burst-stack" aria-hidden="true">
-              {cards.map((c,i) => {
-                const def = TIER_DEFS[getPlayerTierKey(c.ovr)];
-                if (def.rarity < 1 || flipTicks[i]==null) return null;
-                const burstStart = flipTicks[i]+FLIP_HALF+BURST_DELAY;
-                return (
-                  <BurstOverlay
-                    key={`${seqKey}-burst-${i}`}
-                    card={c}
-                    originX={burstCenters[i].x} originY={burstCenters[i].y}
-                    startTick={burstStart} tick={tick}
-                  />
-                );
-              })}
-            </div>
           </div>
 
           {/* ACTIONS */}
