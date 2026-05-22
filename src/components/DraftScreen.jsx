@@ -1,7 +1,7 @@
 import React from 'react';
 import './DraftScreen.css';
 import { JERSEY_BASE } from '../constants.js';
-import { IDLE_FRAMES } from '../sprites/index.js';
+import { IDLE_FRAMES, RUN_FRAMES } from '../sprites/index.js';
 import { ABILITIES } from '../abilities.js';
 import { playSelect, playCancel, playFlip } from '../sound/ui.js';
 import { playRare, playRare2, playRare3 } from '../sound/basketball.js';
@@ -90,17 +90,17 @@ const SCAN_S3_END       = 180;
 const SCAN_FADE         = 162;
 
 const PLANET_ANIM_START = 148;
-const PLANET_ANIM_DUR   = 250;
+const PLANET_ANIM_DUR   = 188;
 const PLANET_ANIM_END   = PLANET_ANIM_START + PLANET_ANIM_DUR;
 const PLANET_LOCK_START = PLANET_ANIM_END;
-const PLANET_LOCK_DUR   = 100;
+const PLANET_LOCK_DUR   = 75;
 const PLANET_WAIT_START = PLANET_LOCK_START + PLANET_LOCK_DUR;
-const PLANET_WAIT_DUR   = 192;
+const PLANET_WAIT_DUR   = 144;
 const PLANET_WAIT_END   = PLANET_WAIT_START + PLANET_WAIT_DUR;
 
 const DNA_ENTRY_DELAY   = PLANET_WAIT_END + 60;
-const DNA_START_STAGGER = 14;
-const DNA_DUR           = 72;
+const DNA_START_STAGGER = 7;
+const DNA_DUR           = 36;
 const MATERIALIZE_DUR   = 18;
 const FLIP_DUR          = 24;
 const FLIP_HALF         = 12;
@@ -486,17 +486,19 @@ function PlanetOrbit({ tick, lockedPlanetIdx, universeId }) {
               <line x1={x3d} y1={y3d-boxSize/2-16} x2="960" y2="310"
                 stroke="#5bf2d4" strokeWidth="1.5" opacity={pointerOp} strokeDasharray="4 4" />
               <g opacity={textOp}>
-                <text x="960" y="302" textAnchor="middle"
-                  fontFamily="JetBrains Mono, monospace" fontSize="15" fontWeight="600"
-                  fill="#5bf2d4" letterSpacing="0.1em">[ ANOMALY LOCKED ON ]</text>
+                <text x="960" y="255" textAnchor="middle"
+                  fontFamily="JetBrains Mono, monospace" fontSize="75" fontWeight="700"
+                  fill="#5bf2d4" letterSpacing="0.16em"
+                  style={{ filter: 'drop-shadow(0 0 12px #5bf2d4)' }}>[ ANOMALY LOCKED ON ]</text>
               </g>
             </>}
           </g>
         );
       })}
-      <text x="960" y="730" textAnchor="middle"
-        fontFamily="JetBrains Mono, monospace" fontSize="16" fontWeight="600"
-        fill="#5bf2d4" letterSpacing="0.08em">UNIVERSE {universeId}</text>
+      <text x="960" y="820" textAnchor="middle"
+        fontFamily="JetBrains Mono, monospace" fontSize="70" fontWeight="700"
+        fill="#5bf2d4" letterSpacing="0.2em"
+        style={{ filter: 'drop-shadow(0 0 14px #5bf2d4)' }}>UNIVERSE {universeId}</text>
     </svg>
   );
 }
@@ -677,8 +679,13 @@ function CardBack({ card, idx, tick }) {
 function CardFront({ card, tier, pulseBorderW, pulse, shimmerX, revealed }) {
   const posColor     = POS_COLORS[card.pos] || '#888';
   const abilityColor = card.ability ? ABILITY_RARITY_COLORS[card.ability.rarity] : null;
+  // Use an inset box-shadow ring for the pulse instead of borderWidth so the
+  // layout doesn't reflow each frame as the border grows/shrinks.
   const frontStyle   = revealed
-    ? { borderWidth:`${pulseBorderW}px`, boxShadow:`0 0 ${18+pulse*28}px ${tier.color}, inset 0 0 ${16+pulse*12}px ${tier.color}55` }
+    ? { boxShadow:
+          `inset 0 0 0 ${pulseBorderW}px ${tier.color},`
+        + `0 0 ${18+pulse*28}px ${tier.color},`
+        + `inset 0 0 ${16+pulse*12}px ${tier.color}55` }
     : undefined;
   return (
     <div className="dc-face dc-front" style={{ '--tc':tier.color, ...frontStyle }}>
@@ -777,6 +784,46 @@ function DraftCardAnim({ card, idx, anim, picked, dimmed, onClick, tick, burstSt
   );
 }
 
+// ─── Running ghost (drag cursor sprite) ────────────────────────────────────
+function RunningGhost({ player, x, y }) {
+  const [tick, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setTick(t => t+1), 80);
+    return () => clearInterval(id);
+  }, []);
+  const SCALE = 4;
+  const frame = RUN_FRAMES[tick % RUN_FRAMES.length];
+  const jerseyColor = POS_COLORS[player.pos] || '#888';
+  const W = 14 * SCALE, H = 18 * SCALE;
+  // Chest sits ~y=8 in sprite; center cursor on chest
+  return (
+    <div style={{
+      position: 'fixed',
+      left: x - W/2,
+      top:  y - 8*SCALE,
+      pointerEvents: 'none',
+      zIndex: 9999,
+      filter: 'drop-shadow(0 5px 0 rgba(0,0,0,0.45))',
+    }}>
+      <svg width={W} height={H} shapeRendering="crispEdges"
+        style={{ imageRendering:'pixelated', display:'block' }}>
+        {frame.map(([px, py, col], i) => (
+          <rect key={i} x={px*SCALE} y={py*SCALE} width={SCALE} height={SCALE}
+            fill={col === JERSEY_BASE ? jerseyColor : col} />
+        ))}
+      </svg>
+      <div style={{
+        position:'absolute', left:'50%', top: H + 4, transform:'translateX(-50%)',
+        fontFamily:'JetBrains Mono, monospace', fontSize:11, fontWeight:700,
+        letterSpacing:'0.12em', color:'#e8c060', whiteSpace:'nowrap',
+        textShadow:'0 0 3px #000, 0 0 6px rgba(0,0,0,0.9), 0 1px 0 #000',
+      }}>
+        {player.lastName ?? player.name}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main DraftScreen component ────────────────────────────────────────────
 export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
   // Draft state
@@ -786,6 +833,14 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
   const [assignments, setAssignments] = React.useState({});
   const [selectedId,  setSelectedId]  = React.useState(null);
   const [saving,      setSaving]      = React.useState(false);
+
+  // Drag-and-drop state
+  const [dragId,     setDragId]     = React.useState(null);
+  const [dragPos,    setDragPos]    = React.useState({ x:0, y:0 });
+  const [dropTarget, setDropTarget] = React.useState(null);
+  const slotRefs       = React.useRef({});
+  const dropTargetRef  = React.useRef(null);
+  const assignRef      = React.useRef(null);
 
   // Animation state
   const [cards,     setCards]     = React.useState([]);
@@ -848,7 +903,16 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
 
   const flipAll = () => {
     if (!entryDone) return;
-    setFlipTicks([tick+6, tick+18, tick+30]);
+    // Only flip cards that aren't already flipped — stagger the remaining ones.
+    let staggerIdx = 0;
+    const next = flipTicks.map(v => {
+      if (v != null) return v;
+      const t = tick + 6 + staggerIdx * 12;
+      staggerIdx++;
+      return t;
+    });
+    if (next.every((v, i) => v === flipTicks[i])) return; // nothing to flip
+    setFlipTicks(next);
     playFlip();
   };
 
@@ -955,6 +1019,70 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
     advancingRef.current = false;
   };
 
+  // ── Drag-and-drop ────────────────────────────────────────────────────────
+  const assignPlayerToSlot = React.useCallback((playerId, pos) => {
+    if (!playerId || !pos) return;
+    setAssignments(prev => {
+      const next = { ...prev };
+      Object.keys(next).forEach(k => { if (next[k]?.id===playerId) delete next[k]; });
+      next[pos] = roster.find(r => r.id===playerId);
+      return next;
+    });
+    playSelect();
+  }, [roster]);
+  assignRef.current = assignPlayerToSlot;
+
+  const hitSlot = (clientX, clientY) => {
+    for (const pos of POS_ORDER) {
+      const el = slotRefs.current[pos];
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
+        return pos;
+      }
+    }
+    return null;
+  };
+
+  React.useEffect(() => {
+    if (!dragId) return;
+    const onMove = (e) => {
+      const src = e.touches ? e.touches[0] : e;
+      if (!src) return;
+      setDragPos({ x:src.clientX, y:src.clientY });
+      const hit = hitSlot(src.clientX, src.clientY);
+      dropTargetRef.current = hit;
+      setDropTarget(hit);
+      if (e.touches) e.preventDefault();
+    };
+    const onUp = () => {
+      if (dropTargetRef.current) assignRef.current?.(dragId, dropTargetRef.current);
+      dropTargetRef.current = null;
+      setDragId(null);
+      setDropTarget(null);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+    window.addEventListener('touchmove', onMove, { passive:false });
+    window.addEventListener('touchend',  onUp);
+    window.addEventListener('touchcancel', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend',  onUp);
+      window.removeEventListener('touchcancel', onUp);
+    };
+  }, [dragId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startDrag = (e, playerId) => {
+    if (e.preventDefault) e.preventDefault();
+    const src = e.touches ? e.touches[0] : e;
+    setDragId(playerId);
+    setDragPos({ x:src.clientX, y:src.clientY });
+    setSelectedId(null);
+  };
+
   // ── Assign phase ─────────────────────────────────────────────────────────
   const canStart = phase==='assign' && POS_ORDER.every(pos => assignments[pos]);
 
@@ -1009,20 +1137,23 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
       {/* TOP NAV */}
       <div className="draft-topnav">
         <button className="draft-back-btn" onClick={() => { playCancel(); onBack(); }}>
-          <span>◀</span><span>BACK</span>
+          <span>◀</span>
         </button>
         <div className="draft-title">
           <span className="dt-big">DRAFT</span>
           <span className="dt-sub">RECRUITS FROM THE MULTIVERSE</span>
         </div>
-        <div className="draft-picks">
-          <span className="dp-lbl">{phase==='assign' ? 'ASSIGNED' : 'PICKS LEFT'}</span>
-          <span className="dp-val">
-            {phase==='assign'
-              ? `${Object.keys(assignments).length}/${ROSTER_SIZE}`
-              : picksLeft}
-          </span>
-        </div>
+        <div className="draft-topnav-spacer" aria-hidden="true" />
+      </div>
+
+      {/* PICKS LEFT — floating bottom-right */}
+      <div className="draft-picks draft-picks-corner">
+        <span className="dp-lbl">{phase==='assign' ? 'ASSIGNED' : 'PICKS LEFT'}</span>
+        <span className="dp-val">
+          {phase==='assign'
+            ? `${Object.keys(assignments).length}/${ROSTER_SIZE}`
+            : picksLeft}
+        </span>
       </div>
 
       {/* SECTION HEADER */}
@@ -1098,14 +1229,13 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
                 <span className="dots">...</span>
               </div>
             )}
-            {draftPhaseLabel==='ready' && <>
-              <button className="da-btn primary" onClick={flipAll}>
-                <span>⚡</span><span>FLIP ALL</span>
-              </button>
-              <div className="da-hint">OR · TAP A CARD TO FLIP IT</div>
-            </>}
-            {draftPhaseLabel==='revealing' && (
-              <div className="da-hint pulse">REVEALING<span className="dots">...</span></div>
+            {entryDone && picked==null && flipTicks.some(ft => ft==null) && (
+              <>
+                <button className="da-btn primary" onClick={flipAll}>
+                  <span>⚡</span><span>FLIP {noneFlipped ? 'ALL' : 'REST'}</span>
+                </button>
+                <div className="da-hint">OR · TAP A CARD TO FLIP IT</div>
+              </>
             )}
             {draftPhaseLabel==='revealed' && (
               <div className="da-hint pulse">TAP A CARD TO DRAFT IT</div>
@@ -1119,19 +1249,21 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
 
       {/* ── ASSIGN PHASE ── */}
       {phase === 'assign' && (
-        <div className="assign-phase">
+        <div className="assign-phase" style={{ touchAction: dragId ? 'none' : 'auto', userSelect: 'none' }}>
           {/* Position slots */}
           <div className="assign-slots">
             {POS_ORDER.map(pos => {
               const assigned  = assignments[pos] ?? null;
               const posColor  = POS_COLORS[pos];
-              const isTarget  = !!selectedId && !assigned;
+              const isTarget  = (!!selectedId || !!dragId) && !assigned;
               const isOccupied = !!assigned;
+              const isDropOver = dropTarget === pos && !!dragId;
               const tierKey   = assigned ? getPlayerTierKey(assigned.ovr) : null;
               const abilityColor = assigned?.ability ? ABILITY_RARITY_COLORS[assigned.ability.rarity] : null;
               return (
                 <div key={pos}
-                  className={`assign-slot ${isOccupied?'filled':''} ${isTarget?'droppable':''}`}
+                  ref={el => { slotRefs.current[pos] = el; }}
+                  className={`assign-slot ${isOccupied?'filled':''} ${isTarget?'droppable':''} ${isDropOver?'drop-over':''}`}
                   onClick={() => handleSlotClick(pos)}>
                   <div className="aslot-header" style={{ background:posColor }}>{pos}</div>
                   <div className="aslot-body">
@@ -1143,7 +1275,9 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
                           {assigned.ability.name}
                         </div>
                       )}
-                    </> : isTarget ? (
+                    </> : isDropOver ? (
+                      <div className="aslot-drop">DROP HERE</div>
+                    ) : isTarget ? (
                       <div className="aslot-drop">DROP</div>
                     ) : (
                       <div className="aslot-empty">EMPTY</div>
@@ -1156,11 +1290,13 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
 
           {/* Instruction */}
           <div className="da-hint" style={{ textAlign:'center' }}>
-            {selectedId
-              ? `▸ SELECT A POSITION FOR ${roster.find(r=>r.id===selectedId)?.lastName ?? ''}`
-              : canStart
-                ? '▸ ALL POSITIONS FILLED — READY TO START'
-                : '▸ SELECT A PLAYER THEN A POSITION'}
+            {dragId
+              ? `▸ PLACING ${roster.find(r=>r.id===dragId)?.lastName ?? ''}`
+              : selectedId
+                ? `▸ SELECT A POSITION FOR ${roster.find(r=>r.id===selectedId)?.lastName ?? ''}`
+                : canStart
+                  ? '▸ ALL POSITIONS FILLED — READY TO START'
+                  : '▸ DRAG A PLAYER TO A POSITION (OR TAP)'}
           </div>
 
           {/* Mini player cards */}
@@ -1173,9 +1309,11 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
               const acColor    = player.ability ? ABILITY_RARITY_COLORS[player.ability.rarity] : null;
               return (
                 <div key={player.id}
-                  className={`assign-card-mini ${selectedId===player.id?'selected':''} ${assignedPos?'assigned':''}`}
+                  className={`assign-card-mini ${selectedId===player.id?'selected':''} ${assignedPos?'assigned':''} ${dragId===player.id?'dragging':''}`}
                   style={{ '--tc':tier.color }}
-                  onClick={() => handleMiniCardClick(player.id)}>
+                  onMouseDown={(e) => startDrag(e, player.id)}
+                  onTouchStart={(e) => startDrag(e, player.id)}
+                  onClick={() => { if (!dragId) handleMiniCardClick(player.id); }}>
                   <div className="acm-pos-header" style={{ background:posColor }}>{player.pos}</div>
                   <div className="acm-body">
                     <div className="acm-sprite">
@@ -1223,6 +1361,12 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
               <span>↺</span><span>REDRAFT</span>
             </button>
           </div>
+
+          {/* Drag ghost — animated running sprite centered on cursor */}
+          {dragId && (() => {
+            const dp = roster.find(r => r.id===dragId);
+            return dp ? <RunningGhost player={dp} x={dragPos.x} y={dragPos.y} /> : null;
+          })()}
         </div>
       )}
     </div>

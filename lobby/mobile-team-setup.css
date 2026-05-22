@@ -1,0 +1,207 @@
+/* ────────────────────────────────────────────────
+   Team Setup — compact overrides
+   Uses container queries so rules trigger when the
+   .tsetup container itself is narrow, regardless of
+   the browser viewport. Mirrors the DraftScreen
+   compact-mode pattern.
+   ──────────────────────────────────────────────── */
+
+/* Hide legacy chrome from the standalone lobby app when it sets is-mobile */
+body.is-mobile [data-state="team-setup"] .player-panel,
+body.is-mobile [data-state="team-setup"] .title-block,
+body.is-mobile [data-state="team-setup"] .rank-badge,
+body.is-mobile [data-state="team-setup"] .roster,
+body.is-mobile [data-state="team-setup"] .center-pillar,
+body.is-mobile [data-state="team-setup"] .launch-bar,
+body.is-mobile [data-state="team-setup"] .hud-corner,
+body.is-mobile [data-state="team-setup"] .corner-bracket {
+  display: none !important;
+}
+body.is-mobile [data-state="team-setup"] .stage {
+  height: auto;
+  min-height: 100vh;
+  overflow: visible;
+}
+
+/* ── COMPACT TIER: container ≤ 700px ── */
+@container tsetup (max-width: 700px) {
+
+  /* Top nav: stack tighter */
+  .ts-topnav {
+    height: auto;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .ts-title .ts-big {
+    font-size: 20px;
+    letter-spacing: 0.18em;
+  }
+  .ts-title .ts-sub {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+  }
+  .ts-back-btn { padding: 8px 12px; font-size: 12px; }
+  .ts-topnav-spacer { width: 40px; }
+
+  /* Section header */
+  .ts-section-h { gap: 10px; }
+  .ts-section-h .ts-label {
+    font-size: 13px;
+    letter-spacing: 0.22em;
+  }
+  .ts-section-h .ts-line { max-width: 60px; }
+
+  /* Grid: collapse to single column, preview on top */
+  .ts-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .ts-preview {
+    order: 1;
+    gap: 8px;
+  }
+  .ts-form {
+    order: 2;
+    gap: 12px;
+    justify-content: flex-start;
+  }
+
+  /* Preview card — compact */
+  .ts-preview-h {
+    font-size: 9px;
+    letter-spacing: 0.16em;
+  }
+  .ts-dossier {
+    padding: 12px 14px 14px;
+    gap: 10px;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+  }
+  .ts-dossier-top {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+  }
+  .ts-dossier-hero {
+    gap: 12px;
+    padding: 4px 0;
+  }
+  .ts-emblem-big {
+    width: 76px;
+    height: 76px;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  }
+  .ts-emblem-big::before { inset: 5px; }
+  .ts-name-display .ts-nd-label { font-size: 9px; letter-spacing: 0.16em; }
+  .ts-name-display .ts-nd-value { font-size: 20px; letter-spacing: 0.06em; }
+  .ts-name-display .ts-nd-meta {
+    font-size: 9px;
+    gap: 6px;
+    letter-spacing: 0.1em;
+    margin-top: 4px;
+  }
+  .ts-color-bar { gap: 8px; padding-top: 8px; }
+  .ts-cb-lbl, .ts-cb-hex { font-size: 9px; letter-spacing: 0.14em; }
+  .ts-cb-track { height: 7px; }
+  .ts-dossier-status {
+    padding: 6px 10px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+  }
+
+  /* Form panels */
+  .ts-panel {
+    padding: 12px 12px 14px;
+  }
+  .ts-panel-h {
+    margin-bottom: 8px;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .ts-panel-h .ts-h-num { font-size: 10px; }
+  .ts-panel-h .ts-h-name { font-size: 14px; letter-spacing: 0.14em; }
+  .ts-panel-h .ts-h-hint { font-size: 9px; letter-spacing: 0.1em; }
+
+  /* Name input */
+  .ts-name-row {
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+  }
+  .ts-name-input {
+    padding: 9px 12px;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    min-width: 0;
+  }
+  .ts-counter {
+    grid-column: 1 / -1;
+    text-align: right;
+    font-size: 10px;
+  }
+  .ts-name-suggest {
+    gap: 5px;
+    margin-top: 8px;
+  }
+  .ts-suggest-lbl { font-size: 9px; }
+  .ts-suggest-chip {
+    font-size: 10px;
+    padding: 4px 9px;
+  }
+
+  /* Color swatches: 4 cols */
+  .ts-swatches {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .ts-sw-chip {
+    height: 48px;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  }
+  .ts-sw-tick {
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    top: 3px;
+    right: 3px;
+  }
+  .ts-sw-name { font-size: 9px; letter-spacing: 0.12em; }
+  .ts-sw-hex { font-size: 8px; letter-spacing: 0.1em; }
+
+  /* Emblems: 6 cols */
+  .ts-emblems {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+  }
+  .ts-em { height: 44px; }
+  .ts-em svg { width: 26px; height: 26px; }
+
+  /* Footer: full-width sticky button row */
+  .ts-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 60;
+    padding: 10px 0 10px;
+    background:
+      linear-gradient(180deg, rgba(2, 6, 10, 0) 0%, rgba(2, 6, 10, 0.95) 30%, rgba(2, 6, 10, 0.98) 100%);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    gap: 10px;
+  }
+  .ts-foot-hint { display: none; }
+  .ts-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 12px 14px;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  }
+}
+
+/* ── EXTRA-NARROW TIER: container ≤ 460px (phone portrait) ── */
+@container tsetup (max-width: 460px) {
+  .ts-swatches { grid-template-columns: repeat(2, 1fr); }
+  .ts-sw-chip { height: 56px; }
+  .ts-emblems { grid-template-columns: repeat(4, 1fr); }
+  /* Smaller side padding so panels and inputs get more usable width */
+  .tsetup { padding: 14px 12px 24px; }
+}

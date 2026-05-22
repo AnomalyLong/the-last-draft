@@ -14,6 +14,7 @@ export type UserData = {
   energyUpdatedAt: number;
   freeDrafts: number;
   gamesPlayed: number;
+  teamName: string;
 };
 
 export const userKey = (username: string) => `user:${username}`;
@@ -31,6 +32,8 @@ const parseUser = (raw: Record<string, string>): UserData => ({
   energy: Number(raw.energy ?? 0),
   energyUpdatedAt: Number(raw.energyUpdatedAt ?? 0),
   freeDrafts: Number(raw.freeDrafts ?? 0),
+  gamesPlayed: Number(raw.gamesPlayed ?? 0),
+  teamName: raw.teamName ?? '',
 });
 
 export const computeEnergy = (energy: number, energyUpdatedAt: number): number => {
@@ -52,6 +55,8 @@ export const getOrCreateUser = async (username: string, redditId: string): Promi
     redis.hSetNX(key, 'creditsSpent', '0'),
     redis.hSetNX(key, 'energy', String(MAX_ENERGY)),
     redis.hSetNX(key, 'energyUpdatedAt', String(now)),
+    // New users get 5 free picks — exactly enough to draft a starting roster.
+    // After the FTUE draft consumes all 5, users must earn more picks.
     redis.hSetNX(key, 'freeDrafts', '5'),
   ]);
 
@@ -99,6 +104,11 @@ export const deductEnergy = async (username: string): Promise<{ success: boolean
   }
 
   return { success: true, energy: after };
+};
+
+// Persist the user's team name. One team per user.
+export const setTeamName = async (username: string, teamName: string): Promise<void> => {
+  await redis.hSet(userKey(username), { teamName: teamName.slice(0, 24) });
 };
 
 export const awardCredits = async (

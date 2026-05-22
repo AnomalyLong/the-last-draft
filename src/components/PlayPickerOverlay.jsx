@@ -8,12 +8,13 @@ const PLAYS = [
   { id: 'iso',      tag: 'ISO',     name: 'Isolation',   desc: '1-on-1 Matchup', color: '#e8c060', tint: 'rgba(232,192,96,0.20)'  },
 ];
 
-const DLG_W    = 280;
-const CARD_W   = DLG_W - 28;   // 252 — 14px padding each side
-const CARD_H   = 82;
+const DLG_W    = 300;
+const SIDE_PAD = 10;
 const CARD_GAP = 8;
-const DLG_H    = 42 + PLAYS.length * CARD_H + (PLAYS.length - 1) * CARD_GAP + 14; // 318
-const DLG_Y    = Math.round((TOTAL_H - DLG_H) / 2);
+const CARD_W   = Math.floor((DLG_W - SIDE_PAD * 2 - CARD_GAP * (PLAYS.length - 1)) / PLAYS.length); // 88
+const CARD_H   = 78;
+const DLG_H    = Math.round(TOTAL_H / 3); // 116 — bottom third of screen
+const DLG_Y    = TOTAL_H - DLG_H;
 const N_PARTS  = 10;
 
 // ─── Play card ────────────────────────────────────────────────────────────────
@@ -31,7 +32,7 @@ function PlayCard({ play, x, y, onClick }) {
 
       {/* Body */}
       <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={4}
-        fill={hover ? '#263c60' : '#192840'} shapeRendering="crispEdges" />
+        fill={hover ? '#263c60' : '#192840'} opacity={0.2} shapeRendering="crispEdges" />
       <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={4}
         fill="none" stroke={play.color} strokeWidth={hover ? 2 : 1} />
       {hover && (
@@ -40,29 +41,29 @@ function PlayCard({ play, x, y, onClick }) {
       )}
 
       {/* Tag pill */}
-      <rect x={x + 6} y={y + 5} width={CARD_W - 12} height={11} rx={2}
+      <rect x={x + 4} y={y + 5} width={CARD_W - 8} height={11} rx={2}
         fill={play.tint} shapeRendering="crispEdges" />
-      <rect x={x + 6} y={y + 5} width={CARD_W - 12} height={11} rx={2}
+      <rect x={x + 4} y={y + 5} width={CARD_W - 8} height={11} rx={2}
         fill="none" stroke={play.color} strokeWidth={1} />
       <PixelTextC text={play.tag} cx={x + CARD_W / 2} y={y + 7}
         scale={1} fill={play.color} outline={null} />
 
-      {/* Play name — scale=2, glyph 9px → 18px tall, top y+20 bottom y+38 */}
-      <PixelTextC text={play.name} cx={x + CARD_W / 2} y={y + 20}
-        scale={2} fill="#e8f0ff" outline="#0a1828" />
+      {/* Play name */}
+      <PixelTextC text={play.name} cx={x + CARD_W / 2} y={y + 22}
+        scale={1} fill="#e8f0ff" outline="#0a1828" />
 
-      {/* Divider — below name (y+38 + 3px gap) */}
-      <rect x={x + 8} y={y + 41} width={CARD_W - 16} height={1}
+      {/* Divider */}
+      <rect x={x + 6} y={y + 34} width={CARD_W - 12} height={1}
         fill="#2a4070" shapeRendering="crispEdges" />
 
       {/* Description */}
-      <PixelTextC text={play.desc} cx={x + CARD_W / 2} y={y + 47}
+      <PixelTextC text={play.desc} cx={x + CARD_W / 2} y={y + 39}
         scale={1} fill="#6090b8" outline={null} />
 
       {/* SELECT button */}
-      <rect x={x + 10} y={y + CARD_H - 22} width={CARD_W - 20} height={18} rx={3}
-        fill={hover ? play.color : '#1a3060'} shapeRendering="crispEdges" />
-      <PixelTextC text="SELECT" cx={x + CARD_W / 2} y={y + CARD_H - 18}
+      <rect x={x + 6} y={y + CARD_H - 18} width={CARD_W - 12} height={14} rx={3}
+        fill={hover ? play.color : '#1a3060'} opacity={0.2} shapeRendering="crispEdges" />
+      <PixelTextC text="SELECT" cx={x + CARD_W / 2} y={y + CARD_H - 15}
         scale={1} fill={hover ? '#000' : play.color} outline={null} />
     </g>
   );
@@ -80,7 +81,6 @@ export function PlayPickerOverlay({ cameraX, onPick }) {
   }, []);
 
   const dlgX    = cameraX + Math.round((ZOOM_W - DLG_W) / 2);
-  const cardX   = dlgX + 14;
   const panelCX = cameraX + ZOOM_W / 2;
 
   const fadeIn  = Math.min(tick / 12, 1);
@@ -123,9 +123,6 @@ export function PlayPickerOverlay({ cameraX, onPick }) {
 
   return (
     <g opacity={fadeIn}>
-      {/* Dim backdrop */}
-      <rect x={cameraX} y={0} width={ZOOM_W} height={TOTAL_H} fill="#000" opacity={0.65} />
-
       {/* Outer golden aura */}
       <rect x={dlgX - 8} y={DLG_Y - 8} width={DLG_W + 16} height={DLG_H + 16} rx={8}
         fill="#ffe060" opacity={bgGlowOp} shapeRendering="crispEdges" />
@@ -135,10 +132,10 @@ export function PlayPickerOverlay({ cameraX, onPick }) {
         fill="#000" opacity={0.55} shapeRendering="crispEdges" />
       {/* Dialog body */}
       <rect x={dlgX} y={DLG_Y} width={DLG_W} height={DLG_H} rx={4}
-        fill="#111e32" shapeRendering="crispEdges" />
+        fill="#111e32" opacity={0.2} shapeRendering="crispEdges" />
       {/* Header bar */}
       <rect x={dlgX} y={DLG_Y} width={DLG_W} height={26} rx={4}
-        fill="#1a2a3e" shapeRendering="crispEdges" />
+        fill="#1a2a3e" opacity={0.2} shapeRendering="crispEdges" />
 
       {/* Floating particles */}
       {particles.map((p, i) => (
@@ -183,10 +180,11 @@ export function PlayPickerOverlay({ cameraX, onPick }) {
       <PixelTextC text="CALL A PLAY" cx={panelCX} y={DLG_Y + 9 + hBob}
         scale={1} fill={hFlash} outline={null} />
 
-      {/* Cards with staggered entrance — stacked vertically */}
+      {/* Cards with staggered entrance — laid out horizontally */}
       {PLAYS.map((play, i) => {
         const { yOff, op } = cardAnim(i);
-        const cardY = DLG_Y + 34 + i * (CARD_H + CARD_GAP);
+        const cardX = dlgX + SIDE_PAD + i * (CARD_W + CARD_GAP);
+        const cardY = DLG_Y + 32;
         return (
           <g key={play.id} opacity={op} transform={`translate(0 ${yOff})`}>
             <PlayCard

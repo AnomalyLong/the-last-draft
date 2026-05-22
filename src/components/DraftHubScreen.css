@@ -1,0 +1,258 @@
+/* Draft Hub — small overlay that shows pick count + lets the user start a draft.
+   Visual language matches DraftScreen. */
+
+.draft-hub {
+  position: absolute;
+  inset: 0;
+  z-index: 55;
+  container-type: inline-size;
+  container-name: drafthub;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 0;
+  gap: 18px;
+  pointer-events: auto;
+  line-height: normal;
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(25, 230, 196, 0.08) 0%, transparent 70%),
+    linear-gradient(180deg, rgba(2, 6, 10, 0.82) 0%, rgba(2, 6, 10, 0.96) 100%);
+  font-family: var(--f-head);
+  color: var(--c-ink);
+  overflow: hidden;
+}
+.draft-hub::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(255, 255, 255, 0.018) 3px 4px);
+  z-index: 0;
+}
+.draft-hub > * { position: relative; z-index: 1; }
+
+/* ── Top nav ── */
+.dh-topnav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex: none;
+  height: 52px;
+  padding: 0 16px;
+}
+.dh-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.dh-big {
+  font-weight: 900;
+  font-size: 28px;
+  letter-spacing: 0.22em;
+  color: var(--c-ink);
+  line-height: 1;
+  padding-left: 0.22em;
+  white-space: nowrap;
+}
+.dh-sub {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--c-ink-dim);
+  white-space: nowrap;
+}
+
+.dh-back-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.18);
+  color: var(--c-ink-dim);
+  font-family: var(--f-head);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  padding: 10px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  transition: border-color 180ms, color 180ms;
+}
+.dh-back-btn:hover {
+  border-color: var(--c-ink);
+  color: var(--c-ink);
+}
+.dh-topnav-spacer { width: 56px; height: 1px; }
+
+/* ── Section header ── */
+.dh-section-h {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  flex: none;
+}
+.dh-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(91, 242, 212, 0.5), transparent);
+  max-width: 240px;
+}
+.dh-label {
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.32em;
+  color: var(--c-ink);
+  text-shadow: 0 0 16px rgba(25, 230, 196, 0.35);
+  white-space: nowrap;
+}
+
+/* ── Body ── */
+.dh-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 0 24px 12px;
+  min-height: 0;
+}
+
+.dh-counter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 36px 26px;
+  background: linear-gradient(180deg, rgba(25,230,196,0.06) 0%, rgba(2,6,10,0.7) 100%);
+  border: 1px solid color-mix(in srgb, var(--c-left) 45%, transparent);
+  border-left: 3px solid var(--c-left);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%);
+  box-shadow:
+    inset 0 0 32px rgba(25,230,196,0.08),
+    0 0 32px rgba(25,230,196,0.18);
+  min-width: 280px;
+}
+.dh-counter-label {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  color: var(--c-ink-dim);
+  text-transform: uppercase;
+}
+.dh-counter-value {
+  font-weight: 900;
+  font-size: 84px;
+  letter-spacing: 0.04em;
+  color: var(--c-left);
+  text-shadow: 0 0 18px var(--c-left);
+  line-height: 1;
+}
+.dh-counter-value.empty {
+  color: rgba(180, 200, 220, 0.5);
+  text-shadow: none;
+}
+.dh-counter-sub {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: var(--c-ink);
+  text-transform: uppercase;
+}
+
+.dh-stats {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.dh-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 18px;
+  border: 1px solid rgba(91, 242, 212, 0.2);
+  background: rgba(2, 6, 10, 0.6);
+}
+.dh-stat-lbl {
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.24em;
+  color: var(--c-ink-dim);
+}
+.dh-stat-val {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  color: var(--c-ink);
+}
+.dh-stat-val em {
+  font-style: normal;
+  color: var(--c-ink-dim);
+  margin: 0 2px;
+}
+
+.dh-btn {
+  appearance: none;
+  font-family: var(--f-head);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  padding: 14px 28px;
+  border: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: transform 180ms, box-shadow 180ms, background 180ms;
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+.dh-btn:hover:not(:disabled) { transform: translateY(-2px); }
+.dh-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.dh-btn.primary {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c-left) 30%, #02060a), #02060a);
+  border: 1px solid var(--c-left);
+  color: var(--c-left);
+  text-shadow: 0 0 10px var(--c-left);
+  box-shadow:
+    0 0 18px rgba(25, 230, 196, 0.3),
+    inset 0 0 16px rgba(25, 230, 196, 0.12);
+}
+.dh-btn.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c-left) 40%, #02060a), #02060a);
+  box-shadow:
+    0 0 26px rgba(25, 230, 196, 0.55),
+    inset 0 0 22px rgba(25, 230, 196, 0.18);
+}
+
+.dh-hint {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: var(--c-ink-dim);
+  text-align: center;
+}
+
+/* ── Compact (mobile / narrow embed) ── */
+@container drafthub (max-width: 700px) {
+  .dh-topnav { padding: 0 10px; height: 46px; }
+  .dh-big { font-size: 22px; letter-spacing: 0.18em; }
+  .dh-sub { font-size: 9px; }
+  .dh-section-h { padding: 0 10px; }
+  .dh-label { font-size: 13px; letter-spacing: 0.24em; }
+  .dh-line { max-width: 80px; }
+  .dh-body { gap: 16px; padding: 0 12px 8px; }
+  .dh-counter { padding: 16px 24px 20px; min-width: 220px; }
+  .dh-counter-value { font-size: 64px; }
+  .dh-counter-label, .dh-counter-sub { font-size: 10px; }
+  .dh-stats { gap: 12px; }
+  .dh-stat { padding: 6px 12px; }
+  .dh-stat-val { font-size: 16px; }
+  .dh-btn { font-size: 12px; padding: 12px 22px; letter-spacing: 0.2em; }
+}

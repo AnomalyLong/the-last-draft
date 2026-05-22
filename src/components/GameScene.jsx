@@ -23,7 +23,7 @@ import { PlayPickerOverlay } from './PlayPickerOverlay.jsx';
 import { OptionsOverlay } from './OptionsOverlay.jsx';
 import { SpecialMoveCard } from './SpecialMoveCard.jsx';
 import { BballTip } from './BballTip.jsx';
-import { DASH_FRAMES, FADEAWAY_FRAMES, SPIN_MOVE_FRAMES, PICKPOCKET_FRAMES, IRON_BLOCK_FRAMES } from '../sprites/index.js';
+import { DASH_FRAMES, FADEAWAY_FRAMES, SPIN_MOVE_FRAMES, PICKPOCKET_FRAMES, IRON_BLOCK_FRAMES, PICK_FRAMES } from '../sprites/index.js';
 
 // BballTip layout constants (game-screen space, inside cameraX group)
 const TIP_CHAR_X = 10;
@@ -206,13 +206,13 @@ export function GameScene({
                           hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting}
                           isDunking={p.isDunking} isBlocking={p.isBlocking} isIronBlocking={p.isIronBlocking} isJumpBall={p.isJumpBall}
                           isStealing={p.isStealing} isPickPocketing={p.isPickPocketing} isSpinning={p.isSpinning} isDashing={p.isDashing}
-                          isFadingAway={p.isFadingAway} facingRight={p.facingRight} />
+                          isFadingAway={p.isFadingAway} isStaggering={p.isStaggering} facingRight={p.facingRight} />
                       </g>
                     : <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
                         hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting}
                         isDunking={p.isDunking} isBlocking={p.isBlocking} isIronBlocking={p.isIronBlocking} isJumpBall={p.isJumpBall}
                         isStealing={p.isStealing} isPickPocketing={p.isPickPocketing} isSpinning={p.isSpinning} isDashing={p.isDashing}
-                        isFadingAway={p.isFadingAway} facingRight={p.facingRight} />
+                        isFadingAway={p.isFadingAway} isStaggering={p.isStaggering} facingRight={p.facingRight} />
                   }
                   {p.hasBall && !p.isDunking && !p.isStealing && !p.isPickPocketing && !p.isSpinning && !p.isDashing && !p.isFadingAway &&
                     <Ball data-testid="dribble-ball"
@@ -246,6 +246,7 @@ export function GameScene({
         {(() => { const sp = players.find(p => p.isSpinning);   return sp ? <SpecialMoveCard key={`spin-${sp.id}`}  player={sp} frames={SPIN_MOVE_FRAMES} label="SPIN MOVE!"   jerseyColor={sp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#F5C800" bgColor="#F5E6C8" anchorX={21} anchorY={28} /> : null; })()}
         {(() => { const dp = players.find(p => p.isDashing);    return dp ? <SpecialMoveCard key={`dash-${dp.id}`}  player={dp} frames={DASH_FRAMES}      label="SPEED BURST!" jerseyColor={dp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={60} accentColor="#44AAFF" bgColor="#C8E8FF" anchorX={9}  anchorY={17} /> : null; })()}
         {(() => { const fp = players.find(p => p.isFadingAway); return fp ? <SpecialMoveCard key={`fade-${fp.id}`} player={fp} frames={FADEAWAY_FRAMES}  label="FADEAWAY!"    jerseyColor={fp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#FF8C00" bgColor="#FFF0CC" anchorX={9}  anchorY={12} /> : null; })()}
+        {(() => { const pk = players.find(p => p.isPicking);    return pk ? <SpecialMoveCard key={`pick-${pk.id}`} player={pk} frames={PICK_FRAMES}      label="SET PICK!"    jerseyColor={pk.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#C060E0" bgColor="#E8D0FF" anchorX={5}  anchorY={8}  /> : null; })()}
 
         <g transform={`translate(${cameraX + (isMobile ? Math.round(ZOOM_W * (1 / mobileZoom - 1) / 2) : 0)}, 0)`}>
           <HUD
@@ -269,7 +270,9 @@ export function GameScene({
       {/* Overlay layer — full-screen dim + centered SVG so dialogs are never clipped by mobile zoom */}
       {anyModalOverlay && (
         <>
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)' }} />
+          {(levelUpState || quarterSummary || gameOver || showOptions || gameTip || showTeams) && (
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)' }} />
+          )}
           <svg
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', imageRendering: 'pixelated', display: 'block' }}
             viewBox={`0 0 ${ZOOM_W} ${TOTAL_H}`}

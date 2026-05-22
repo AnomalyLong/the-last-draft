@@ -773,7 +773,7 @@
 
 .bnav {
   position: relative;
-  height: 96px;
+  height: 72px;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: stretch;
@@ -933,7 +933,7 @@
   letter-spacing: 0.28em;
   color: var(--c-left);
   text-shadow: 0 0 10px var(--c-left), 0 1px 0 rgba(0, 0, 0, 0.6);
-  margin-top: 50px;
+  margin-top: 30px;
 }
 
 /* Entrance animation */

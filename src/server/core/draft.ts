@@ -1,5 +1,5 @@
 import { redis } from '@devvit/web/server';
-import { allocatePlayerId, mintPlayer, rosterKey, type PlayerRarity, type PlayerAbility } from './player';
+import { allocatePlayerId, mintPlayer, type PlayerRarity, type PlayerAbility } from './player';
 import { spendCredits } from './user';
 
 const userKey = (username: string) => `user:${username}`;
@@ -14,16 +14,13 @@ type DraftPlayerParams = {
   ability?: PlayerAbility | null;
 };
 
-// Mints a player using a free draft slot, or for free if the user has no roster.
+// Mints a player using one free draft pick. Each call atomically decrements
+// the counter — a 5-player draft consumes exactly 5 picks. New users start
+// with 5 picks (enough for the FTUE roster).
 export const freeDraft = async (
   username: string,
   params: DraftPlayerParams,
 ) => {
-  const rosterSize = await redis.zCard(rosterKey(username));
-  if (rosterSize === 0) {
-    return await mintPlayer({ owner: username, source: 'draft', ...params });
-  }
-
   const key = userKey(username);
   const remaining = await redis.hIncrBy(key, 'freeDrafts', -1);
   if (remaining < 0) {

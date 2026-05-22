@@ -10,7 +10,10 @@ function tryExpand(nativeEvent) {
   try { requestExpandedMode(nativeEvent, 'game'); } catch {}
 }
 
-import { TitleScreen, TeamSelect, DraftScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreenNew, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen } from './components/index.js';
+import { TitleScreen, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreenNew, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen } from './components/index.js';
+import TeamSetupView from '../lobby/team-setup.jsx';
+import '../lobby/team-setup.css';
+import '../lobby/mobile-team-setup.css';
 import { titleMusic, bgMusic, bounceBall } from './sound/basketball.js';
 import { audioSettings } from './sound/audioSettings.js';
 import { useGame } from './useGame.js';
@@ -53,11 +56,22 @@ export default function App() {
     try { return devvitContext?.username ?? ''; } catch { return ''; }
   });
   const [serverCredits, setServerCredits] = React.useState(0);
+  const [freeDrafts,    setFreeDrafts]    = React.useState(0);
+
+  const refreshUser = React.useCallback(() => {
+    return trpc.user.init.query().then((user) => {
+      setServerCredits(user.credits);
+      setFreeDrafts(user.freeDrafts ?? 0);
+      if (user.teamName) setHomeTeamName(user.teamName);
+    }).catch(() => {});
+  }, []);
 
   React.useEffect(() => {
     trpc.user.init.query().then((user) => {
       setServerCredits(user.credits);
+      setFreeDrafts(user.freeDrafts ?? 0);
       setIsFtue(user.gamesPlayed === 0);
+      if (user.teamName) setHomeTeamName(user.teamName);
     }).catch(() => {});
 
     // Load saved roster + lineup so returning players can skip the draft
@@ -124,6 +138,12 @@ export default function App() {
   const [rawRoster, setRawRoster]   = React.useState([]);
   const [rawLineup, setRawLineup]   = React.useState({});
   const [isFtue, setIsFtue] = React.useState(true); // true until persisted completion flag is received
+
+  // Refresh user data (credits, picks, team name) whenever we land on the
+  // draft hub or the lobby — values may have changed since page load.
+  React.useEffect(() => {
+    if (scene === 'draftHub' || scene === 'title') refreshUser();
+  }, [scene, refreshUser]);
   const [awayTeam] = React.useState(
     () => OPPONENTS[Math.floor(Math.random() * OPPONENTS.length)]
   );
@@ -180,14 +200,19 @@ export default function App() {
           homeRoster={homeRoster}
           isFtue={isFtue}
           onPlay={(mode) => {
+            const hasTeam = homeTeamName && homeTeamName !== 'HOME';
             if (!isFtue && homeRoster.length === 5) {
               setScene('matchmaking');
+            } else if (isFtue && homeRoster.length === 0) {
+              // First-ever play: drop FTUE users into team setup (or straight
+              // into draft if they've already named their team somehow)
+              setScene(hasTeam ? 'draft' : 'teamSelect');
             } else {
-              setScene('teamSelect');
+              setScene('draftHub');
             }
           }}
           onCollection={() => setScene('collection')}
-          onDraft={() => { if (homeRoster.length >= 5) return; setScene('teamSelect'); }}
+          onDraft={() => setScene('draftHub')}
           onAuction={() => {}}
           onOptions={() => setScene('options')}
         />
@@ -206,14 +231,53 @@ export default function App() {
       {!isInline && scene === 'draft' && (
         <DraftScreen
           homeTeamName={homeTeamName}
-          onStart={(r) => { setHomeRoster(r); setGameTip("Welcome to your first game!"); setScene('game'); }}
+          onStart={(r) => {
+            setHomeRoster(r);
+            // Always refresh — the 5 mints just decremented the server-side
+            // freeDrafts counter and we want the client to reflect that.
+            refreshUser();
+            // FTUE: jump straight into the first game with a tip.
+            // Post-FTUE: return to the hub so the user sees their updated pick count.
+            if (isFtue) {
+              setGameTip("Welcome to your first game!");
+              setScene('game');
+            } else {
+              setScene('draftHub');
+            }
+          }}
           onBack={() => setScene('teamSelect')}
-          onMenu={(r) => { setHomeRoster(r); setScene('title'); }}
+          onMenu={(r) => { setHomeRoster(r); refreshUser(); setScene('title'); }}
         />
       )}
 
-      {/* ── NON-GAME SCENES (SVG — excludes title + collection + draft) ── */}
-      {(isInline || (scene !== 'game' && scene !== 'title' && scene !== 'collection' && scene !== 'draft')) && (
+      {!isInline && scene === 'teamSelect' && (
+        <TeamSetupView
+          initialName={homeTeamName === 'HOME' ? '' : homeTeamName}
+          onBack={() => setScene(homeRoster.length ? 'draftHub' : 'title')}
+          onContinue={({ name }) => {
+            setHomeTeamName(name);
+            trpc.user.setTeamName.mutate({ teamName: name }).catch(() => {});
+            setScene('draft');
+          }}
+        />
+      )}
+
+      {!isInline && scene === 'draftHub' && (
+        <DraftHubScreen
+          freeDrafts={freeDrafts}
+          credits={serverCredits}
+          rosterCount={homeRoster.length}
+          onUsePick={() => {
+            // Skip team-name setup if the user has already named their team
+            const hasTeam = homeTeamName && homeTeamName !== 'HOME';
+            setScene(hasTeam ? 'draft' : 'teamSelect');
+          }}
+          onBack={() => setScene('title')}
+        />
+      )}
+
+      {/* ── NON-GAME SCENES (SVG — excludes title + collection + draft + teamSelect + draftHub) ── */}
+      {(isInline || (scene !== 'game' && scene !== 'title' && scene !== 'collection' && scene !== 'draft' && scene !== 'teamSelect' && scene !== 'draftHub')) && (
         <svg
           data-testid="game-court"
           width="100%"
@@ -233,12 +297,6 @@ export default function App() {
               onMusicVol={handleMusicVol} onSfxVol={handleSfxVol}
               scanlines={scanlines} vignette={vignette}
               onScanlines={setScanlines} onVignette={setVignette}
-              onBack={() => setScene('title')}
-            />
-          )}
-          {!isInline && scene === 'teamSelect' && (
-            <TeamSelect
-              onStart={(name) => { if (homeRoster.length >= 5) { setScene('title'); return; } setHomeTeamName(name); setScene('draft'); }}
               onBack={() => setScene('title')}
             />
           )}

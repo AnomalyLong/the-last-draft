@@ -383,13 +383,20 @@ export default function LobbyScreen({ username, credits, homeRoster, isFtue, onP
     }
   };
 
+  // If the user has no roster yet, route any "roster/collection" entry point
+  // to the draft flow instead so they can create one.
+  const handleCollection = () => {
+    if (!homeRoster.length) onDraft();
+    else onCollection();
+  };
+
   return (
     <div className="lobby2" data-testid="lobby-screen">
 
       {/* Title strip */}
       <div className="lb2-title-strip">
         <span className="lb2-ts-dot" />
-        <span className="lb2-ts-text">READY ROOM · THE LAST DRAFT</span>
+        <span className="lb2-ts-text">THE LAST DRAFT</span>
         <span className="lb2-ts-time">{(credits ?? 0).toLocaleString()} CR</span>
       </div>
 
@@ -411,7 +418,7 @@ export default function LobbyScreen({ username, credits, homeRoster, isFtue, onP
               <span className="val">{homeRoster.length}<em>/</em>5</span>
             </div>
           </div>
-          <RosterStrip roster={homeRoster} onOpen={onCollection} />
+          <RosterStrip roster={homeRoster} onOpen={handleCollection} />
         </div>
 
         {/* Featured events */}
@@ -434,11 +441,11 @@ export default function LobbyScreen({ username, credits, homeRoster, isFtue, onP
       {/* Bottom nav — sole navigation */}
       <BottomNav
         onPlay={handlePlay}
-        onCollection={onCollection}
+        onCollection={handleCollection}
         onDraft={onDraft}
         onAuction={onAuction}
         onOptions={onOptions}
-        draftDisabled={hasDraft}
+        draftDisabled={false}
       />
     </div>
   );

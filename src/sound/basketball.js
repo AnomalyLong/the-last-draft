@@ -16,6 +16,7 @@ import swishSound      from './basketball/swish.wav';
 import levelUpSound    from './levelup.wav';
 import fanfareSound    from './fanfare.wav';
 import blockSound      from './block.wav';
+import pickSound       from './basketball/pick.wav';
 import { audioSettings } from './audioSettings.js';
 
 function makeSound(src, baseVol = 0.8) {
@@ -112,4 +113,5 @@ export const playSwish      = makeSound(swishSound,      0.8);
 export const playLevelUp    = makeSound(levelUpSound,    0.9);
 export const playFanfare    = makeSound(fanfareSound,    0.9);
 export const playBlock      = makeSound(blockSound,      0.8);
+export const playPick       = makeSound(pickSound,       0.8);
 export const playCoin       = makeSound(coinSound,       0.6);

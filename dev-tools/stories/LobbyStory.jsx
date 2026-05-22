@@ -12,6 +12,7 @@ const MOCK_ROSTER = [
 ];
 
 const DESKTOP_PRESETS = [
+  { label: '628×548 (Reddit)', w: 628, h: 548 },
   { label: '1920×1080', w: 1920, h: 1080 },
   { label: '1440×900',  w: 1440, h: 900  },
   { label: '1280×800',  w: 1280, h: 800  },
@@ -30,8 +31,8 @@ export default function LobbyStory() {
   const [credits, setCredits]   = useState(2450);
   const [mobile, setMobile]     = useState(false);
   const [deviceKey, setDeviceKey] = useState('iphone14');
-  const [desktopW, setDesktopW] = useState(1200);
-  const [desktopH, setDesktopH] = useState(700);
+  const [desktopW, setDesktopW] = useState(628);
+  const [desktopH, setDesktopH] = useState(548);
   const [scanlines, setScanlines] = useState(0.5);
   const [vignette, setVignette]   = useState(0.75);
 

@@ -12,6 +12,7 @@ export { TitleScreen } from './TitleScreen.jsx';
 export { TeamSelect } from './TeamSelect.jsx';
 export { PixelText, PixelTextC } from './PixelText.jsx';
 export { DraftScreen } from './DraftScreen.jsx';
+export { DraftHubScreen } from './DraftHubScreen.jsx';
 export { LevelUpOverlay } from './LevelUpOverlay.jsx';
 export { BballTip } from './BballTip.jsx';
 export { QuarterBanner } from './QuarterBanner.jsx';

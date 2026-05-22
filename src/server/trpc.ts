@@ -4,7 +4,7 @@ import { Context } from './context';
 import { context, reddit, redis } from '@devvit/web/server';
 import { z } from 'zod';
 
-import { getOrCreateUser, getUser, grantFreeDrafts, userKey, ledgerKey, gamesKey, MAX_ENERGY, USERS_INDEX_KEY } from './core/user';
+import { getOrCreateUser, getUser, grantFreeDrafts, setTeamName, userKey, ledgerKey, gamesKey, MAX_ENERGY, USERS_INDEX_KEY } from './core/user';
 import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, updatePlayerProgress, ROLES, type Role, rosterKey, lineupKey } from './core/player';
 import { freeDraft, creditDraft } from './core/draft';
 import { startGame, recordPlay, endGame, getGame, type PlayEvent } from './core/game';
@@ -86,6 +86,14 @@ export const appRouter = t.router({
         const result = await setLineupSlot(username, input.role as Role, input.playerId);
         if (!result.success) throw new TRPCError({ code: 'FORBIDDEN', message: 'Player not in roster' });
         return result;
+      }),
+
+    setTeamName: publicProcedure
+      .input(z.object({ teamName: z.string().min(1).max(24) }))
+      .mutation(async ({ input }) => {
+        const username = await requireUsername();
+        await setTeamName(username, input.teamName);
+        return { success: true };
       }),
   }),
 
