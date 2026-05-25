@@ -35,17 +35,18 @@ const _typingAudio = {
 // dlgW/H      — dialog box dimensions
 // textX/Y     — pixel-text origin (defaults: right of char, vertically centered in box)
 
-export function BballTip({ text, charX, charY, scale = 0.30, dlgX, dlgY, dlgW, dlgH = 19, textX, textY, onClick }) {
+export function BballTip({ text, charX, charY, scale = 0.30, dlgX, dlgY, dlgW, dlgH = 19, textX, textY, textScale = 1, tapHint = false, onClick }) {
   const [displayed, setDisplayed] = React.useState('');
   const charIdxRef = React.useRef(0);
 
   const charW = Math.round(150 * scale);
   const rx = 3;
+  const glyphH = 7 * textScale;
   const tx = textX ?? charX + charW + 6;
-  const ty = textY ?? dlgY + Math.floor((dlgH - 7) / 2);
+  const ty = textY ?? dlgY + Math.floor((dlgH - glyphH) / 2);
 
   // Expand the box character by character; cap at dlgW when fully typed
-  const CELL_W = 6; // monogram.js: 5px glyph + 1px gap, scale=1
+  const CELL_W = 6 * textScale; // 5px glyph + 1px gap, scaled
   const leftPad = tx - dlgX;
   const rightPad = 6;
   const currentW = Math.min(dlgW, leftPad + displayed.length * CELL_W + rightPad);
@@ -88,7 +89,16 @@ export function BballTip({ text, charX, charY, scale = 0.30, dlgX, dlgY, dlgW, d
       <rect x={dlgX} y={dlgY} width={currentW} height={dlgH} rx={rx}
         fill="#0c1018" shapeRendering="crispEdges" />
       <path d={borderPath} fill="none" stroke="#ffffff" strokeWidth={1.5} />
-      <PixelText text={displayed} x={tx} y={ty} scale={1} fill="#ffffff" outline={null} />
+      <PixelText text={displayed} x={tx} y={ty} scale={textScale} fill="#ffffff" outline={null} />
+      {tapHint && displayed === text && text && (
+        <g className="bballtip-tap" style={{ animation: 'tapbounce 1.2s ease-in-out infinite' }}>
+          <text x={dlgX + currentW - 6} y={dlgY + dlgH - 6} textAnchor="end"
+            fontFamily="JetBrains Mono, monospace" fontSize={6 * textScale}
+            fontWeight="700" fill="#5bf2d4" letterSpacing="0.16em">
+            TAP TO CONTINUE ▼
+          </text>
+        </g>
+      )}
       <BballChar x={charX} y={charY} scale={scale} />
     </g>
   );

@@ -82,10 +82,12 @@ export const titleMusic = {
       if (_titlePending) return;
       _titlePending = true;
       const resume = () => {
+        const wasPending = _titlePending;
         _titlePending = false;
-        _titleMusic.play().catch(() => {});
         document.removeEventListener('click',      resume);
         document.removeEventListener('touchstart', resume);
+        if (!wasPending) return; // stop() canceled us before the user interacted
+        _titleMusic.play().catch(() => {});
       };
       document.addEventListener('click',      resume, { once: true });
       document.addEventListener('touchstart', resume, { once: true });

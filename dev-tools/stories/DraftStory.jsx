@@ -21,6 +21,7 @@ export default function DraftStory() {
   const [teamName, setTeamName] = useState('BULLS');
   const [key, setKey] = useState(0);
   const [log, setLog] = useState([]);
+  const [isFtue, setIsFtue] = useState(true);
   const [mobile, setMobile]     = useState(false);
   const [deviceKey, setDeviceKey] = useState('iphone14');
   const [desktopW, setDesktopW] = useState(628);
@@ -104,6 +105,10 @@ export default function DraftStory() {
           <input type="range" min={0} max={1} step={0.05} value={vignette}
             onChange={e => setVignette(Number(e.target.value))} style={{ width: 55 }} />
         </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" checked={isFtue} onChange={(e) => setIsFtue(e.target.checked)} />
+          FTUE (coach dialogue)
+        </label>
         <button
           onClick={() => setKey((k) => k + 1)}
           style={{ background: '#1a1a1a', border: '1px solid #444', color: '#aaa', borderRadius: 3, padding: '3px 10px', cursor: 'pointer', fontSize: 12 }}
@@ -116,8 +121,9 @@ export default function DraftStory() {
       {mobile ? (
         <PhoneFrameExpanded device={DEVICES[deviceKey]}>
           <DraftScreen
-            key={`${key}-${teamName}-m`}
+            key={`${key}-${teamName}-${isFtue}-m`}
             homeTeamName={teamName}
+            isFtue={isFtue}
             onStart={(roster) => push(`onStart (${roster?.length ?? 0} players)`)}
             onBack={() => push('onBack')}
             onMenu={(roster) => push(`onMenu (${roster?.length ?? 0} players)`)}
@@ -135,8 +141,9 @@ export default function DraftStory() {
           flexShrink: 0,
         }}>
           <DraftScreen
-            key={`${key}-${teamName}`}
+            key={`${key}-${teamName}-${isFtue}`}
             homeTeamName={teamName}
+            isFtue={isFtue}
             onStart={(roster) => push(`onStart (${roster?.length ?? 0} players)`)}
             onBack={() => push('onBack')}
             onMenu={(roster) => push(`onMenu (${roster?.length ?? 0} players)`)}

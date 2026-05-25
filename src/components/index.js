@@ -32,3 +32,4 @@ export { CollectionScreenNew } from './CollectionScreenNew.jsx';
 export { AdminOverlay } from './AdminOverlay.jsx';
 export { MatchmakingScreen } from './MatchmakingScreen.jsx';
 export { default as LobbyScreen } from './LobbyScreen.jsx';
+export { FtueIntroVideo } from './FtueIntroVideo.jsx';

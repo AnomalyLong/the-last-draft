@@ -143,14 +143,15 @@ html, body {
   position: absolute;
   inset: 0;
   background: repeating-linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.40) 0px,
-    rgba(0, 0, 0, 0.40) 1px,
-    transparent 1px,
-    transparent 2px
+    180deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.18) 3px,
+    transparent 4px
   );
   pointer-events: none;
   z-index: 90;
+  mix-blend-mode: multiply;
 }
 .crt-glow {
   position: absolute;
@@ -242,13 +243,14 @@ html, body {
 /* ── Title block (RANKED MATCH) ─── */
 .title-block {
   position: absolute;
-  top: 56px;
+  top: 120px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
   text-align: center;
   pointer-events: none;
   width: 1400px;
+  display: none;
 }
 .title-line {
   font-family: var(--f-head);
@@ -347,7 +349,7 @@ html, body {
 /* ── Player panels ─── */
 .player-panel {
   position: absolute;
-  top: 220px;
+  top: 160px;
   z-index: 15;
   width: 820px;
   height: 640px;
@@ -460,6 +462,8 @@ html, body {
   flex-direction: column;
   gap: 4px;
   width: 660px;
+  max-height: 280px;
+  overflow: hidden;
 }
 .player-panel.right .stats { align-items: flex-end; margin-left: auto; }
 
@@ -588,6 +592,91 @@ html, body {
 }
 .player-panel.right .ribbon-level b { color: var(--c-right); }
 
+/* ── Stat details (revealed only) ─── */
+.stat-details {
+  margin-top: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 12px;
+}
+
+.detail-name {
+  font-family: var(--f-display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--c-ink);
+  text-transform: uppercase;
+}
+
+.detail-ovr {
+  font-family: var(--f-display);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--c-ink-dim);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.stat-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  height: 14px;
+}
+
+.stat-label {
+  width: 28px;
+  color: var(--c-ink-dim);
+  text-transform: uppercase;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.stat-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+  min-width: 40px;
+}
+
+.stat-fill {
+  height: 100%;
+  background: var(--c-left);
+  transition: width 300ms ease;
+}
+
+.stat-value {
+  width: 24px;
+  text-align: right;
+  color: var(--c-ink);
+  font-weight: 500;
+  font-size: 9px;
+  flex-shrink: 0;
+}
+
+.ability-row {
+  margin-top: 3px;
+  padding-top: 3px;
+  font-family: var(--f-display);
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--c-ink-dim);
+  text-transform: uppercase;
+  border-top: 0.5px solid rgba(255, 255, 255, 0.08);
+}
+
 /* ── Rank emblem (sits in the notch between stats and VS pillar) ─── */
 .rank-badge {
   position: absolute;
@@ -647,7 +736,7 @@ html, body {
 /* ── Roster row (5 mechs) ─── */
 .roster {
   position: absolute;
-  bottom: 36px;
+  bottom: 80px;
   width: 820px;
   height: 196px;
   z-index: 12;
@@ -666,20 +755,43 @@ html, body {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
+  transition: all 200ms ease;
+  cursor: pointer;
 }
+
+.mech-slot:hover {
+  background: rgba(2, 6, 10, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.1);
+}
+
 .roster.left .mech-slot {
-  border-bottom: 2px solid var(--c-left);
+  border-bottom: 3px solid var(--c-left);
+  background: linear-gradient(135deg, rgba(25, 230, 196, 0.08) 0%, rgba(2, 6, 10, 0.7) 100%);
 }
+
+.roster.left .mech-slot:hover {
+  background: linear-gradient(135deg, rgba(25, 230, 196, 0.15) 0%, rgba(2, 6, 10, 0.85) 100%);
+  box-shadow: 0 0 16px rgba(25, 230, 196, 0.2);
+}
+
 .roster.right .mech-slot {
-  border-bottom: 2px solid var(--c-right);
+  border-bottom: 3px solid var(--c-right);
+  background: linear-gradient(135deg, rgba(255, 45, 111, 0.08) 0%, rgba(2, 6, 10, 0.7) 100%);
+}
+
+.roster.right .mech-slot:hover {
+  background: linear-gradient(135deg, rgba(255, 45, 111, 0.15) 0%, rgba(2, 6, 10, 0.85) 100%);
+  box-shadow: 0 0 16px rgba(255, 45, 111, 0.2);
 }
 
 .mech-img {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1;
   background-size: cover;
   background-position: center;
   opacity: 0.92;
+  min-height: 100px;
 }
 .mech-img image-slot {
   display: block;
@@ -691,6 +803,72 @@ html, body {
 .mech-img image-slot::part(image) {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+.mech-grade {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 2;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-family: var(--f-head);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--c-ink);
+}
+
+.mech-stats {
+  position: relative;
+  z-index: 3;
+  padding: 6px 4px;
+  background: rgba(2, 6, 10, 0.95);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.roster.left .mech-stats {
+  background: linear-gradient(180deg, rgba(2, 6, 10, 0.92) 0%, rgba(25, 230, 196, 0.1) 100%);
+}
+
+.roster.right .mech-stats {
+  background: linear-gradient(180deg, rgba(2, 6, 10, 0.92) 0%, rgba(255, 45, 111, 0.1) 100%);
+}
+
+.mech-stat-row {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  color: var(--c-ink-dim);
+  display: flex;
+  justify-content: space-between;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+
+.mech-stat-row span {
+  color: var(--c-ink);
+  font-weight: 700;
+}
+
+.mech-ability {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  font-family: var(--f-display);
+  font-size: 8px;
+  color: var(--c-ink);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.2);
 }
 .mech-img::before {
   content: "";

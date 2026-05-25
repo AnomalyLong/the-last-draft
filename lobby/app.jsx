@@ -60,12 +60,18 @@ const PLAYER = {
   rankLabel: "RANK",
   rankName: "1",
   rankTier: "ENSIGN",
+  overall: 68,
+  spd: 65,
+  dex: 72,
+  jmp: 68,
+  acc: 69,
+  ability: "QUICK RELEASE",
   units: [
     { grade: "S", name: "MS-06 Zaku II", img: "assets/mech1.png", terrain: ["space", "ground"], terrainBoost: 2 },
-    { grade: "S", name: "RX-78-2 Gundam", img: "assets/mech2.png", terrain: ["ground"], terrainBoost: 1 },
+    { grade: "S", name: "RX-78-2 Gundam", img: "assets/mech2.png", terrain: ["ground"], terrainBoost: 1, ability: "PLAYMAKER · ANKLEBREAKER" },
     { grade: "A", name: "MSN-04 Sazabi", img: "assets/mech3.png", terrain: ["space"], terrainBoost: 3 },
     { grade: "S", name: "GN-001 Exia", img: "assets/mech4.png", terrain: ["ground", "air"], terrainBoost: 2 },
-    { grade: "S", name: "ZGMF-X10A", img: "assets/mech5.png", terrain: ["space", "air"], terrainBoost: 2 },
+    { grade: "S", name: "ZGMF-X10A", img: "assets/mech5.png", terrain: ["space", "air"], terrainBoost: 2, ability: "SHARPSHOOTER" },
   ],
 };
 
@@ -81,6 +87,12 @@ const OPPONENT = {
   rankLabel: "RANK",
   rankName: "2",
   rankTier: "S-CLASS",
+  overall: 88,
+  spd: 85,
+  dex: 88,
+  jmp: 82,
+  acc: 90,
+  ability: "CYBER LOCK",
   // hidden until match found
 };
 
@@ -151,7 +163,7 @@ function PlayerPanel({ side, data, revealed }) {
   const TeamIcon = isLeft ? TeamIconLeft : TeamIconRight;
   const slotId = isLeft ? "portrait-left" : "portrait-right";
   const placeholder = isLeft
-    ? "Drop pilot portrait"
+    ? "Drop player portrait"
     : revealed ? "Drop opponent portrait" : "—";
 
   return (
@@ -162,7 +174,7 @@ function PlayerPanel({ side, data, revealed }) {
             id={slotId}
             shape="rect"
             fit="contain"
-            src="assets/idle.gif"
+            src="assets/snoo-idle.png"
             placeholder={placeholder}
             position="50% 50%"
           ></image-slot>
@@ -180,9 +192,6 @@ function PlayerPanel({ side, data, revealed }) {
         <div className="stat-row row-rp">
           {data.location && <span className="label">{data.location.split(" ")[0]}</span>}
           <span className="val">{data.rp.toLocaleString()}<span className="rp-suffix">RP</span></span>
-        </div>
-        <div className="stat-row row-name">
-          <span className="val">{data.name}</span>
         </div>
         <div className="title-ribbon">
           <span className="ribbon-level">Lv.<b>{data.level}</b></span>
@@ -226,11 +235,11 @@ function Roster({ side, units, revealed }) {
                   ></image-slot>
                 </div>
                 <div className={`mech-grade ${u.grade}`}>{u.grade}</div>
-                <div className="mech-icons">
-                  <TerrainIcon kind="ground" active={u.terrain.includes("ground")} />
-                  <TerrainIcon kind="space" active={u.terrain.includes("space")} />
-                  <TerrainIcon kind="air" active={u.terrain.includes("air")} />
-                  <TerrainIcon kind="water" active={u.terrain.includes("water")} />
+                <div className="mech-stats">
+                  <div className="mech-stat-row">SPD <span>{Math.floor(Math.random() * 40 + 60)}</span></div>
+                  <div className="mech-stat-row">DEX <span>{Math.floor(Math.random() * 40 + 60)}</span></div>
+                  <div className="mech-stat-row">JMP <span>{Math.floor(Math.random() * 40 + 60)}</span></div>
+                  <div className="mech-ability">{u.ability || "NO ABILITY"}</div>
                 </div>
               </>
             ) : (
@@ -300,12 +309,7 @@ function SearchingView({ elapsed, progress }) {
 
 // ─── Title block (shared across states) ──────────────────────
 function TitleBlock({ matchType, mapName }) {
-  return (
-    <div className="title-block">
-      <div className="title-line single">{matchType}</div>
-      <div className="title-sub">{mapName}</div>
-    </div>
-  );
+  return null;
 }
 
 // ─── Center pillar (VS + ground type) ────────────────────────
@@ -326,7 +330,12 @@ function PrototypeControls({ state, goto, setState }) {
     ["lobby",      "Lobby"],
     ["lobby2",     "Lobby v2"],
     ["collection", "Collection"],
-    ["auction",    "Auction"],
+    ["team-setup", "Team Setup"],
+    ["shop",       "Shop"],
+    ["sell-players", "Sell Players"],
+    ["battle-pass", "Battle Pass"],
+    ["auction",    "Live Auction"],
+    ["warp-auction", "Warp Auction"],
     ["post",       "Post"],
     ["draft",      "Draft"],
     ["court",      "Court"],
@@ -371,10 +380,13 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
-  const [state, setState] = useState("lobby2"); // lobby | lobby2 | collection | draft | court | auction | post | searching | found | vs
-  const [auctionPilotId, setAuctionPilotId] = useState("p01");
+  const [state, setState] = useState("lobby2"); // lobby | lobby2 | collection | team-setup | draft | court | shop | auction | warp-auction | post | sell-players | battle-pass | searching | found | vs
+  const [team, setTeam] = useState({ name: "", palette: "cyanMagenta", emblem: "diamond", color: "#19e6c4" });
+  const [auctionPlayerId, setAuctionPlayerId] = useState("p01");
+  const [auctionMode, setAuctionMode] = useState("standard"); // standard | warp
   const [elapsed, setElapsed] = useState(0);
   const [countdown, setCountdown] = useState(5);
+  const [warpFinalPrice, setWarpFinalPrice] = useState(null);
   const timerRef = useRef(null);
 
   // apply palette
@@ -488,41 +500,122 @@ function App() {
           {state === "lobby" && (
             <LobbyView onDeploy={(mode) => setState("searching")}
                        onOpenCollection={() => setState("collection")}
-                       onOpenDraft={() => setState("draft")}
-                       onOpenAuction={() => setState("auction")} />
+                       onOpenDraft={() => setState(team.name ? "draft" : "team-setup")}
+                       onOpenAuction={() => setState("auction-house")} />
           )}
 
           {/* Lobby v2 — mobile-first */}
           {state === "lobby2" && (
             <LobbyV2 onDeploy={(mode) => setState("searching")}
                      onOpenCollection={() => setState("collection")}
-                     onOpenDraft={() => setState("draft")}
-                     onOpenAuction={() => setState("auction")} />
+                     onOpenDraft={() => setState(team.name ? "draft" : "team-setup")}
+                     onOpenShop={() => setState("shop")} />
           )}
 
-          {/* Collection (pilot roster) */}
-          {state === "collection" && (
-            <CollectionView
-              onBack={() => setState("lobby")}
-              onAuction={(id) => { setAuctionPilotId(id); setState("auction"); }}
+          {/* Team setup — name + color + emblem before drafting */}
+          {state === "team-setup" && (
+            <TeamSetupView
+              initialName={team.name}
+              initialColor={team.palette}
+              initialEmblem={team.emblem}
+              onBack={() => setState("lobby2")}
+              onContinue={(t) => {
+                setTeam(t);
+                setTweak("palette", t.palette);
+                setState("draft");
+              }}
             />
           )}
 
-          {/* Auction (live bidding) */}
+          {/* Collection (player roster) */}
+          {state === "collection" && (
+            <CollectionView
+              onBack={() => setState("lobby")}
+              onAuction={(id) => { setAuctionPlayerId(id); setAuctionMode("standard"); setState("auction"); }}
+              onShowAuctionChoice={(id) => { setAuctionPlayerId(id); setState("warp-auction"); }}
+            />
+          )}
+
+          {/* Shop (hub: weekly featured, listings, cosmetics, sell players, battle pass) */}
+          {state === "shop" && (
+            <ShopView
+              onBack={() => setState("lobby2")}
+              onOpenLiveAuction={(id) => { setAuctionPlayerId(id); setState("auction"); }}
+              onOpenSellPlayers={() => setState("sell-players")}
+              onOpenBattlePass={() => setState("battle-pass")}
+            />
+          )}
+
+          {/* Sell Players (list your own players) */}
+          {state === "sell-players" && (
+            <SellPlayersView
+              onBack={() => setState("shop")}
+            />
+          )}
+
+          {/* Battle Pass (cosmetics & rewards) */}
+          {state === "battle-pass" && (
+            <BattlePassView
+              onBack={() => setState("shop")}
+            />
+          )}
+
+          {/* Auction (live bidding for ONE lot) */}
           {state === "auction" && (
-            <AuctionView pilotId={auctionPilotId}
-                         onBack={() => setState("collection")}
+            <AuctionView playerId={auctionPlayerId}
+                         onBack={() => setState("auction-house")}
                          onSharePost={() => setState("post")} />
           )}
 
+          {/* Warp Auction (cosmic 30-second instant auction) */}
+          {state === "warp-auction" && (
+            <WarpAuctionView playerId={auctionPlayerId}
+                             onBack={() => setState("collection")}
+                             onComplete={(finalPrice) => {
+                               setWarpFinalPrice(finalPrice);
+                               setState("warp-complete");
+                             }}
+            />
+          )}
+
+          {/* Warp Complete — credit claim screen */}
+          {state === "warp-complete" && (
+            <div className="warp-complete">
+              <div className="wc-backdrop"></div>
+              <div className="wc-card">
+                <div className="wcc-icon">✓</div>
+                <div className="wcc-title">WARP AUCTION COMPLETE</div>
+                <div className="wcc-price">
+                  <span className="wcp-coin">◉</span>
+                  {warpFinalPrice?.toLocaleString()}
+                </div>
+                <div className="wcc-disclaimer">
+                  <span className="wcd-lbl">DISCLAIMER</span>
+                  <span className="wcd-text">
+                    Credits will be deposited to your account within 24 hours.
+                    Transaction ID: #{Math.random().toString(36).slice(2, 8).toUpperCase()}
+                  </span>
+                </div>
+                <button 
+                  className="wcc-btn"
+                  onClick={() => setState("collection")}
+                >
+                  BACK TO COLLECTION
+                </button>
+              </div>
+            </div>
+          )}
+
+
+
           {/* Auction post (shareable Reddit-style) */}
           {state === "post" && (
-            <PostView pilotId={auctionPilotId}
+            <PostView playerId={auctionPlayerId}
                       onBack={() => setState("auction")}
                       onBid={() => setState("auction")} />
           )}
 
-          {/* Draft (new pilot intake) */}
+          {/* Draft (new player intake) */}
           {state === "draft" && (
             <DraftView onBack={() => setState("lobby")} />
           )}

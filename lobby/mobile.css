@@ -200,22 +200,22 @@ body.is-mobile .lobby-section-h .ghost-btn {
   letter-spacing: 0.16em;
 }
 
-/* Pilot card: portrait shorter, stats below */
-body.is-mobile .lobby-pilot-portrait { height: 280px; }
-body.is-mobile .lobby-pilot-codestrip { font-size: 10px; }
-body.is-mobile .lobby-pilot-stats {
+/* Player card: portrait shorter, stats below */
+body.is-mobile .lobby-player-portrait { height: 280px; }
+body.is-mobile .lobby-player-codestrip { font-size: 10px; }
+body.is-mobile .lobby-player-stats {
   padding: 14px 16px 16px;
   gap: 12px;
 }
-body.is-mobile .lobby-pilot-name .jp { font-size: 26px; }
-body.is-mobile .lobby-pilot-name .en { font-size: 11px; letter-spacing: 0.22em; }
-body.is-mobile .lobby-pilot-row { gap: 8px; }
+body.is-mobile .lobby-player-name .jp { font-size: 26px; }
+body.is-mobile .lobby-player-name .en { font-size: 11px; letter-spacing: 0.22em; }
+body.is-mobile .lobby-player-row { gap: 8px; }
 body.is-mobile .metric-lbl { font-size: 9px; letter-spacing: 0.18em; }
 body.is-mobile .metric-val { font-size: 16px; }
 body.is-mobile .metric-val .suf { font-size: 10px; }
-body.is-mobile .lobby-pilot-title { padding: 8px 12px; gap: 8px; }
-body.is-mobile .lobby-pilot-title .lbl { font-size: 9px; letter-spacing: 0.16em; }
-body.is-mobile .lobby-pilot-title .ribbon { font-size: 16px; }
+body.is-mobile .lobby-player-title { padding: 8px 12px; gap: 8px; }
+body.is-mobile .lobby-player-title .lbl { font-size: 9px; letter-spacing: 0.16em; }
+body.is-mobile .lobby-player-title .ribbon { font-size: 16px; }
 
 /* Squad: 2 cols on portrait, stacked vertical cards */
 body.is-mobile .lobby-squad-grid {
@@ -348,6 +348,7 @@ body.is-mobile .player-panel {
   height: 50vh;
   display: flex;
   flex-direction: column;
+  z-index: 50;
 }
 body.is-mobile .player-panel.left {
   top: 0;
@@ -428,7 +429,46 @@ body.is-mobile .rank-badge .rank-emblem { inset: 14px; }
 body.is-mobile .rank-badge .rank-emblem svg { width: 36px; height: 36px; }
 body.is-mobile .rank-badge .rank-name { font-size: 10px; bottom: 9px; }
 
-/* Roster: hide on mobile (too cluttered) */
+/* Roster: show on mobile VS screen, positioned behind avatar */
+body.is-mobile [data-state="vs"] .roster,
+body.is-mobile [data-state="found"] .roster {
+  display: grid;
+  position: fixed;
+  z-index: 1;
+  padding: 0;
+  gap: 0;
+  grid-template-columns: repeat(5, 1fr);
+  pointer-events: none;
+  overflow: visible;
+  width: 100vw;
+}
+
+body.is-mobile [data-state="vs"] .roster.left,
+body.is-mobile [data-state="found"] .roster.left {
+  top: 12.5vh;
+  left: 0;
+  right: 0;
+  height: 25vh;
+}
+
+body.is-mobile [data-state="vs"] .roster.right,
+body.is-mobile [data-state="found"] .roster.right {
+  top: 62.5vh;
+  left: 0;
+  right: 0;
+  height: 25vh;
+}
+
+/* Mech slot styling on mobile */
+body.is-mobile [data-state="vs"] .mech-slot,
+body.is-mobile [data-state="found"] .mech-slot {
+  border: none;
+  opacity: 0.28;
+  transform: scale(0.75);
+  transform-origin: center;
+}
+
+/* Roster in other states: hide */
 body.is-mobile .roster { display: none; }
 
 /* Launch bar: bottom of viewport */

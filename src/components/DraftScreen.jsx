@@ -4,8 +4,9 @@ import { JERSEY_BASE } from '../constants.js';
 import { IDLE_FRAMES, RUN_FRAMES } from '../sprites/index.js';
 import { ABILITIES } from '../abilities.js';
 import { playSelect, playCancel, playFlip } from '../sound/ui.js';
-import { playRare, playRare2, playRare3 } from '../sound/basketball.js';
+import { playRare } from '../sound/basketball.js';
 import { trpc } from '../trpc.js';
+import { BballTip } from './BballTip.jsx';
 
 // ─── Layout / roster constants ─────────────────────────────────────────────
 const ROSTER_SIZE = 5;
@@ -90,12 +91,12 @@ const SCAN_S3_END       = 180;
 const SCAN_FADE         = 162;
 
 const PLANET_ANIM_START = 148;
-const PLANET_ANIM_DUR   = 188;
+const PLANET_ANIM_DUR   = 94;
 const PLANET_ANIM_END   = PLANET_ANIM_START + PLANET_ANIM_DUR;
 const PLANET_LOCK_START = PLANET_ANIM_END;
-const PLANET_LOCK_DUR   = 75;
+const PLANET_LOCK_DUR   = 38;
 const PLANET_WAIT_START = PLANET_LOCK_START + PLANET_LOCK_DUR;
-const PLANET_WAIT_DUR   = 144;
+const PLANET_WAIT_DUR   = 72;
 const PLANET_WAIT_END   = PLANET_WAIT_START + PLANET_WAIT_DUR;
 
 const DNA_ENTRY_DELAY   = PLANET_WAIT_END + 60;
@@ -676,7 +677,9 @@ function CardBack({ card, idx, tick }) {
 }
 
 // ─── Card Front ────────────────────────────────────────────────────────────
-function CardFront({ card, tier, pulseBorderW, pulse, shimmerX, revealed }) {
+function CardFront({ card, tier, pulseBorderW, pulse, shimmerX, revealed, universeId }) {
+  // POS_COLORS still drives the jersey color for visual variety — players
+  // have a stat archetype internally, but we don't surface "PG/SG/..." anywhere.
   const posColor     = POS_COLORS[card.pos] || '#888';
   const abilityColor = card.ability ? ABILITY_RARITY_COLORS[card.ability.rarity] : null;
   // Use an inset box-shadow ring for the pulse instead of borderWidth so the
@@ -692,7 +695,7 @@ function CardFront({ card, tier, pulseBorderW, pulse, shimmerX, revealed }) {
       <div className="dc-tier-label">{tier.label}</div>
       <div className="dc-card">
         <div className="dc-head">
-          <span className="dc-pos" style={{ background:posColor }}>{card.pos}</span>
+          <span className="dc-universe">U·{universeId ?? '???'}</span>
           <span className="dc-ovr">{card.ovr}</span>
         </div>
         <div className="dc-portrait">
@@ -732,8 +735,20 @@ function StatRow({ lbl, val, color }) {
   );
 }
 
+function AcmStatRow({ lbl, val, color }) {
+  return (
+    <div className="acm-stat">
+      <span className="acm-stat-lbl">{lbl}</span>
+      <span className="acm-stat-bar">
+        <span className="acm-stat-fill" style={{ width:`${val}%`, background:color, boxShadow:`0 0 4px ${color}90` }} />
+      </span>
+      <span className="acm-stat-val">{val}</span>
+    </div>
+  );
+}
+
 // ─── Animated card slot ────────────────────────────────────────────────────
-function DraftCardAnim({ card, idx, anim, picked, dimmed, onClick, tick, burstStart }) {
+function DraftCardAnim({ card, idx, anim, picked, dimmed, onClick, tick, burstStart, universeId }) {
   const tierKey = getPlayerTierKey(card.ovr);
   const tier    = TIER_DEFS[tierKey];
   const { phase, face, scaleX, revealed, dnaProgress, matProgress } = anim;
@@ -777,7 +792,7 @@ function DraftCardAnim({ card, idx, anim, picked, dimmed, onClick, tick, burstSt
         }}>
         {face==='back'
           ? <CardBack card={card} idx={idx} tick={tick} />
-          : <CardFront card={card} tier={tier} pulseBorderW={borderW} pulse={pulse} shimmerX={shimmerX} revealed={revealed} />
+          : <CardFront card={card} tier={tier} pulseBorderW={borderW} pulse={pulse} shimmerX={shimmerX} revealed={revealed} universeId={universeId} />
         }
       </button>
     </div>
@@ -825,7 +840,35 @@ function RunningGhost({ player, x, y }) {
 }
 
 // ─── Main DraftScreen component ────────────────────────────────────────────
-export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
+// ─── FTUE coach dialogue lines ─────────────────────────────────────────────
+const FTUE_IDLE_LINES = [
+  "Welcome to the draft! Pick wisely.",
+  "OVR ratings don't lie, kid.",
+  "Ability cards are rare — snag them!",
+  "Build around your best player.",
+];
+function getFtueLine(phase, pickNum, total, tick, hasAbility = false) {
+  if (phase === 'downloading') {
+    if (tick < SCAN_S1_END) return "Scanning the multiverse for anomalies...";
+    if (tick < SCAN_S2_END) return "Locking onto a target universe...";
+    if (tick < SCAN_S3_END) return "Acquiring DNA. Hang tight!";
+    return "Downloading the genetic blueprints...";
+  }
+  if (phase === 'ready') {
+    if (pickNum === 1) return "Tap a card to reveal — or FLIP ALL.";
+    if (pickNum === total) return "Last pick! Make it count.";
+    return `Pick ${pickNum} of ${total}. Three new candidates incoming.`;
+  }
+  if (phase === 'revealed') {
+    if (hasAbility) return "Lucky! A player with an ability!";
+    if (pickNum === 1) return "Pick one! Look at the OVR.";
+    return "Pick the one that fits your team.";
+  }
+  if (phase === 'confirmed') return "Nice pick! Locking it in...";
+  return FTUE_IDLE_LINES[Math.floor((tick ?? 0) / 220) % FTUE_IDLE_LINES.length];
+}
+
+export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack, onMenu }) {
   // Draft state
   const [draftPool]   = React.useState(() => generateDraftPool());
   const [roster,      setRoster]      = React.useState([]);
@@ -833,6 +876,13 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
   const [assignments, setAssignments] = React.useState({});
   const [selectedId,  setSelectedId]  = React.useState(null);
   const [saving,      setSaving]      = React.useState(false);
+
+  // FTUE coach state
+  const [coachDismissed, setCoachDismissed] = React.useState(false);
+  // Intro coach (shown once for FTUE between "Initiate Draft Sequence" and the scan).
+  // Pages through INTRO_LINES one click at a time; last click starts the scan.
+  const [coachIntro, setCoachIntro] = React.useState(false);
+  const [introIdx,   setIntroIdx]   = React.useState(0);
 
   // Drag-and-drop state
   const [dragId,     setDragId]     = React.useState(null);
@@ -878,6 +928,25 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, []);
 
+  // Track which cards have already played their rare-tier sound on flip so
+  // each card sounds exactly once per draft session.
+  const flipSoundedRef = React.useRef([false, false, false]);
+  React.useEffect(() => {
+    flipSoundedRef.current = [false, false, false];
+  }, [seqKey]);
+  React.useEffect(() => {
+    flipTicks.forEach((ft, i) => {
+      if (ft == null || flipSoundedRef.current[i]) return;
+      if (tick < ft + FLIP_HALF) return; // front face not visible yet
+      flipSoundedRef.current[i] = true;
+      const card = cards[i];
+      if (!card) return;
+      // Only play a sound for ability cards — tier alone (gold/blue/silver)
+      // doesn't trigger anything.
+      if (card.ability) playRare();
+    });
+  }, [tick, flipTicks, cards]);
+
   // Derived animation state
   const entryDone   = tick >= ENTRY_END_TICK;
   const allRevealed = flipTicks.every(ft => ft!=null && tick>=ft+FLIP_DUR);
@@ -894,15 +963,40 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
     const newCards = rollCards([]);
     setCards(newCards);
     setStarted(true);
-    setRunning(true);
     tickBaseRef.current = 0;
     setTick(0);
     setPlanetIdx(Math.floor(Math.random()*6));
     setUniverseId(Math.floor(Math.random()*1000).toString().padStart(3,'0'));
+    // For FTUE on their first pick, show the coach intro BEFORE running the
+    // scan. Tick engine stays off until they dismiss the intro.
+    if (isFtue && roster.length === 0) {
+      setCoachIntro(true);
+      setIntroIdx(0);
+    } else {
+      setRunning(true);
+    }
+  };
+
+  const INTRO_LINES = [
+    "Lets get you started with your first team.",
+    "Lets scan the multiverse for Anomalies.",
+    "Maybe you'll find your shooting star.",
+  ];
+  const advanceCoachIntro = () => {
+    setIntroIdx((i) => {
+      if (i + 1 >= INTRO_LINES.length) {
+        // last page — kick off the scan
+        setCoachIntro(false);
+        setRunning(true);
+        return 0;
+      }
+      return i + 1;
+    });
   };
 
   const flipAll = () => {
     if (!entryDone) return;
+    if (coachActive) return; // user must dismiss the FTUE coach first
     // Only flip cards that aren't already flipped — stagger the remaining ones.
     let staggerIdx = 0;
     const next = flipTicks.map(v => {
@@ -918,6 +1012,7 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
 
   const handleCardClick = (i) => {
     if (!entryDone || picked!=null) return;
+    if (coachActive) return; // user must dismiss the FTUE coach first
     if (flipTicks[i]==null) {
       setFlipTicks(ft => ft.map((v,j) => j===i ? tick+4 : v));
       playFlip();
@@ -931,15 +1026,11 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
     advancingRef.current = true;
     setPicked(i);
     playSelect();
-    const player   = cards[i];
+    // Tag the player with the universe they came from so the assign tray
+    // can display it instead of the (now-hidden) preferred position.
+    const player   = { ...cards[i], universeId };
     const newRoster = [...roster, player];
     setRoster(newRoster);
-
-    // Trigger burst sounds
-    const tierKey = getPlayerTierKey(player.ovr);
-    if (tierKey==='gold')        { playRare3(); }
-    else if (tierKey==='blue')   { playRare2(); }
-    else if (player.ability)     { playRare();  }
 
     setTimeout(() => {
       if (newRoster.length >= ROSTER_SIZE) {
@@ -948,14 +1039,20 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
         advancingRef.current = false;
         return;
       }
-      // Advance to next pick: skip radar/planets, start at DNA_ENTRY_DELAY
+      // Advance to next pick: skip scan + planet locator (already locked
+      // on a single universe for the whole session) and jump straight to
+      // the DNA card reveal. Universe + planet stay the same across all
+      // 5 picks of this draft.
       const nextCards = rollCards(newRoster);
-      tickBaseRef.current = PLANET_WAIT_END + 30;
+      const nextBase = PLANET_WAIT_END + 30;
+      tickBaseRef.current = nextBase;
       setCards(nextCards);
       setFlipTicks([null,null,null]);
       setPicked(null);
-      setPlanetIdx(Math.floor(Math.random()*6));
-      setUniverseId(Math.floor(Math.random()*1000).toString().padStart(3,'0'));
+      // Reset tick IN the same state batch so the next render uses the new
+      // base (pad phase, invisible) instead of briefly painting the new
+      // face-down cards with the leftover high tick from the prior pick.
+      setTick(nextBase);
       setSeqKey(k => k+1); // triggers tick engine restart
       advancingRef.current = false;
     }, 1000);
@@ -1017,6 +1114,8 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
     setSeqKey(0);
     tickBaseRef.current = 0;
     advancingRef.current = false;
+    setCoachIntro(false);
+    setIntroIdx(0);
   };
 
   // ── Drag-and-drop ────────────────────────────────────────────────────────
@@ -1122,6 +1221,22 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
     noneFlipped    ? 'ready'       :
     allRevealed    ? 'revealed'    : 'revealing';
 
+  // FTUE coach line + active gate.
+  // The coach blocks card / FLIP-ALL clicks until the user taps to dismiss.
+  // Dismissal resets whenever the line text changes.
+  const hasAbility = cards.some(c => c?.ability);
+  const coachLine = isFtue ? getFtueLine(draftPhaseLabel, roster.length + 1, ROSTER_SIZE, tick, hasAbility) : null;
+  // Hide during downloading/revealing/confirmed — coach only appears in
+  // the stable interactive moments (ready, revealed).
+  const coachShowing = isFtue && phase === 'draft' && started
+    && draftPhaseLabel !== 'downloading'
+    && draftPhaseLabel !== 'revealing'
+    && draftPhaseLabel !== 'confirmed';
+  // Only one stable line per phase: stage to drive the dismiss reset.
+  const coachStage = `${draftPhaseLabel}-${roster.length}-${seqKey}-${hasAbility ? 'A' : 'N'}`;
+  React.useEffect(() => { setCoachDismissed(false); }, [coachStage]);
+  const coachActive = coachShowing && !coachDismissed;
+
   // Burst centers (1920×1080 viewport space)
   const burstCenters = [
     { x:1920*0.30, y:1080*0.50 },
@@ -1195,6 +1310,7 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
                   onClick={() => handleCardClick(i)}
                   tick={tick}
                   burstStart={flipTicks[i]!=null ? flipTicks[i]+FLIP_HALF+BURST_DELAY : null}
+                  universeId={universeId}
                 />
               );
             })}
@@ -1212,15 +1328,15 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
             )}
 
             {/* Anomaly scan overlay */}
-            {started && <AnomalyScan tick={tick} universeId={universeId} />}
+            {started && !coachIntro && <AnomalyScan tick={tick} universeId={universeId} />}
 
             {/* Planet orbit */}
-            {started && <PlanetOrbit tick={tick} lockedPlanetIdx={planetIdx} universeId={universeId} />}
+            {started && !coachIntro && <PlanetOrbit tick={tick} lockedPlanetIdx={planetIdx} universeId={universeId} />}
           </div>
 
           {/* ACTIONS */}
           <div className="draft-actions">
-            {draftPhaseLabel==='downloading' && (
+            {draftPhaseLabel==='downloading' && !coachIntro && (
               <div className="da-hint pulse">
                 {tick<SCAN_S1_END ? '▸ SCANNING FOR ANOMALIES' :
                  tick<SCAN_S2_END ? '▸ LOCATING UNIVERSE'      :
@@ -1314,17 +1430,17 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
                   onMouseDown={(e) => startDrag(e, player.id)}
                   onTouchStart={(e) => startDrag(e, player.id)}
                   onClick={() => { if (!dragId) handleMiniCardClick(player.id); }}>
-                  <div className="acm-pos-header" style={{ background:posColor }}>{player.pos}</div>
+                  <div className="acm-universe-header">U·{player.universeId ?? '???'}</div>
                   <div className="acm-body">
                     <div className="acm-sprite">
                       <MiniPlayerSVG jerseyColor={posColor} phase={i*2} />
                     </div>
                     <div className="acm-name">{player.lastName ?? player.name}</div>
-                    <div className="acm-ovr" style={{ color:tier.color, textShadow:`0 0 8px ${tier.color}` }}>
-                      {player.ovr}
-                    </div>
-                    <div className="acm-tier-badge" style={{ color:tier.color, borderColor:tier.color }}>
-                      {tierKey.toUpperCase()}
+                    <div className="acm-stats">
+                      <AcmStatRow lbl="SPD" val={player.spd} color="#22d3ee" />
+                      <AcmStatRow lbl="DEX" val={player.dex} color="#a855f7" />
+                      <AcmStatRow lbl="JMP" val={player.jmp} color="#22c55e" />
+                      <AcmStatRow lbl="ACC" val={player.acc} color="#fb923c" />
                     </div>
                     {player.ability && (
                       <div className="acm-ability" style={{ color:acColor }}>
@@ -1367,6 +1483,45 @@ export function DraftScreen({ homeTeamName='HOME', onStart, onBack, onMenu }) {
             const dp = roster.find(r => r.id===dragId);
             return dp ? <RunningGhost player={dp} x={dragPos.x} y={dragPos.y} /> : null;
           })()}
+        </div>
+      )}
+
+      {/* FTUE intro coach — shown once before the scan, after the user
+          clicks "INITIATE DRAFT SEQUENCE". Clicking it kicks off the scan. */}
+      {coachIntro && (
+        <div className="draft-coach" style={{ pointerEvents: 'auto' }}>
+          <svg viewBox="0 0 600 112" preserveAspectRatio="xMidYMid meet"
+            width="100%" height="112" style={{ display: 'block', cursor: 'pointer' }}
+            onClick={advanceCoachIntro}>
+            <BballTip
+              text={INTRO_LINES[introIdx]}
+              charX={12} charY={12} scale={0.6}
+              dlgX={60} dlgY={32} dlgW={540} dlgH={48}
+              textScale={1.6}
+              textX={118}
+              tapHint
+            />
+          </svg>
+        </div>
+      )}
+
+      {/* FTUE coach dialogue — blocks card interaction until dismissed. */}
+      {coachActive && !coachIntro && (
+        <div className="draft-coach" style={{ pointerEvents: 'auto' }}>
+          <svg viewBox="0 0 600 112" preserveAspectRatio="xMidYMid meet"
+            width="100%" height="112" style={{ display: 'block', cursor: 'pointer' }}
+            onClick={() => setCoachDismissed(true)}>
+            <BballTip
+              text={coachLine}
+              charX={12} charY={12} scale={0.6}
+              /* dlg starts INSIDE the character so the bubble reads as
+                 coming from behind the ball, not floating away */
+              dlgX={60} dlgY={32} dlgW={540} dlgH={48}
+              textScale={1.6}
+              textX={118}
+              tapHint
+            />
+          </svg>
         </div>
       )}
     </div>

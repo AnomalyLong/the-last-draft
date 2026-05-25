@@ -10,7 +10,7 @@ function tryExpand(nativeEvent) {
   try { requestExpandedMode(nativeEvent, 'game'); } catch {}
 }
 
-import { TitleScreen, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreenNew, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen } from './components/index.js';
+import { TitleScreen, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreenNew, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FtueIntroVideo } from './components/index.js';
 import TeamSetupView from '../lobby/team-setup.jsx';
 import '../lobby/team-setup.css';
 import '../lobby/mobile-team-setup.css';
@@ -31,7 +31,7 @@ export default function App() {
   const [showInGameOptions, setShowInGameOptions] = React.useState(false);
 
   React.useEffect(() => {
-    if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'collection' || scene === 'matchmaking') {
+    if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'draftHub' || scene === 'collection' || scene === 'matchmaking') {
       bgMusic.stop();
       bounceBall.stop();
       titleMusic.start();
@@ -138,6 +138,7 @@ export default function App() {
   const [rawRoster, setRawRoster]   = React.useState([]);
   const [rawLineup, setRawLineup]   = React.useState({});
   const [isFtue, setIsFtue] = React.useState(true); // true until persisted completion flag is received
+  const [ftueIntroSeen, setFtueIntroSeen] = React.useState(false);
 
   // Refresh user data (credits, picks, team name) whenever we land on the
   // draft hub or the lobby — values may have changed since page load.
@@ -200,19 +201,26 @@ export default function App() {
           homeRoster={homeRoster}
           isFtue={isFtue}
           onPlay={(mode) => {
+            // Kick audio context inside the user-gesture so subsequent
+            // scene-driven music starts cleanly on mobile (iOS Safari needs
+            // play() invoked from a direct gesture handler).
+            titleMusic.start();
             const hasTeam = homeTeamName && homeTeamName !== 'HOME';
-            if (!isFtue && homeRoster.length === 5) {
+            if (isFtue && !ftueIntroSeen) {
+              setScene('ftueIntro');
+            } else if (!isFtue && homeRoster.length === 5) {
               setScene('matchmaking');
             } else if (isFtue && homeRoster.length === 0) {
-              // First-ever play: drop FTUE users into team setup (or straight
-              // into draft if they've already named their team somehow)
               setScene(hasTeam ? 'draft' : 'teamSelect');
             } else {
               setScene('draftHub');
             }
           }}
           onCollection={() => setScene('collection')}
-          onDraft={() => setScene('draftHub')}
+          onDraft={() => {
+            if (isFtue && !ftueIntroSeen) setScene('ftueIntro');
+            else setScene('draftHub');
+          }}
           onAuction={() => {}}
           onOptions={() => setScene('options')}
         />
@@ -231,6 +239,7 @@ export default function App() {
       {!isInline && scene === 'draft' && (
         <DraftScreen
           homeTeamName={homeTeamName}
+          isFtue={isFtue}
           onStart={(r) => {
             setHomeRoster(r);
             // Always refresh — the 5 mints just decremented the server-side
@@ -247,6 +256,20 @@ export default function App() {
           }}
           onBack={() => setScene('teamSelect')}
           onMenu={(r) => { setHomeRoster(r); refreshUser(); setScene('title'); }}
+        />
+      )}
+
+      {!isInline && scene === 'ftueIntro' && (
+        <FtueIntroVideo
+          onDone={() => {
+            setFtueIntroSeen(true);
+            const hasTeam = homeTeamName && homeTeamName !== 'HOME';
+            if (homeRoster.length === 0) {
+              setScene(hasTeam ? 'draft' : 'teamSelect');
+            } else {
+              setScene('draftHub');
+            }
+          }}
         />
       )}
 
@@ -277,7 +300,7 @@ export default function App() {
       )}
 
       {/* ── NON-GAME SCENES (SVG — excludes title + collection + draft + teamSelect + draftHub) ── */}
-      {(isInline || (scene !== 'game' && scene !== 'title' && scene !== 'collection' && scene !== 'draft' && scene !== 'teamSelect' && scene !== 'draftHub')) && (
+      {(isInline || (scene !== 'game' && scene !== 'title' && scene !== 'collection' && scene !== 'draft' && scene !== 'teamSelect' && scene !== 'draftHub' && scene !== 'matchmaking')) && (
         <svg
           data-testid="game-court"
           width="100%"
@@ -300,15 +323,17 @@ export default function App() {
               onBack={() => setScene('title')}
             />
           )}
-          {!isInline && scene === 'matchmaking' && (
-            <MatchmakingScreen
-              homeRoster={homeRoster}
-              homeTeamName={homeTeamName}
-              awayTeam={awayTeam}
-              onReady={handleMatchmakingReady}
-            />
-          )}
         </svg>
+      )}
+
+      {/* ── MATCHMAKING (HTML overlay — full-bleed div, not SVG) ── */}
+      {!isInline && scene === 'matchmaking' && (
+        <MatchmakingScreen
+          homeRoster={homeRoster}
+          homeTeamName={(homeTeamName && homeTeamName !== 'HOME') ? homeTeamName : (username ? `u/${username}` : 'YOU')}
+          awayTeam={awayTeam}
+          onReady={handleMatchmakingReady}
+        />
       )}
 
       {/* ── TITLE/MENU DEBUG CONSOLE ─────────────────────────── */}
@@ -372,6 +397,7 @@ export default function App() {
               trpc.game.end.mutate({ gameId: session.gameId, token: session.token, score })
                 .then(summary => { setServerCredits(c => c + summary.creditsEarned); })
                 .catch(() => {});
+              setIsFtue(false);
               gameSessionRef.current = null;
               clientScoreRef.current = 0;
             }
