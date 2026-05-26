@@ -88,6 +88,62 @@ export const appRouter = t.router({
         return result;
       }),
 
+    checkSubActivity: publicProcedure
+      .input(z.object({ subredditName: z.string().min(1) }))
+      .query(async ({ input }) => {
+        const currentUser = await reddit.getCurrentUser();
+        if (!currentUser) throw new TRPCError({ code: 'UNAUTHORIZED' });
+        const target = input.subredditName.toLowerCase();
+        const username = currentUser.username;
+        const [comments, posts] = await Promise.all([
+          reddit.getCommentsByUser({ username, limit: 100, sort: 'new' }).all().catch((e: any) => { console.error('getCommentsByUser', e); return []; }),
+          reddit.getPostsByUser({ username, limit: 100, sort: 'new' }).all().catch((e: any) => { console.error('getPostsByUser', e); return []; }),
+        ]);
+        const subComments = comments.filter((c: any) => (c.subredditName ?? '').toLowerCase() === target);
+        const subPosts = posts.filter((p: any) => (p.subredditName ?? '').toLowerCase() === target);
+        const allTimes = [...subComments, ...subPosts]
+          .map((x: any) => x.createdAt instanceof Date ? x.createdAt.getTime() : new Date(x.createdAt).getTime())
+          .filter(n => Number.isFinite(n));
+        const firstSeen = allTimes.length ? new Date(Math.min(...allTimes)).toISOString() : null;
+        const lastSeen = allTimes.length ? new Date(Math.max(...allTimes)).toISOString() : null;
+        const toTime = (x: any) => x.createdAt instanceof Date ? x.createdAt.getTime() : new Date(x.createdAt).getTime();
+        const recentComments = [...comments]
+          .sort((a: any, b: any) => toTime(b) - toTime(a))
+          .slice(0, 10)
+          .map((c: any) => ({
+            sub: c.subredditName ?? '',
+            date: new Date(toTime(c)).toISOString().slice(0, 10),
+            snippet: String(c.body ?? '').replace(/\s+/g, ' ').slice(0, 80),
+          }));
+        const recentPosts = [...posts]
+          .sort((a: any, b: any) => toTime(b) - toTime(a))
+          .slice(0, 10)
+          .map((p: any) => ({
+            sub: p.subredditName ?? '',
+            date: new Date(toTime(p)).toISOString().slice(0, 10),
+            title: String(p.title ?? '').slice(0, 80),
+          }));
+        return {
+          subreddit: input.subredditName,
+          commentCount: subComments.length,
+          postCount: subPosts.length,
+          firstSeen,
+          lastSeen,
+          scanned: { comments: comments.length, posts: posts.length },
+          recentComments,
+          recentPosts,
+        };
+      }),
+
+    getFlairBySubreddit: publicProcedure
+      .input(z.object({ subredditName: z.string().min(1) }))
+      .query(async ({ input }) => {
+        const currentUser = await reddit.getCurrentUser();
+        if (!currentUser) throw new TRPCError({ code: 'UNAUTHORIZED' });
+        const flair = await currentUser.getUserFlairBySubreddit(input.subredditName);
+        return { flair: flair ?? null };
+      }),
+
     setTeamName: publicProcedure
       .input(z.object({ teamName: z.string().min(1).max(24) }))
       .mutation(async ({ input }) => {

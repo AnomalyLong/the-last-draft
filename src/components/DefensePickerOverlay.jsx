@@ -1,79 +1,69 @@
 import React from 'react';
-import { ZOOM_W, TOTAL_H } from '../constants.js';
+import { ZOOM_W, TOTAL_H, DEFENSE_PICK_COUNTDOWN_MS } from '../constants.js';
 import { PixelTextC } from './PixelText.jsx';
 
-const PLAYS = [
-  { id: 'standard', tag: 'MOTION',  name: 'Standard',    desc: ['Motion', 'Offense'], color: '#20c8a0', tint: 'rgba(32,200,160,0.13)' },
-  { id: 'pickroll', tag: 'SCREEN',  name: 'Pick & Roll', desc: ['Screen', '& Drive'], color: '#c060e0', tint: 'rgba(192,96,224,0.16)' },
-  { id: 'iso',      tag: 'ISO',     name: 'Isolation',   desc: ['1-on-1', 'Matchup'], color: '#e8c060', tint: 'rgba(232,192,96,0.20)' },
+const DEFENSES = [
+  { id: 'motion',     tag: 'ZONE',   name: 'Motion',     desc: ['Zone',   'Defense'],   color: '#5099ff', tint: 'rgba(80,153,255,0.15)' },
+  { id: 'guard',      tag: 'MAN',    name: 'Guard',      desc: ['Guard A', 'Player'],  color: '#20c8a0', tint: 'rgba(32,200,160,0.13)' },
+  { id: 'aggressive', tag: 'PRESS',  name: 'Aggressive', desc: ['All-Out', 'Press'],   color: '#e85060', tint: 'rgba(232,80,96,0.18)'  },
 ];
 
 const DLG_W    = 300;
 const SIDE_PAD = 10;
 const CARD_GAP = 8;
-const CARD_W   = Math.floor((DLG_W - SIDE_PAD * 2 - CARD_GAP * (PLAYS.length - 1)) / PLAYS.length); // 88
+const CARD_W   = Math.floor((DLG_W - SIDE_PAD * 2 - CARD_GAP * (DEFENSES.length - 1)) / DEFENSES.length);
 const CARD_H   = 78;
-const DLG_H    = Math.round(TOTAL_H / 3); // 116 — bottom third of screen
+const DLG_H    = Math.round(TOTAL_H / 3);
 const DLG_Y    = TOTAL_H - DLG_H;
 const N_PARTS  = 10;
+const AUTO_DISMISS_MS = DEFENSE_PICK_COUNTDOWN_MS;
 
-// ─── Play card ────────────────────────────────────────────────────────────────
-
-function PlayCard({ play, x, y, onClick }) {
+function DefenseCard({ def, x, y, onClick }) {
   const [hover, setHover] = React.useState(false);
 
   return (
     <g onClick={onClick} style={{ cursor: 'pointer' }}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
 
-      {/* Shadow */}
       <rect x={x + 2} y={y + 3} width={CARD_W} height={CARD_H} rx={4}
         fill="rgba(0,0,0,0.50)" shapeRendering="crispEdges" />
 
-      {/* Body */}
       <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={4}
-        fill={hover ? '#263c60' : '#192840'} opacity={0.2} shapeRendering="crispEdges" />
+        fill={hover ? '#3c2630' : '#281828'} opacity={0.2} shapeRendering="crispEdges" />
       <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={4}
-        fill="none" stroke={play.color} strokeWidth={hover ? 2 : 1} />
+        fill="none" stroke={def.color} strokeWidth={hover ? 2 : 1} />
       {hover && (
         <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={4}
           fill="white" opacity={0.06} shapeRendering="crispEdges" />
       )}
 
-      {/* Tag pill */}
       <rect x={x + 4} y={y + 5} width={CARD_W - 8} height={11} rx={2}
-        fill={play.tint} shapeRendering="crispEdges" />
+        fill={def.tint} shapeRendering="crispEdges" />
       <rect x={x + 4} y={y + 5} width={CARD_W - 8} height={11} rx={2}
-        fill="none" stroke={play.color} strokeWidth={1} />
-      <PixelTextC text={play.tag} cx={x + CARD_W / 2} y={y + 7}
-        scale={1} fill={play.color} outline={null} />
+        fill="none" stroke={def.color} strokeWidth={1} />
+      <PixelTextC text={def.tag} cx={x + CARD_W / 2} y={y + 7}
+        scale={1} fill={def.color} outline={null} />
 
-      {/* Play name */}
-      <PixelTextC text={play.name} cx={x + CARD_W / 2} y={y + 22}
-        scale={1} fill="#e8f0ff" outline="#0a1828" />
+      <PixelTextC text={def.name} cx={x + CARD_W / 2} y={y + 22}
+        scale={1} fill="#ffe8e8" outline="#1a0a0a" />
 
-      {/* Divider */}
       <rect x={x + 6} y={y + 34} width={CARD_W - 12} height={1}
-        fill="#2a4070" shapeRendering="crispEdges" />
+        fill="#703040" shapeRendering="crispEdges" />
 
-      {/* Description — two lines */}
-      <PixelTextC text={play.desc[0]} cx={x + CARD_W / 2} y={y + 39}
-        scale={1} fill="#6090b8" outline={null} />
-      <PixelTextC text={play.desc[1]} cx={x + CARD_W / 2} y={y + 50}
-        scale={1} fill="#6090b8" outline={null} />
+      <PixelTextC text={def.desc[0]} cx={x + CARD_W / 2} y={y + 39}
+        scale={1} fill="#b08090" outline={null} />
+      <PixelTextC text={def.desc[1]} cx={x + CARD_W / 2} y={y + 50}
+        scale={1} fill="#b08090" outline={null} />
 
-      {/* SELECT button */}
       <rect x={x + 6} y={y + CARD_H - 18} width={CARD_W - 12} height={14} rx={3}
-        fill={hover ? play.color : '#1a3060'} opacity={0.2} shapeRendering="crispEdges" />
+        fill={hover ? def.color : '#601a30'} opacity={0.2} shapeRendering="crispEdges" />
       <PixelTextC text="SELECT" cx={x + CARD_W / 2} y={y + CARD_H - 15}
-        scale={1} fill={hover ? '#000' : play.color} outline={null} />
+        scale={1} fill={hover ? '#000' : def.color} outline={null} />
     </g>
   );
 }
 
-// ─── Picker dialog ────────────────────────────────────────────────────────────
-
-export function PlayPickerOverlay({ cameraX, onPick }) {
+export function DefensePickerOverlay({ cameraX, onPick }) {
   const [tick, setTick] = React.useState(0);
   React.useEffect(() => {
     let rafId;
@@ -85,6 +75,9 @@ export function PlayPickerOverlay({ cameraX, onPick }) {
   const dlgX    = cameraX + Math.round((ZOOM_W - DLG_W) / 2);
   const panelCX = cameraX + ZOOM_W / 2;
 
+  const elapsedMs   = tick * 16.67;
+  const remainingS  = Math.max(0, Math.ceil((AUTO_DISMISS_MS - elapsedMs) / 1000));
+
   const fadeIn  = Math.min(tick / 12, 1);
   const bPulse  = (Math.sin(tick * 0.055) + 1) / 2;
   const bWidth  = 1 + bPulse * 2;
@@ -92,7 +85,7 @@ export function PlayPickerOverlay({ cameraX, onPick }) {
   const bgGlowOp = (0.04 + bPulse * 0.05) * fadeIn;
 
   const shimX   = dlgX + ((tick * 2.4) % (DLG_W + 60)) - 30;
-  const hFlash  = Math.floor(tick / 16) % 2 === 0 ? '#ffe060' : '#ffffff';
+  const hFlash  = Math.floor(tick / 16) % 2 === 0 ? '#ff6080' : '#ffffff';
   const hBob    = Math.round(Math.sin(tick * 0.07) * 1);
 
   const particles = Array.from({ length: N_PARTS }, (_, i) => {
@@ -101,7 +94,7 @@ export function PlayPickerOverlay({ cameraX, onPick }) {
     const x     = xBase + Math.sin(tick * 0.06 + i * 1.9) * 7;
     const y     = DLG_Y + DLG_H - cycle * (DLG_H + 24);
     const pOp   = Math.min(1, cycle * 8) * (1 - cycle * 0.6) * fadeIn;
-    const col   = cycle > 0.55 ? '#fffff0' : '#ffe060';
+    const col   = cycle > 0.55 ? '#fff0f0' : '#ff6080';
     return { x, y, pOp, col };
   });
 
@@ -125,21 +118,16 @@ export function PlayPickerOverlay({ cameraX, onPick }) {
 
   return (
     <g opacity={fadeIn}>
-      {/* Outer golden aura */}
       <rect x={dlgX - 8} y={DLG_Y - 8} width={DLG_W + 16} height={DLG_H + 16} rx={8}
-        fill="#ffe060" opacity={bgGlowOp} shapeRendering="crispEdges" />
+        fill="#ff6080" opacity={bgGlowOp} shapeRendering="crispEdges" />
 
-      {/* Dialog shadow */}
       <rect x={dlgX + 4} y={DLG_Y + 4} width={DLG_W} height={DLG_H} rx={4}
         fill="#000" opacity={0.55} shapeRendering="crispEdges" />
-      {/* Dialog body */}
       <rect x={dlgX} y={DLG_Y} width={DLG_W} height={DLG_H} rx={4}
-        fill="#111e32" opacity={0.2} shapeRendering="crispEdges" />
-      {/* Header bar */}
+        fill="#321020" opacity={0.2} shapeRendering="crispEdges" />
       <rect x={dlgX} y={DLG_Y} width={DLG_W} height={26} rx={4}
-        fill="#1a2a3e" opacity={0.2} shapeRendering="crispEdges" />
+        fill="#3e1a2a" opacity={0.2} shapeRendering="crispEdges" />
 
-      {/* Floating particles */}
       {particles.map((p, i) => (
         <rect key={i}
           x={Math.round(p.x - 1)} y={Math.round(p.y - 1)}
@@ -148,52 +136,78 @@ export function PlayPickerOverlay({ cameraX, onPick }) {
           shapeRendering="crispEdges" />
       ))}
 
-      {/* Pulsating border */}
       <rect x={dlgX} y={DLG_Y} width={DLG_W} height={DLG_H} rx={4}
-        fill="none" stroke="#ffe060" strokeWidth={bWidth} opacity={bOp} />
-      {/* Inner accent border */}
+        fill="none" stroke="#ff6080" strokeWidth={bWidth} opacity={bOp} />
       <rect x={dlgX + 2} y={DLG_Y + 2} width={DLG_W - 4} height={DLG_H - 4} rx={3}
-        fill="none" stroke="#ffd040" strokeWidth={0.5} opacity={0.18 + bPulse * 0.14} />
+        fill="none" stroke="#ff4060" strokeWidth={0.5} opacity={0.18 + bPulse * 0.14} />
 
-      {/* Corner ornaments */}
       {corners.map((c, i) => (
         <g key={i} opacity={cOp}>
           <rect x={Math.round(c.x - cSz / 2)} y={Math.round(c.y)} width={Math.round(cSz)} height={1}
-            fill="#ffe060" shapeRendering="crispEdges" />
+            fill="#ff6080" shapeRendering="crispEdges" />
           <rect x={Math.round(c.x)} y={Math.round(c.y - cSz / 2)} width={1} height={Math.round(cSz)}
-            fill="#ffe060" shapeRendering="crispEdges" />
+            fill="#ff6080" shapeRendering="crispEdges" />
         </g>
       ))}
 
-      {/* Header shimmer */}
       <defs>
-        <clipPath id="play-hdr-clip">
+        <clipPath id="def-hdr-clip">
           <rect x={dlgX + 1} y={DLG_Y + 1} width={DLG_W - 2} height={24} />
         </clipPath>
       </defs>
-      <g clipPath="url(#play-hdr-clip)">
+      <g clipPath="url(#def-hdr-clip)">
         <g transform={`rotate(-14, ${shimX + 7}, ${DLG_Y + 13})`}>
           <rect x={shimX} y={DLG_Y - 4} width={12} height={34}
             fill="white" opacity={0.20} />
         </g>
       </g>
 
-      {/* Header text */}
-      <PixelTextC text="CALL A PLAY" cx={panelCX} y={DLG_Y + 9 + hBob}
+      <PixelTextC text="PICK DEFENSE" cx={panelCX - 14} y={DLG_Y + 9 + hBob}
         scale={1} fill={hFlash} outline={null} />
 
-      {/* Cards with staggered entrance — laid out horizontally */}
-      {PLAYS.map((play, i) => {
+      {/* Countdown ring + spinner — right side of the header */}
+      {(() => {
+        const cx = dlgX + DLG_W - 16;
+        const cy = DLG_Y + 13;
+        const r  = 7;
+        const C  = 2 * Math.PI * r;
+        const remainingT = Math.max(0, 1 - elapsedMs / AUTO_DISMISS_MS);
+        const dashEmpty  = C * (1 - remainingT);
+        const spinAngle  = (tick * 6) % 360; // continuous spin
+        return (
+          <g>
+            {/* Track */}
+            <circle cx={cx} cy={cy} r={r} fill="none"
+              stroke="#5a2030" strokeWidth={2} opacity={0.6} />
+            {/* Depleting progress ring */}
+            <circle cx={cx} cy={cy} r={r} fill="none"
+              stroke="#ff6080" strokeWidth={2}
+              strokeDasharray={`${C - dashEmpty} ${dashEmpty}`}
+              strokeDashoffset={C * 0.25} // start at top
+              transform={`rotate(-90 ${cx} ${cy})`}
+              strokeLinecap="round" />
+            {/* Spinner arc — orbits continuously */}
+            <g transform={`rotate(${spinAngle} ${cx} ${cy})`}>
+              <circle cx={cx + r} cy={cy} r={1.6} fill="#ffe060" />
+            </g>
+            {/* Countdown number */}
+            <PixelTextC text={`${remainingS}`} cx={cx} y={cy - 4}
+              scale={1} fill="#ffffff" outline={null} />
+          </g>
+        );
+      })()}
+
+      {DEFENSES.map((def, i) => {
         const { yOff, op } = cardAnim(i);
         const cardX = dlgX + SIDE_PAD + i * (CARD_W + CARD_GAP);
         const cardY = DLG_Y + 32;
         return (
-          <g key={play.id} opacity={op} transform={`translate(0 ${yOff})`}>
-            <PlayCard
-              play={play}
+          <g key={def.id} opacity={op} transform={`translate(0 ${yOff})`}>
+            <DefenseCard
+              def={def}
               x={cardX}
               y={cardY}
-              onClick={() => onPick(play)}
+              onClick={() => onPick(def)}
             />
           </g>
         );

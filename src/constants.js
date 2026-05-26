@@ -5,6 +5,10 @@ export const BLOCK_RATE = 0.20; // probability the closest defender blocks a sho
 
 export const ABILITY_LEVELUP_RATE = 0.10; // probability a level-up grants an ability vs a stat upgrade (0–1)
 
+// ─── UI Timers ────────────────────────────────────────────────────────────────
+export const DEFENSE_PICK_MS = 3250; // how long the defense picker modal stays open before auto-dismiss
+export const DEFENSE_PICK_COUNTDOWN_MS = 3000; // displayed countdown duration — modal closes 250ms later so "0" is visible briefly
+
 // ─── Play Rates ───────────────────────────────────────────────────────────────
 // Motion Offense — pass count range before shooting
 export const MOTION_MIN_PASSES = 1;

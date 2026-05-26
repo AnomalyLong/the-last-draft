@@ -19,6 +19,7 @@ import { audioSettings } from './sound/audioSettings.js';
 import { useGame } from './useGame.js';
 import OPPONENTS from './opponents.json';
 import { trpc } from './trpc';
+import { runCommand } from './debugCommands.js';
 
 export default function App() {
   const isInline = React.useMemo(() => getMode() === 'inline', []);
@@ -122,14 +123,8 @@ export default function App() {
   };
 
   const handleTitleCommand = (cmd) => {
-    const trimmed = cmd.trim();
-    if (trimmed === 'admin') {
-      trpc.admin.isAdmin.query()
-        .then(result => {
-          if (result.isAdmin) setShowAdminOverlay(true);
-        })
-        .catch(() => {});
-    }
+    const addTitleLog = (text, type = 'out') => setTitleLogs(prev => [...prev, { text, type }]);
+    runCommand(cmd, { scene: 'title', addLog: addTitleLog, setShowAdminOverlay });
   };
 
   const [gameTip, setGameTip] = React.useState(null);

@@ -4,9 +4,10 @@ import { gridToSvg, svgToGrid, INITIAL_PLAYERS, SHOOT_TARGET_LEFT, SHOOT_TARGET_
   BLOCK_REBOUND_MIN_FT, BLOCK_REBOUND_MAX_FT, JUMP_BALL_FORMATION, ABILITY_LEVELUP_RATE,
   MOTION_MIN_PASSES, MOTION_MAX_PASSES,
   ISO_PASS_RATE, ISO_DUNK_RATE,
-  PICKROLL_DRIVE_RATE, PICKROLL_C_DUNK_RATE, NUM_PERIODS } from './constants.js';
+  PICKROLL_DRIVE_RATE, PICKROLL_C_DUNK_RATE, NUM_PERIODS, DEFENSE_PICK_MS } from './constants.js';
 import { SHOOT_CHAR_FRAMES } from './sprites/index.js';
 import { ABILITIES } from './abilities.js';
+import { runCommand } from './debugCommands.js';
 import { playShot, playMiss, playDunk, playJumpball, playPass, playLeap, playQuarter, playSwish, playLevelUp, playFanfare, playBlock, playPick, bounceBall, bgMusic } from './sound/basketball.js';
 
 // ─── Half-court formation positions ─────────────────────────────────────────
@@ -108,6 +109,8 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const [statBonuses, setStatBonuses] = useState(new Map()); // mirror of statBonusRef for reactive display
   const firstLevelUpDoneRef = useRef(false); // first home level-up always grants an ability
   const [playPickState, setPlayPickState] = useState(false);
+  const [defensePickState, setDefensePickState] = useState(false);
+  const defensePickTimerRef = useRef(null);
   const [xpFlyup, setXpFlyup] = useState(null);
   const xpFlyupIdRef = useRef(0);
   const [stealFlyup, setStealFlyup] = useState(null);
@@ -633,8 +636,19 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
                   resumeFastBreak();
                 }, 1.25);
               } else {
+                // Fire Defense Options
                 // Give ball directly to PG and move both teams into formation.
                 // Loop fires as soon as the PG arrives — zero idle gap.
+                
+                // Show 3-second defense picker (no logic wired yet — just UI).
+                if (stealer.team === 'away') {
+                  setDefensePickState(true);
+                  if (defensePickTimerRef.current) clearTimeout(defensePickTimerRef.current);
+                  defensePickTimerRef.current = setTimeout(() => {
+                    setDefensePickState(false);
+                    defensePickTimerRef.current = null;
+                  }, DEFENSE_PICK_MS);
+                }
                 const pgId = stealer.team === 'home' ? 1 : 6;
                 playersRef.current = playersRef.current.map(p => ({
                   ...p, hasBall: p.id === pgId,
@@ -920,6 +934,18 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         playersRef.current = playersRef.current.map(p => p.id === rebounder.id ? { ...p, hasBall: true } : p);
         setPlayers(prev => prev.map(p => p.id === rebounder.id ? { ...p, hasBall: true } : p));
         addLog(`${rebounder.role} (${rebounder.team}) grabs the board!`);
+
+        // Defense picker only when the shooter was home and away ended up with the ball.
+        const shooter = playersRef.current.find(p => p.id === excludeId);
+        if (rebounder.team === 'away' && shooter?.team === 'home') {
+          setDefensePickState(true);
+          if (defensePickTimerRef.current) clearTimeout(defensePickTimerRef.current);
+          defensePickTimerRef.current = setTimeout(() => {
+            setDefensePickState(false);
+            defensePickTimerRef.current = null;
+          }, DEFENSE_PICK_MS);
+        }
+
         if (onComplete) onComplete();
       });
     }
@@ -1342,6 +1368,14 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     ];
     otherMoves.forEach(({ id, gx, gy }) => smoothMoveTo(gx, gy, id, id <= 5 ? true : false));
     addLog('away throw-in...');
+
+    // Show 3-second defense picker (no logic wired yet — just UI).
+    setDefensePickState(true);
+    if (defensePickTimerRef.current) clearTimeout(defensePickTimerRef.current);
+    defensePickTimerRef.current = setTimeout(() => {
+      setDefensePickState(false);
+      defensePickTimerRef.current = null;
+    }, DEFENSE_PICK_MS);
 
     setTimeout(() => {
       const startCx = 660, startCy = 216;
@@ -1888,6 +1922,8 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
       startWander('away');
       startGuarding('home');
 
+//TODO: Check to see what User selected as Defense
+      
       /** Motion offence: 1-3 passes after getting into position **/
       triggerMotionOffence(() => {
         if (!gameLoopActiveRef.current || gamePausedRef.current) return;
@@ -1905,10 +1941,10 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
 
   // ─── Commands ──────────────────────────────────────────────────────────────
 
-  const handleCommand = (cmd) => {
-    addLog(cmd, 'cmd');
-    const parts = cmd.trim().split(/\s+/);
-    const op = parts[0];
+  const handleGameCommand = (op, parts) => {
+    // parts is now an args-only array (op stripped). Shim the legacy parts[1], parts[2]
+    // shape by prepending op so existing code below keeps working unchanged.
+    parts = [op, ...parts];
     try {
       if (op === 'move') {
         // Nudge every player by a raw SVG pixel offset (useful for layout tweaks).
@@ -2124,30 +2160,15 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         addLog('testPickPlay — opening play picker overlay');
         setPlayPickState(true);
 
-      } else if (op === 'help') {
-        addLog('move <dx> <dy>    — move ball carrier by pixels');
-        addLog('moveTo <x> <y>   — smooth move ball carrier to grid');
-        addLog('tp <x> <y>       — teleport PG to grid pos');
-        addLog('pos              — print PG grid position');
-        addLog('shoot            — shoot toward basket (make)');
-        addLog('fadeaway         — fadeaway shot toward basket (make)');
-        addLog('shootFail        — shoot and miss, bounce to random rebound');
-        addLog('reset            — reset PG to top of key');
-        addLog('testMoveAway     — away team takes possession');
-        addLog('testMoveHome     — home team takes possession');
-        addLog('testPass <role>  — pass to teammate (PG/SG/SF/PF/C)');
-        addLog('testJumpBall     — both Cs tip off at center, 50/50 winner');
-        addLog('testThrowInHome  — home C inbounds from left sideline');
-        addLog('testThrowInAway  — away C inbounds from right sideline');
-        addLog('testDunk         — ball carrier drives to basket and dunks');
-        addLog('testGamePlay     — start continuous game loop');
-        addLog('stopGamePlay     — stop the game loop');
-        addLog('testSpinMove     — ball carrier performs spin move animation');
-        addLog('testHomePG       — give ball to home PG for testing');
-        addLog('testSpeedBurst   — ball carrier performs speed-burst dash animation');
-        addLog('testDash         — alias for testSpeedBurst');
-        addLog('testLevelUp      — trigger level-up sequence for ball carrier');
-        addLog('testPickPlay     — open the play picker overlay');
+      } else if (op === 'testPickDefense') {
+        addLog('testPickDefense — opening defense picker overlay (3s)');
+        setDefensePickState(true);
+        if (defensePickTimerRef.current) clearTimeout(defensePickTimerRef.current);
+        defensePickTimerRef.current = setTimeout(() => {
+          setDefensePickState(false);
+          defensePickTimerRef.current = null;
+        }, DEFENSE_PICK_MS);
+
       } else if (op === 'testHomePG') {
         setPlayers(prev => prev.map(p => ({ ...p, hasBall: p.id === 1 })));
         addLog('ball given to home PG');
@@ -2178,6 +2199,10 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         addLog(`unknown: "${op}" — type help`, 'err');
       }
     } catch (e) { addLog(e.message, 'err'); }
+  };
+
+  const handleCommand = (cmd) => {
+    runCommand(cmd, { scene: 'game', addLog, handleGameCommand });
   };
 
   // ─── Camera ────────────────────────────────────────────────────────────────
@@ -2224,6 +2249,12 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   }, []);
 
   const possession = carrier.team; // 'home' | 'away'
+
+  const onPickDefense = (def) => {
+    if (def) addLog(`Defense: ${def.name}`);
+    setDefensePickState(false);
+    if (defensePickTimerRef.current) { clearTimeout(defensePickTimerRef.current); defensePickTimerRef.current = null; }
+  };
 
   const onPickPlay = (play) => {
     if (play) addLog(`Play called: ${play.name}`);
@@ -2310,5 +2341,5 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     });
   };
 
-  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
+  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, defensePickState, onPickDefense, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
 }
