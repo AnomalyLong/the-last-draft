@@ -19,12 +19,13 @@ const N_PARTS  = 10;
 
 // ─── Play card ────────────────────────────────────────────────────────────────
 
-function PlayCard({ play, x, y, onClick }) {
+function PlayCard({ play, x, y, onClick, disabled }) {
   const [hover, setHover] = React.useState(false);
 
   return (
-    <g onClick={onClick} style={{ cursor: 'pointer' }}
-      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+    <g onClick={disabled ? undefined : onClick} style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
+      onMouseEnter={() => !disabled && setHover(true)} onMouseLeave={() => setHover(false)}>
+    <g opacity={disabled ? 0.38 : 1}>
 
       {/* Shadow */}
       <rect x={x + 2} y={y + 3} width={CARD_W} height={CARD_H} rx={4}
@@ -62,18 +63,31 @@ function PlayCard({ play, x, y, onClick }) {
       <PixelTextC text={play.desc[1]} cx={x + CARD_W / 2} y={y + 50}
         scale={1} fill="#6090b8" outline={null} />
 
-      {/* SELECT button */}
+      {/* SELECT / NO REPEAT button */}
       <rect x={x + 6} y={y + CARD_H - 18} width={CARD_W - 12} height={14} rx={3}
-        fill={hover ? play.color : '#1a3060'} opacity={0.2} shapeRendering="crispEdges" />
-      <PixelTextC text="SELECT" cx={x + CARD_W / 2} y={y + CARD_H - 15}
-        scale={1} fill={hover ? '#000' : play.color} outline={null} />
+        fill={disabled ? '#1a1a2a' : hover ? play.color : '#1a3060'} opacity={0.2} shapeRendering="crispEdges" />
+      <PixelTextC text={disabled ? 'NO RPT' : 'SELECT'} cx={x + CARD_W / 2} y={y + CARD_H - 15}
+        scale={1} fill={disabled ? '#445' : hover ? '#000' : play.color} outline={null} />
+    </g>
+
+    {/* Cooldown badge — rendered at full opacity above the dimmed card */}
+    {disabled && (
+      <g>
+        <rect x={x + 16} y={y - 6} width={56} height={11} rx={2}
+          fill="#7a1c1c" shapeRendering="crispEdges" />
+        <rect x={x + 16} y={y - 6} width={56} height={11} rx={2}
+          fill="none" stroke="#e04040" strokeWidth={1} />
+        <PixelTextC text="COOLDOWN" cx={x + CARD_W / 2} y={y - 4}
+          scale={1} fill="#e04040" outline={null} />
+      </g>
+    )}
     </g>
   );
 }
 
 // ─── Picker dialog ────────────────────────────────────────────────────────────
 
-export function PlayPickerOverlay({ cameraX, onPick }) {
+export function PlayPickerOverlay({ cameraX, onPick, disabledPlayId }) {
   const [tick, setTick] = React.useState(0);
   React.useEffect(() => {
     let rafId;
@@ -194,6 +208,7 @@ export function PlayPickerOverlay({ cameraX, onPick }) {
               x={cardX}
               y={cardY}
               onClick={() => onPick(play)}
+              disabled={play.id === disabledPlayId}
             />
           </g>
         );

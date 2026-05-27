@@ -62,7 +62,7 @@ export function GameScene({
   players, shot, logs, handleCommand, cameraX,
   possession, homeScore, awayScore, quarter, time,
   scorePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade,
-  playPickState, onPickPlay,
+  playPickState, onPickPlay, lastPickedPlayIdRef,
   defensePickState, onPickDefense,
   defenseFtueState, onDismissDefenseFtue,
   quarterAnnouncement, playerAlpha,
@@ -301,7 +301,7 @@ export function GameScene({
                 onClose={() => setShowTeams(false)}
               />
             )}
-            {playPickState && <PlayPickerOverlay cameraX={0} onPick={onPickPlay} />}
+            {playPickState && <PlayPickerOverlay cameraX={0} onPick={onPickPlay} disabledPlayId={lastPickedPlayIdRef.current} />}
             {defensePickState && <DefensePickerOverlay cameraX={0} onPick={onPickDefense} />}
             {defenseFtueState && <DefenseFtueOverlay cameraX={0} onDone={onDismissDefenseFtue} />}
             {levelUpState && (

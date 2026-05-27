@@ -1161,8 +1161,10 @@
   flex-wrap: nowrap;
   flex-shrink: 0;
   width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
 }
-.assign-slot { flex: 1 1 0; min-width: 0; width: auto; }
+.assign-slot { flex: 0 1 142px; min-width: 0; }
 
 .assign-slot {
   width: 142px;
@@ -1253,8 +1255,10 @@
   flex-wrap: nowrap;
   flex-shrink: 0;
   width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
 }
-.assign-card-mini { flex: 1 1 0; min-width: 0; width: auto; }
+.assign-card-mini { flex: 0 1 130px; min-width: 0; }
 
 .assign-actions { flex-shrink: 0; padding-bottom: 8px; }
 .assign-card-mini {

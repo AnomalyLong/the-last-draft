@@ -1100,8 +1100,13 @@ body.is-mobile .matchmaking-screen .player-ability {
   opacity: 0;
   text-transform: uppercase;
 }
-.matchmaking-screen[data-state="vs"] .launch-bar {
-  animation: launchIn 500ms ease 1400ms both;
+.matchmaking-screen[data-state="vs"] .launch-bar,
+.matchmaking-screen[data-state="ready"] .launch-bar {
+  animation: launchIn 500ms ease 0ms both;
+}
+.matchmaking-screen .launch-bar.tap-to-start {
+  cursor: pointer;
+  gap: 0;
 }
 .matchmaking-screen .launch-bar .count {
   font-family: var(--f-head);

@@ -4,6 +4,7 @@ import { RUN_FRAMES } from '../sprites/run.js';
 import { JERSEY_BASE } from '../constants.js';
 
 const POS_COLORS = { PG: '#3ea6ff', SG: '#a855f7', SF: '#19e6c4', PF: '#ff7a3c', C: '#ffc94a' };
+const RARITY_COLORS = { common: '#b0b8c8', rare: '#b0b8c8', super_rare: '#30c0e0', ultra_rare: '#ffc94a' };
 
 function tierFromRarity(rarity) {
   if (rarity >= 5) return 'blue';
@@ -83,6 +84,7 @@ const CARD_GAP = 8;
 // ── Roster strip (5 pilot cards) ─────────────────────────
 function RosterStrip({ roster, onOpen }) {
   const [startIdx, setStartIdx] = React.useState(0);
+  const [collapsed, setCollapsed] = React.useState(() => roster.length > 0);
   const outerRef = React.useRef(null);
   const [outerW, setOuterW] = React.useState(500);
 
@@ -139,52 +141,60 @@ function RosterStrip({ roster, onOpen }) {
   const leaderAbilities = [leader.ability, ...(leader.abilities ?? [])].map(abilityName).filter(Boolean);
 
   return (
-    <div className="lb2-rstrip" data-testid="roster-strip">
+    <div className={`lb2-rstrip${collapsed ? ' collapsed' : ''}`} data-testid="roster-strip">
       <div className="lb2-rstrip-row">
-        <div className="lb2-rstrip-label">
+        <button
+          className="lb2-rstrip-label"
+          onClick={e => { e.stopPropagation(); setCollapsed(c => !c); }}
+          aria-expanded={!collapsed}
+        >
           <span className="lb2-rstrip-h">ROSTER</span>
-        </div>
-        <div className="lb2-rstrip-cards-outer" ref={outerRef}>
-          <div className="lb2-rstrip-clip">
-            <div className="lb2-rstrip-cards" style={{ transform: `translateX(-${slideOffset}px)` }}>
-              {roster.map((p, i) => {
-                const posColor = POS_COLORS[p.pos] ?? '#eaf6f3';
-                const tier = tierFromRarity(p.rarity ?? 3);
-                return (
-                  <div key={i}
-                       className={`lb2-rs-card tier-${tier} ${i === 0 ? 'leader' : ''}`}
-                       style={{ '--pos-c': posColor, '--char-c': posColor }}
-                       onClick={onOpen}>
-                    {i === 0 && <div className="lb2-rs-leader">CAPTAIN</div>}
-                    <div className="lb2-rs-pos">{p.pos}</div>
-                    <div className="lb2-rs-img">
-                      <RunSprite jerseyColor={posColor} />
-                    </div>
-                    <div className="lb2-rs-overlay" />
-                    <div className="lb2-rs-bot">
-                      <span className="lb2-rs-lv">Lv<b>{p.level ?? 1}</b></span>
-                      <div className="lb2-rs-ovr-group">
-                        <span className="lb2-rs-ovr-label">OVR</span>
-                        <span className="lb2-rs-ovrn">{overall(p)}</span>
+          <span className="lb2-rstrip-chevron">{collapsed ? '▸' : '▾'}</span>
+        </button>
+        {!collapsed && (
+          <div className="lb2-rstrip-cards-outer" ref={outerRef}>
+            <div className="lb2-rstrip-clip">
+              <div className="lb2-rstrip-cards" style={{ transform: `translateX(-${slideOffset}px)` }}>
+                {roster.map((p, i) => {
+                  const posColor = POS_COLORS[p.pos] ?? '#eaf6f3';
+                  const tier = tierFromRarity(p.rarity ?? 3);
+                  const rarityColor = RARITY_COLORS[p.rarity] ?? '#b0b8c8';
+                  return (
+                    <div key={i}
+                         className={`lb2-rs-card tier-${tier} ${i === 0 ? 'leader' : ''}`}
+                         style={{ '--pos-c': posColor, '--char-c': posColor, '--rc': rarityColor }}
+                         onClick={onOpen}>
+                      {i === 0 && <div className="lb2-rs-leader">CAPTAIN</div>}
+                      <div className="lb2-rs-pos">{p.pos}</div>
+                      <div className="lb2-rs-img">
+                        <RunSprite jerseyColor={posColor} />
+                      </div>
+                      <div className="lb2-rs-overlay" />
+                      <div className="lb2-rs-bot">
+                        <span className="lb2-rs-lv">Lv<b>{p.level ?? 1}</b></span>
+                        <div className="lb2-rs-ovr-group">
+                          <span className="lb2-rs-ovr-label">OVR</span>
+                          <span className="lb2-rs-ovrn">{overall(p)}</span>
+                        </div>
+                      </div>
+                      <div className="lb2-rs-xpbar">
+                        <div className="lb2-rs-xpbar-fill" style={{ width: `${xpPercent(p)}%` }} />
                       </div>
                     </div>
-                    <div className="lb2-rs-xpbar">
-                      <div className="lb2-rs-xpbar-fill" style={{ width: `${xpPercent(p)}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
+            {showNav && idx > 0 && (
+              <button className="lb2-rstrip-nav prev" onClick={e => { e.stopPropagation(); prev(); }}>‹</button>
+            )}
+            {showNav && idx < maxStart && (
+              <button className="lb2-rstrip-nav next" onClick={e => { e.stopPropagation(); next(); }}>›</button>
+            )}
           </div>
-          {showNav && idx > 0 && (
-            <button className="lb2-rstrip-nav prev" onClick={e => { e.stopPropagation(); prev(); }}>‹</button>
-          )}
-          {showNav && idx < maxStart && (
-            <button className="lb2-rstrip-nav next" onClick={e => { e.stopPropagation(); next(); }}>›</button>
-          )}
-        </div>
+        )}
       </div>
-      {leaderAbilities.length > 0 && (
+      {!collapsed && leaderAbilities.length > 0 && (
         <div className="lb2-rstrip-buff">
           <span className="lb2-rs-bufftag">ABILITIES</span>
           <span className="lb2-rs-bufftxt">
@@ -201,8 +211,8 @@ function RosterStrip({ roster, onOpen }) {
   );
 }
 
-// ── Featured events + news (hardcoded) ───────────────────
-function FeaturedSection() {
+// ── Featured section (hero card) ─────────────────────────
+function FeaturedSection({ onUnavailable }) {
   return (
     <div className="lb2-featured">
       <div className="lb2-ft-h">
@@ -229,36 +239,85 @@ function FeaturedSection() {
             <span><em>FORMAT</em><b>BO3 · 5v5</b></span>
           </div>
         </div>
-        <button className="lb2-ft-hero-cta">
+        <button className="lb2-ft-hero-cta" onClick={onUnavailable}>
           <span className="g">⟫</span>
           <span>REGISTER</span>
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Notifications dropdown ────────────────────────────────
+const NOTIF_ITEMS = [
+  { tag: 'PATCH', accent: 'cyan',    title: 'v1.2.0 · SHOT ARC TUNING',        sub: 'ACC rebalance · 3pt window adjusted · netcode pass', time: '2h' },
+  { tag: 'DROP',  accent: 'magenta', title: 'LIMITED · CHROME SLAM PACK',       sub: '5★ guaranteed · ends in 18h',                        time: 'NEW' },
+  { tag: 'AUCTION',accent: 'gold',   title: 'ZEEKBECK · LOT 0451 CLOSING',      sub: 'Current bid ◉ 18,450 · 142 bidders',                 time: '2h 14m' },
+];
+
+function NotifDropdown() {
+  return (
+    <div className="lb2-notif-dropdown" data-testid="notif-dropdown">
+      {NOTIF_ITEMS.map(n => (
+        <div key={n.tag} className={`lb2-ft-news-row accent-${n.accent}`}>
+          <div className="lb2-ft-news-tag">{n.tag}</div>
+          <div className="lb2-ft-news-body">
+            <div className="lb2-ft-news-title">{n.title}</div>
+            <div className="lb2-ft-news-sub">{n.sub}</div>
+          </div>
+          <div className="lb2-ft-news-time">{n.time}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Missions ──────────────────────────────────────────────
+const MISSIONS = {
+  daily: [
+    { id: 'win1',   label: 'WIN A GAME',     sub: 'Complete any match',         reward: 50,  progress: 0, total: 1, accent: 'cyan' },
+    { id: 'draft1', label: 'DRAFT A PLAYER', sub: 'Use a free or credit draft', reward: 25,  progress: 0, total: 1, accent: 'magenta' },
+    { id: 'play3',  label: 'PLAY 3 GAMES',   sub: 'Any mode counts',            reward: 100, progress: 0, total: 3, accent: 'gold' },
+  ],
+  weekly: [
+    { id: 'wwin5',  label: 'WIN 5 GAMES',    sub: 'Any mode',                   reward: 300, progress: 0, total: 5, accent: 'cyan' },
+    { id: 'wdraft', label: 'DRAFT 3 PLAYERS',sub: 'Free or credit drafts',      reward: 150, progress: 0, total: 3, accent: 'magenta' },
+    { id: 'wranked',label: 'PLAY RANKED',    sub: 'Complete a ranked match',    reward: 200, progress: 0, total: 1, accent: 'gold' },
+  ],
+};
+
+function DailyMissionsSection() {
+  const [tab, setTab] = React.useState('daily');
+  const missions = MISSIONS[tab];
+  const resetLabel = 'MISSIONS COMING SOON';
+
+  return (
+    <div className="lb2-missions" data-testid="missions">
+      <div className="lb2-ft-h">
+        <span className="lbl">MISSIONS</span>
+        <div className="lb2-mission-tabs">
+          <button className={`lb2-mission-tab${tab === 'daily' ? ' active' : ''}`} onClick={() => setTab('daily')}>DAILY</button>
+          <button className={`lb2-mission-tab${tab === 'weekly' ? ' active' : ''}`} onClick={() => setTab('weekly')}>WEEKLY</button>
+        </div>
+        <span className="meta">{resetLabel}</span>
+      </div>
       <div className="lb2-ft-news">
-        <div className="lb2-ft-news-row accent-cyan">
-          <div className="lb2-ft-news-tag">PATCH</div>
-          <div className="lb2-ft-news-body">
-            <div className="lb2-ft-news-title">v1.2.0 · SHOT ARC TUNING</div>
-            <div className="lb2-ft-news-sub">ACC rebalance · 3pt window adjusted · netcode pass</div>
+        {missions.map(m => (
+          <div key={m.id} className={`lb2-ft-news-row accent-${m.accent}`}>
+            <div className="lb2-ft-news-tag" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+              <span style={{ fontSize: 13, fontWeight: 900, lineHeight: 1 }}>{m.reward}</span>
+              <span style={{ fontSize: 8, letterSpacing: '0.1em', opacity: 0.7 }}>CR</span>
+            </div>
+            <div className="lb2-ft-news-body">
+              <div className="lb2-ft-news-title">{m.label}</div>
+              <div className="lb2-ft-news-sub">{m.sub}</div>
+              <div className="lb2-mission-bar">
+                <div className="lb2-mission-bar-fill" style={{ width: `${Math.round((m.progress / m.total) * 100)}%` }} />
+              </div>
+            </div>
+            <div className="lb2-ft-news-time">{m.progress}/{m.total}</div>
           </div>
-          <div className="lb2-ft-news-time">2h</div>
-        </div>
-        <div className="lb2-ft-news-row accent-magenta">
-          <div className="lb2-ft-news-tag">DROP</div>
-          <div className="lb2-ft-news-body">
-            <div className="lb2-ft-news-title">LIMITED · CHROME SLAM PACK</div>
-            <div className="lb2-ft-news-sub">5★ guaranteed · ends in 18h</div>
-          </div>
-          <div className="lb2-ft-news-time">NEW</div>
-        </div>
-        <div className="lb2-ft-news-row accent-gold">
-          <div className="lb2-ft-news-tag">AUCTION</div>
-          <div className="lb2-ft-news-body">
-            <div className="lb2-ft-news-title">ZEEKBECK · LOT 0451 CLOSING</div>
-            <div className="lb2-ft-news-sub">Current bid ◉ 18,450 · 142 bidders</div>
-          </div>
-          <div className="lb2-ft-news-time">2h 14m</div>
-        </div>
+        ))}
       </div>
     </div>
   );
@@ -266,15 +325,15 @@ function FeaturedSection() {
 
 // ── Queue mode button ─────────────────────────────────────
 const QUEUE_MODES = [
-  { id: 'ranked',   label: 'RANKED',   desc: 'Climb the ladder. RP at stake.',       stake: '±25 RP', wait: '~12s',   accent: 'cyan' },
+  { id: 'ranked',   label: 'RANKED',   desc: 'Climb the ladder. RP at stake.',       stake: '±25 RP', wait: '~12s',   accent: 'cyan', unavailable: true },
   { id: 'training', label: 'TRAINING', desc: 'Drill against the AI. No pressure.',   stake: '0 RP',   wait: 'INSTANT', accent: 'ink' },
 ];
 
-function QueueButton({ q, selected, onSelect }) {
+function QueueButton({ q, selected, onSelect, onUnavailable }) {
   return (
     <button
       className={`lb2-qbtn accent-${q.accent} ${selected ? 'selected' : ''}`}
-      onClick={() => onSelect(q.id)}
+      onClick={() => q.unavailable ? onUnavailable?.() : onSelect(q.id)}
       data-testid={`queue-btn-${q.id}`}
     >
       <div className="lb2-qb-mark" />
@@ -372,7 +431,11 @@ function BottomNav({ onPlay, onCollection, onDraft, onAuction, onOptions, draftD
 
 // ── Main LobbyScreen ──────────────────────────────────────
 export default function LobbyScreen({ username, credits, homeRoster, isFtue, onPlay, onCollection, onDraft, onAuction, onOptions }) {
-  const [selectedMode, setSelectedMode] = React.useState('ranked');
+  const [selectedMode, setSelectedMode] = React.useState('training');
+  const [modal, setModal] = React.useState(() => !username ? 'guest' : null);
+  const [showNotifs, setShowNotifs] = React.useState(false);
+  const showModal = (type) => setModal(type);
+  const closeModal = () => setModal(null);
   const hasDraft = homeRoster.length >= 5;
 
   const handlePlay = () => {
@@ -397,7 +460,19 @@ export default function LobbyScreen({ username, credits, homeRoster, isFtue, onP
       <div className="lb2-title-strip">
         <span className="lb2-ts-dot" />
         <span className="lb2-ts-text">THE LAST DRAFT</span>
-        <span className="lb2-ts-time">{(credits ?? 0).toLocaleString()} CR</span>
+        <div className="lb2-ts-right">
+          <span className="lb2-ts-time">{(credits ?? 0).toLocaleString()} CR</span>
+          <button
+            className={`lb2-ts-bell${showNotifs ? ' active' : ''}`}
+            onClick={() => setShowNotifs(v => !v)}
+            aria-label="Notifications"
+            data-testid="notif-bell"
+          >
+            🔔
+            <span className="lb2-ts-bell-dot" />
+          </button>
+        </div>
+        {showNotifs && <NotifDropdown />}
       </div>
 
       {/* Scrollable body */}
@@ -422,21 +497,60 @@ export default function LobbyScreen({ username, credits, homeRoster, isFtue, onP
         </div>
 
         {/* Featured events */}
-        <FeaturedSection />
+        <FeaturedSection onUnavailable={() => showModal('unavailable')} />
+
+        {/* Daily missions */}
+        <DailyMissionsSection />
 
         {/* Queue selector */}
         <div className="lb2-section-h">
           <span className="lb2-sh-bar" />
-          <span>SELECT MISSION</span>
+          <span>GAME TYPE</span>
           <span className="lb2-sh-bar" />
         </div>
         <div className="lb2-queue">
           {QUEUE_MODES.map(q => (
-            <QueueButton key={q.id} q={q} selected={selectedMode === q.id} onSelect={setSelectedMode} />
+            <QueueButton key={q.id} q={q} selected={selectedMode === q.id} onSelect={setSelectedMode} onUnavailable={() => showModal('unavailable')} />
           ))}
         </div>
 
       </div>
+
+      {/* Modal */}
+      {modal && (
+        <div data-testid="lobby-modal" style={{
+          position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+        }} onClick={closeModal}>
+          <div style={{
+            background: '#0d1117', border: '1px solid #ff7a3c',
+            padding: '24px 20px', maxWidth: 260, textAlign: 'center',
+            fontFamily: 'monospace',
+          }} onClick={e => e.stopPropagation()}>
+            {modal === 'guest' ? (<>
+              <div style={{ color: '#ff7a3c', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>NOT LOGGED IN</div>
+              <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 20 }}>
+                You can still play, but your progress, roster, and credits won't be saved.
+              </div>
+            </>) : (<>
+              <div style={{ color: '#ff7a3c', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>NOT AVAILABLE</div>
+              <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 20 }}>
+                This feature is not available yet. Check back soon.
+              </div>
+            </>)}
+            <button
+              onClick={closeModal}
+              style={{
+                background: '#ff7a3c', color: '#000', border: 'none',
+                padding: '6px 20px', fontFamily: 'monospace', fontSize: 10,
+                letterSpacing: '0.1em', cursor: 'pointer',
+              }}
+            >
+              GOT IT
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom nav — sole navigation */}
       <BottomNav

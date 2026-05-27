@@ -68,9 +68,9 @@ function PixelSprite({ frames = IDLE_FRAMES, frameInterval = 120, scale = 4, jer
 
 // ─── Rarity config ─────────────────────────────────────────────
 const RARITY = {
-  common:     { color: '#5a6a7a', accent: '#8090a0', label: 'COMMON' },
-  rare:       { color: '#40c070', accent: '#70e098', label: 'RARE' },
-  super_rare: { color: '#30c0e0', accent: '#60d8f8', label: 'SUPER RARE' },
+  common:     { color: '#b0b8c8', accent: '#d8dde6', label: 'COMMON' },
+  rare:       { color: '#b0b8c8', accent: '#d8dde6', label: 'UNCOMMON' },
+  super_rare: { color: '#30c0e0', accent: '#60d8f0', label: 'RARE' },
   ultra_rare: { color: '#ffc94a', accent: '#ffe080', label: 'ULTRA RARE' },
 };
 

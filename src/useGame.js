@@ -109,6 +109,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const [statBonuses, setStatBonuses] = useState(new Map()); // mirror of statBonusRef for reactive display
   const firstLevelUpDoneRef = useRef(false); // first home level-up always grants an ability
   const [playPickState, setPlayPickState] = useState(false);
+  const lastPickedPlayIdRef = useRef(null);
   const [defensePickState, setDefensePickState] = useState(false);
   const [defenseFtueState, setDefenseFtueState] = useState(false);
   const defensePickTimerRef = useRef(null);
@@ -2287,7 +2288,10 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   onPickDefenseRef.current = onPickDefense;
 
   const onPickPlay = (play) => {
-    if (play) addLog(`Play called: ${play.name}`);
+    if (play) {
+      addLog(`Play called: ${play.name}`);
+      lastPickedPlayIdRef.current = (play.id === 'iso' || play.id === 'pickroll') ? play.id : null;
+    }
     setPlayPickState(false);
     startTimer(timerSpeedRef.current);
     const resume = resumeAfterPauseRef.current;
@@ -2371,5 +2375,5 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     });
   };
 
-  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, defensePickState, onPickDefense, defenseFtueState, onDismissDefenseFtue, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
+  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, lastPickedPlayIdRef, defensePickState, onPickDefense, defenseFtueState, onDismissDefenseFtue, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
 }

@@ -16,14 +16,15 @@ const POS_COLORS = {
   PG: '#3ea6ff', SG: '#a855f7', SF: '#19e6c4', PF: '#ff7a3c', C: '#ffc94a',
 };
 
-// Tier defs: gold = OVR≥71 (best, biggest burst), blue = OVR 64-70, silver = OVR<64
+// Tier defs: gold = OVR≥71 (best, biggest burst), blue = OVR 64-70, silver = OVR 58-63, common = OVR<58
 const TIER_DEFS = {
-  silver: { label: 'RARE',       color: '#b0b8c8', glow: '#d8dde6', rarity: 0, burstDur: 0,   burstSpeed: 0, sparkles: 0  },
-  blue:   { label: 'SUPER RARE', color: '#30c0e0', glow: '#60d8f0', rarity: 1, burstDur: 138, burstSpeed: 5, sparkles: 12 },
+  common: { label: 'COMMON',     color: '#b0b8c8', glow: '#d8dde6', rarity: 0, burstDur: 0,   burstSpeed: 0, sparkles: 0  },
+  silver: { label: 'UNCOMMON',   color: '#b0b8c8', glow: '#d8dde6', rarity: 0, burstDur: 0,   burstSpeed: 0, sparkles: 0  },
+  blue:   { label: 'RARE',       color: '#30c0e0', glow: '#60d8f0', rarity: 1, burstDur: 138, burstSpeed: 5, sparkles: 12 },
   gold:   { label: 'ULTRA RARE', color: '#ffc94a', glow: '#ffe080', rarity: 2, burstDur: 175, burstSpeed: 7, sparkles: 20 },
 };
-function getPlayerTierKey(ovr) { return ovr >= 71 ? 'gold' : ovr >= 64 ? 'blue' : 'silver'; }
-function tierToRarity(ovr) { return ovr >= 71 ? 'ultra_rare' : ovr >= 64 ? 'super_rare' : ovr >= 58 ? 'rare' : 'common'; }
+function getPlayerTierKey(ovr, ability) { if (ability) return 'gold'; return ovr >= 76 ? 'gold' : ovr >= 68 ? 'blue' : ovr >= 62 ? 'silver' : 'common'; }
+function tierToRarity(ovr, ability) { if (ability) return 'ultra_rare'; return ovr >= 76 ? 'ultra_rare' : ovr >= 68 ? 'super_rare' : ovr >= 62 ? 'rare' : 'common'; }
 
 const ABILITY_RARITY_COLORS = { 1: '#20c8a0', 2: '#c060e0', 3: '#e8c060' };
 
@@ -39,11 +40,11 @@ const LAST_NAMES = [
   'VALE','QUILL','STORR','VANCE','GALE','BLAZE','WARD','AEON','FREY','ZORN',
 ];
 const STAT_RANGES = {
-  PG: { spd:[68,88], dex:[63,80], jmp:[48,70], acc:[62,82] },
-  SG: { spd:[58,78], dex:[63,83], jmp:[52,72], acc:[68,88] },
-  SF: { spd:[58,75], dex:[58,77], jmp:[58,77], acc:[58,77] },
-  PF: { spd:[48,65], dex:[52,70], jmp:[63,83], acc:[52,70] },
-  C:  { spd:[42,58], dex:[42,58], jmp:[68,88], acc:[48,65] },
+  PG: { spd:[42,99], dex:[35,95], jmp:[20,82], acc:[35,95] },
+  SG: { spd:[32,92], dex:[38,99], jmp:[22,82], acc:[42,99] },
+  SF: { spd:[30,92], dex:[30,92], jmp:[30,92], acc:[30,92] },
+  PF: { spd:[18,72], dex:[22,78], jmp:[38,99], acc:[22,78] },
+  C:  { spd:[15,62], dex:[15,62], jmp:[42,99], acc:[18,70] },
 };
 const OVR_WEIGHTS = {
   PG: { spd:0.35, dex:0.30, jmp:0.10, acc:0.25 },
@@ -147,7 +148,7 @@ function MiniPlayerSVG({ jerseyColor, phase = 0 }) {
 function BurstOverlay({ card, originX, originY, startTick, tick }) {
   if (startTick == null) return null;
   if (!card.ability) return null;
-  const tierKey = getPlayerTierKey(card.ovr);
+  const tierKey = getPlayerTierKey(card.ovr, card.ability);
   const def = TIER_DEFS[tierKey];
 
   const t = tick - startTick;
@@ -749,7 +750,7 @@ function AcmStatRow({ lbl, val, color }) {
 
 // ─── Animated card slot ────────────────────────────────────────────────────
 function DraftCardAnim({ card, idx, anim, picked, dimmed, onClick, tick, burstStart, universeId }) {
-  const tierKey = getPlayerTierKey(card.ovr);
+  const tierKey = getPlayerTierKey(card.ovr, card.ability);
   const tier    = TIER_DEFS[tierKey];
   const { phase, face, scaleX, revealed, dnaProgress, matProgress } = anim;
 
@@ -863,10 +864,10 @@ function getFtueLine(phase, pickNum, total, tick, hasAbility = false) {
   if (phase === 'revealed') {
     if (hasAbility) return "Lucky! A player with an ability!";
     if (pickNum === 1) return "Pick one! Look at the OVR.";
-    if (pickNum === 2) return "Acc influences Shot accuracy.";
-    if (pickNum === 3) return "Jmp helps with blocking and jump ball.";
-    if (pickNum === 4) return "Spd helps with steals and dunks.";
-    if (pickNum === 5) return "Dex helps with steals and blocks.";
+    if (pickNum === 2) return "TIP: Acc influences Shot accuracy.";
+    if (pickNum === 3) return "TIP: Jmp helps with blocking and jump ball.";
+    if (pickNum === 4) return "TIP: Spd helps with steals and dunks.";
+    if (pickNum === 5) return "TIP: Dex helps with steals and blocks.";
     return "Pick the one that fits your team.";
   }
   if (phase === 'confirmed') return "Nice pick! Locking it in...";
@@ -1068,7 +1069,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
     const saves = await Promise.allSettled(
       lineup.map(player => trpc.draft.free.mutate({
         name: player.name,
-        rarity: tierToRarity(player.ovr),
+        rarity: tierToRarity(player.ovr, player.ability),
         spd: player.spd, dex: player.dex, jmp: player.jmp, acc: player.acc,
         ability: player.ability ?? null,
       }))
@@ -1390,7 +1391,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
               const isTarget  = (!!selectedId || !!dragId) && !assigned;
               const isOccupied = !!assigned;
               const isDropOver = dropTarget === pos && !!dragId;
-              const tierKey   = assigned ? getPlayerTierKey(assigned.ovr) : null;
+              const tierKey   = assigned ? getPlayerTierKey(assigned.ovr, assigned.ability) : null;
               const abilityColor = assigned?.ability ? ABILITY_RARITY_COLORS[assigned.ability.rarity] : null;
               return (
                 <div key={pos}
@@ -1434,7 +1435,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
           {/* Mini player cards */}
           <div className="assign-cards">
             {roster.map((player,i) => {
-              const tierKey    = getPlayerTierKey(player.ovr);
+              const tierKey    = getPlayerTierKey(player.ovr, player.ability);
               const tier       = TIER_DEFS[tierKey];
               const posColor   = POS_COLORS[player.pos];
               const assignedPos = POS_ORDER.find(pos => assignments[pos]?.id===player.id) ?? null;
@@ -1507,6 +1508,8 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
       {/* FTUE intro coach — shown once before the scan, after the user
           clicks "INITIATE DRAFT SEQUENCE". Clicking it kicks off the scan. */}
       {coachIntro && (
+        <>
+        <div style={{ position:'fixed', inset:0, zIndex:19, cursor:'pointer' }} onClick={advanceCoachIntro} />
         <div className="draft-coach" style={{ pointerEvents: 'auto' }}>
           <svg viewBox="0 0 600 112" preserveAspectRatio="xMidYMid meet"
             width="100%" height="112" style={{ display: 'block', cursor: 'pointer' }}
@@ -1521,10 +1524,13 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
             />
           </svg>
         </div>
+        </>
       )}
 
       {/* FTUE coach dialogue — blocks card interaction until dismissed. */}
       {coachActive && !coachIntro && (
+        <>
+        <div style={{ position:'fixed', inset:0, zIndex:19, cursor:'pointer' }} onClick={() => setCoachDismissed(true)} />
         <div className="draft-coach" style={{ pointerEvents: 'auto' }}>
           <svg viewBox="0 0 600 112" preserveAspectRatio="xMidYMid meet"
             width="100%" height="112" style={{ display: 'block', cursor: 'pointer' }}
@@ -1541,6 +1547,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
             />
           </svg>
         </div>
+        </>
       )}
     </div>
   );

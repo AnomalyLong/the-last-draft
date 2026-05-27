@@ -250,18 +250,6 @@ function Roster({ side, players, revealed }) {
                     <span className="player-ovr-label">OVR</span>
                     <span className="player-ovr-val">{ovr}</span>
                   </div>
-                  <div className="player-stat-row">
-                    SPD <span>{p.spd ?? '—'}</span>
-                  </div>
-                  <div className="player-stat-row">
-                    DEX <span>{p.dex ?? '—'}</span>
-                  </div>
-                  <div className="player-stat-row">
-                    JMP <span>{p.jmp ?? '—'}</span>
-                  </div>
-                  <div className="player-stat-row">
-                    ACC <span>{p.acc ?? '—'}</span>
-                  </div>
                   <div className="player-abilities">
                     {abilities.length > 0 ? (
                       abilities.slice(0, 3).map((ab, idx) => (
@@ -361,7 +349,7 @@ function SearchingView({ elapsed, progress }) {
 // ── Main screen ─────────────────────────────────────────────────────────────
 
 export function MatchmakingScreen({ homeRoster, homeTeamName, awayTeam, onReady, isMobile: isMobileProp }) {
-  const [phase, setPhase] = useState('searching'); // 'searching' | 'found' | 'vs'
+  const [phase, setPhase] = useState('searching'); // 'searching' | 'found' | 'vs' | 'ready'
   const [elapsed, setElapsed] = useState(0);
   const [countdown, setCountdown] = useState(5);
   const onReadyRef = useRef(onReady);
@@ -400,9 +388,7 @@ export function MatchmakingScreen({ homeRoster, homeTeamName, awayTeam, onReady,
       setCountdown(c => {
         if (c <= 1) {
           clearInterval(id);
-          // Defer onReady out of the setState updater so callers can call
-          // setState in their handler without violating React's render rules.
-          setTimeout(() => onReadyRef.current?.(), 0);
+          setTimeout(() => setPhase('ready'), 0);
           return 0;
         }
         return c - 1;
@@ -412,7 +398,7 @@ export function MatchmakingScreen({ homeRoster, homeTeamName, awayTeam, onReady,
   }, [phase]);
 
   const progress = Math.min(1, elapsed / 5);
-  const opponentRevealed = phase === 'found' || phase === 'vs';
+  const opponentRevealed = phase === 'found' || phase === 'vs' || phase === 'ready';
 
   const homeTeam = {
     name: homeTeamName ?? 'HOME',
@@ -544,6 +530,12 @@ export function MatchmakingScreen({ homeRoster, homeTeamName, awayTeam, onReady,
               <span>TIP-OFF IN</span>
               <span className="count">{countdown}</span>
               <span>READY UP</span>
+            </div>
+          )}
+
+          {phase === 'ready' && (
+            <div className="launch-bar tap-to-start" onClick={() => onReadyRef.current?.()}>
+              <span>TAP TO START</span>
             </div>
           )}
 
