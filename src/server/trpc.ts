@@ -213,7 +213,7 @@ export const appRouter = t.router({
     free: publicProcedure
       .input(z.object({
         name: z.string().min(1).max(32),
-        rarity: z.enum(['common', 'rare', 'epic', 'legendary']),
+        rarity: z.enum(['common', 'rare', 'super_rare', 'ultra_rare']),
         spd: z.number().int().min(0).max(99).optional(),
         dex: z.number().int().min(0).max(99).optional(),
         jmp: z.number().int().min(0).max(99).optional(),
@@ -232,7 +232,7 @@ export const appRouter = t.router({
     credit: publicProcedure
       .input(z.object({
         name: z.string().min(1).max(32),
-        rarity: z.enum(['common', 'rare', 'epic', 'legendary']),
+        rarity: z.enum(['common', 'rare', 'super_rare', 'ultra_rare']),
         cost: z.number().int().positive(),
         spd: z.number().int().min(0).max(99).optional(),
         dex: z.number().int().min(0).max(99).optional(),

@@ -289,7 +289,7 @@ const MISSIONS = {
 function DailyMissionsSection() {
   const [tab, setTab] = React.useState('daily');
   const missions = MISSIONS[tab];
-  const resetLabel = 'MISSIONS COMING SOON';
+  const resetLabel = 'MISSIONS DISABLED CURRENTLY';
 
   return (
     <div className="lb2-missions" data-testid="missions">

@@ -1,7 +1,7 @@
 import { redis } from '@devvit/web/server';
 
 export type PlayerSource = 'draft' | 'credit' | 'purchase';
-export type PlayerRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type PlayerRarity = 'common' | 'rare' | 'super_rare' | 'ultra_rare';
 export const ROLES = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
 export type Role = (typeof ROLES)[number];
 
