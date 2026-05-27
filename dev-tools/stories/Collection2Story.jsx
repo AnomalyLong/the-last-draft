@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
 import { PhoneFrameExpanded, DEVICES } from '../PhoneFrame.jsx';
 import { CrtOverlay } from '../StoryFrame.jsx';
-import { CollectionScreenNew } from '@src/components/CollectionScreenNew.jsx';
+import { CollectionScreen } from '@src/components/CollectionScreen.jsx';
 
 const SAMPLE_ROSTER = [
-  { id: 1,  owner: 'TestUser', name: 'KAEL THORNE',  level: 5, xp: 340, source: 'draft',  rarity: 'rare',      spd: 81, dex: 73, jmp: 58, acc: 70, ability: { id: 7, name: 'SHARPSHOOTER', desc: 'FADE AWAY',              rarity: 1 }, abilities: [],                                                                          statBonuses: { spd: 2, dex: 0, jmp: 0, acc: 1 } },
-  { id: 2,  owner: 'TestUser', name: 'NOVA STRAND',  level: 3, xp: 180, source: 'draft',  rarity: 'common',    spd: 66, dex: 77, jmp: 60, acc: 80, ability: null,                                                                              abilities: [],                                                                          statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 } },
-  { id: 3,  owner: 'TestUser', name: 'ZEX FROST',    level: 8, xp: 620, source: 'draft',  rarity: 'epic',      spd: 70, dex: 74, jmp: 72, acc: 73, ability: { id: 5, name: 'PLAY MAKER',    desc: 'PASS INCREASE SHOT %',   rarity: 2 }, abilities: [{ id: 3, name: 'SPEEDY',        desc: 'SPD BURST',   rarity: 1 }], statBonuses: { spd: 0, dex: 4, jmp: 2, acc: 0 } },
-  { id: 4,  owner: 'TestUser', name: 'JAX STEELE',   level: 2, xp: 80,  source: 'draft',  rarity: 'common',    spd: 53, dex: 61, jmp: 79, acc: 57, ability: null,                                                                              abilities: [],                                                                          statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 } },
-  { id: 5,  owner: 'TestUser', name: 'REX VOLKOV',   level: 6, xp: 460, source: 'draft',  rarity: 'rare',      spd: 47, dex: 53, jmp: 84, acc: 56, ability: { id: 2, name: 'IRON BLOCK',    desc: 'BLOCK BONUS',            rarity: 1 }, abilities: [],                                                                          statBonuses: { spd: 0, dex: 0, jmp: 3, acc: 0 } },
-  { id: 6,  owner: 'TestUser', name: 'ACE MARCH',    level:12, xp: 980, source: 'credit', rarity: 'legendary', spd: 76, dex: 82, jmp: 65, acc: 88, ability: { id: 1, name: 'DUNK MASTER',   desc: 'DUNK RATE UP',           rarity: 3 }, abilities: [{ id: 8, name: 'ANKLE BREAKER', desc: 'SPIN MOVES', rarity: 1 }], statBonuses: { spd: 3, dex: 5, jmp: 0, acc: 4 } },
-  { id: 7,  owner: 'TestUser', name: 'ZEPH CRANE',   level: 1, xp: 20,  source: 'draft',  rarity: 'common',    spd: 73, dex: 67, jmp: 52, acc: 64, ability: null,                                                                              abilities: [],                                                                          statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 } },
-  { id: 8,  owner: 'TestUser', name: 'AXEL ECHO',    level: 4, xp: 260, source: 'draft',  rarity: 'rare',      spd: 60, dex: 74, jmp: 67, acc: 76, ability: { id: 6, name: 'PICK POCKET',   desc: 'INCREASED STEAL',        rarity: 2 }, abilities: [],                                                                          statBonuses: { spd: 0, dex: 2, jmp: 0, acc: 0 } },
-  { id: 9,  owner: 'TestUser', name: 'RYX BLADE',    level: 1, xp: 40,  source: 'draft',  rarity: 'common',    spd: 52, dex: 56, jmp: 76, acc: 59, ability: null,                                                                              abilities: [],                                                                          statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 } },
-  { id: 10, owner: 'TestUser', name: 'LYRA VANCE',   level: 7, xp: 540, source: 'credit', rarity: 'epic',      spd: 72, dex: 80, jmp: 68, acc: 84, ability: { id: 8, name: 'ANKLE BREAKER', desc: 'SPIN MOVES',             rarity: 1 }, abilities: [{ id: 5, name: 'PLAY MAKER',    desc: 'PASS INCREASE SHOT %', rarity: 2 }], statBonuses: { spd: 2, dex: 3, jmp: 0, acc: 2 } },
+  { id: 1,  owner: 'TestUser', name: 'KAEL THORNE',  level: 5, xp: 340, source: 'draft',  rarity: 'ultra_rare',  spd: 81, dex: 73, jmp: 58, acc: 70, ability: { id: 7, name: 'SHARPSHOOTER', desc: 'FADE AWAY',              rarity: 1 }, abilities: [],                                                                          statBonuses: { spd: 2, dex: 0, jmp: 0, acc: 1 } },
+  { id: 2,  owner: 'TestUser', name: 'NOVA STRAND',  level: 3, xp: 180, source: 'draft',  rarity: 'super_rare',  spd: 66, dex: 77, jmp: 60, acc: 80, ability: null,                                                                              abilities: [],                                                                          statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 } },
+  { id: 3,  owner: 'TestUser', name: 'ZEX FROST',    level: 8, xp: 620, source: 'draft',  rarity: 'super_rare',  spd: 70, dex: 74, jmp: 72, acc: 73, ability: { id: 5, name: 'PLAY MAKER',    desc: 'PASS INCREASE SHOT %',   rarity: 2 }, abilities: [{ id: 3, name: 'SPEEDY',        desc: 'SPD BURST',   rarity: 1 }], statBonuses: { spd: 0, dex: 4, jmp: 2, acc: 0 } },
+  { id: 4,  owner: 'TestUser', name: 'JAX STEELE',   level: 2, xp: 80,  source: 'draft',  rarity: 'rare',        spd: 53, dex: 61, jmp: 79, acc: 57, ability: null,                                                                              abilities: [],                                                                          statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 } },
+  { id: 5,  owner: 'TestUser', name: 'REX VOLKOV',   level: 6, xp: 460, source: 'draft',  rarity: 'super_rare',  spd: 47, dex: 53, jmp: 84, acc: 56, ability: { id: 2, name: 'IRON BLOCK',    desc: 'BLOCK BONUS',            rarity: 1 }, abilities: [],                                                                          statBonuses: { spd: 0, dex: 0, jmp: 3, acc: 0 } },
+  { id: 6,  owner: 'TestUser', name: 'ACE MARCH',    level:12, xp: 980, source: 'credit', rarity: 'ultra_rare',  spd: 76, dex: 82, jmp: 65, acc: 88, ability: { id: 1, name: 'DUNK MASTER',   desc: 'DUNK RATE UP',           rarity: 3 }, abilities: [{ id: 8, name: 'ANKLE BREAKER', desc: 'SPIN MOVES', rarity: 1 }], statBonuses: { spd: 3, dex: 5, jmp: 0, acc: 4 } },
+  { id: 7,  owner: 'TestUser', name: 'ZEPH CRANE',   level: 1, xp: 20,  source: 'draft',  rarity: 'ultra_rare',  spd: 73, dex: 67, jmp: 52, acc: 64, ability: null,                                                                              abilities: [],                                                                          statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 } },
+  { id: 8,  owner: 'TestUser', name: 'AXEL ECHO',    level: 4, xp: 260, source: 'draft',  rarity: 'super_rare',  spd: 60, dex: 74, jmp: 67, acc: 76, ability: { id: 6, name: 'PICK POCKET',   desc: 'INCREASED STEAL',        rarity: 2 }, abilities: [],                                                                          statBonuses: { spd: 0, dex: 2, jmp: 0, acc: 0 } },
+  { id: 9,  owner: 'TestUser', name: 'RYX BLADE',    level: 1, xp: 40,  source: 'draft',  rarity: 'rare',        spd: 52, dex: 56, jmp: 76, acc: 59, ability: null,                                                                              abilities: [],                                                                          statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 } },
+  { id: 10, owner: 'TestUser', name: 'LYRA VANCE',   level: 7, xp: 540, source: 'credit', rarity: 'ultra_rare',  spd: 72, dex: 80, jmp: 68, acc: 84, ability: { id: 8, name: 'ANKLE BREAKER', desc: 'SPIN MOVES',             rarity: 1 }, abilities: [{ id: 5, name: 'PLAY MAKER',    desc: 'PASS INCREASE SHOT %', rarity: 2 }], statBonuses: { spd: 2, dex: 3, jmp: 0, acc: 2 } },
+  { id: 11, owner: 'TestUser', name: 'COLE DUTCH',   level: 1, xp: 0,   source: 'draft',  rarity: 'common',      spd: 48, dex: 52, jmp: 50, acc: 54, ability: null,                                                                              abilities: [],                                                                          statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 } },
 ];
 
 const SAMPLE_LINEUP = { PG: 1, SG: 2, SF: 3, PF: 4, C: 5 };
@@ -32,7 +33,7 @@ const DESKTOP_PRESETS = [
 ];
 
 export default function Collection2Story() {
-  const [rosterSize, setRosterSize] = useState(10);
+  const [rosterSize, setRosterSize] = useState(11);
   const [credits, setCredits]       = useState(1250);
   const [mobile, setMobile]         = useState(false);
   const [deviceKey, setDeviceKey]   = useState('iphone14');
@@ -81,7 +82,7 @@ export default function Collection2Story() {
         )}
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           Roster size
-          <input type="range" min={0} max={10} value={rosterSize}
+          <input type="range" min={0} max={11} value={rosterSize}
             onChange={(e) => setRosterSize(Number(e.target.value))} style={{ width: 80 }} />
           <span style={{ color: '#ccc', minWidth: 20 }}>{rosterSize}</span>
         </label>
@@ -118,7 +119,7 @@ export default function Collection2Story() {
 
       {mobile ? (
         <PhoneFrameExpanded device={DEVICES[deviceKey]}>
-          <CollectionScreenNew
+          <CollectionScreen
             roster={SAMPLE_ROSTER.slice(0, rosterSize)}
             lineup={SAMPLE_LINEUP}
             username="TestUser"
@@ -139,7 +140,7 @@ export default function Collection2Story() {
           background: '#02060a',
           flexShrink: 0,
         }}>
-          <CollectionScreenNew
+          <CollectionScreen
             roster={SAMPLE_ROSTER.slice(0, rosterSize)}
             lineup={SAMPLE_LINEUP}
             username="TestUser"

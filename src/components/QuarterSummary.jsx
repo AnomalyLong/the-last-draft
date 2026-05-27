@@ -13,9 +13,10 @@ const LABEL_CX_OFF = PANEL_X_OFF + 90;   // label center
 const VAL_CX_OFF   = PANEL_X_OFF + 270;  // value center
 
 const TEAM_Y      = PANEL_Y + 42;
-const DIV1_Y      = PANEL_Y + 64;  // pushed down to clear scale-2 team name (18px)
-const STAT_Y_BASE = PANEL_Y + 76;
-const STAT_STEP   = 24;
+const GSCORE_Y    = PANEL_Y + 62;  // game score (home – away) below team name
+const DIV1_Y      = PANEL_Y + 82;
+const STAT_Y_BASE = PANEL_Y + 94;
+const STAT_STEP   = 22;
 const DIV2_Y        = STAT_Y_BASE + 4 * STAT_STEP + 4;
 const WIN_BONUS_Y   = DIV2_Y + 16;
 const SCORE_Y       = WIN_BONUS_Y + 30;  // below win bonus (scale-3 = 27px + 3px gap)
@@ -219,6 +220,16 @@ export function QuarterSummary({ quarterSummary, homeTeamName, cameraX, onDismis
           <PixelTextC text={(homeTeamName || 'HOME').toUpperCase().slice(0, 8)}
             cx={cx} y={TEAM_Y}
             scale={2} fill="#20c8ff" outline="#001020" />
+          {/* Game score: home – away */}
+          {quarterSummary.homeScore != null && quarterSummary.awayScore != null && (
+            <PixelTextC
+              text={`${quarterSummary.homeScore} - ${quarterSummary.awayScore}`}
+              cx={cx} y={GSCORE_Y}
+              scale={2}
+              fill={quarterSummary.homeScore >= quarterSummary.awayScore ? '#ffe060' : '#e8f4ff'}
+              outline="#001020"
+            />
+          )}
           <rect x={px + 18} y={DIV1_Y} width={PANEL_W - 36} height={1}
             fill="#152030" shapeRendering="crispEdges" />
         </g>

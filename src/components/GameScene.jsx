@@ -21,6 +21,7 @@ import { QuarterSummary } from './QuarterSummary.jsx';
 import { GameOverScreen } from './GameOverScreen.jsx';
 import { PlayPickerOverlay } from './PlayPickerOverlay.jsx';
 import { DefensePickerOverlay } from './DefensePickerOverlay.jsx';
+import { DefenseFtueOverlay } from './DefenseFtueOverlay.jsx';
 import { OptionsOverlay } from './OptionsOverlay.jsx';
 import { SpecialMoveCard } from './SpecialMoveCard.jsx';
 import { BballTip } from './BballTip.jsx';
@@ -63,6 +64,7 @@ export function GameScene({
   scorePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade,
   playPickState, onPickPlay,
   defensePickState, onPickDefense,
+  defenseFtueState, onDismissDefenseFtue,
   quarterAnnouncement, playerAlpha,
   xpFlyup, stealFlyup, blockFlyup,
   quarterSummary, onDismissQuarterSummary,
@@ -99,9 +101,9 @@ export function GameScene({
   const awayPortEntry = awayRoster[POS_ORDER.indexOf(awayCurrent.role)] ?? null;
   const homeHasBall   = carrier.team === 'home';
 
-  const anyOverlay = !!(levelUpState || quarterSummary || gameOver || showOptions || showTeams || playPickState || defensePickState || gameTip);
+  const anyOverlay = !!(levelUpState || quarterSummary || gameOver || showOptions || showTeams || playPickState || defensePickState || defenseFtueState || gameTip);
   // Overlays that live in the separate overlay SVG (full ZOOM_W×TOTAL_H, not zoomed)
-  const anyModalOverlay = !!(levelUpState || quarterSummary || gameOver || showOptions || playPickState || defensePickState || gameTip || showTeams);
+  const anyModalOverlay = !!(levelUpState || quarterSummary || gameOver || showOptions || playPickState || defensePickState || defenseFtueState || gameTip || showTeams);
 
   // Measure the container to compute pixel-accurate panel height and viewBox extension.
   // CSS cqw/cqh resolve against the browser viewport in some contexts (devtools phone frame),
@@ -301,6 +303,7 @@ export function GameScene({
             )}
             {playPickState && <PlayPickerOverlay cameraX={0} onPick={onPickPlay} />}
             {defensePickState && <DefensePickerOverlay cameraX={0} onPick={onPickDefense} />}
+            {defenseFtueState && <DefenseFtueOverlay cameraX={0} onDone={onDismissDefenseFtue} />}
             {levelUpState && (
               <LevelUpOverlay
                 type={levelUpState.type ?? 'ability'}

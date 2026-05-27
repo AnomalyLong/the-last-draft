@@ -5,7 +5,7 @@ import { context, reddit, redis } from '@devvit/web/server';
 import { z } from 'zod';
 
 import { getOrCreateUser, getUser, grantFreeDrafts, setTeamName, userKey, ledgerKey, gamesKey, MAX_ENERGY, USERS_INDEX_KEY } from './core/user';
-import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, updatePlayerProgress, ROLES, type Role, rosterKey, lineupKey } from './core/player';
+import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, setLineup, updatePlayerProgress, ROLES, type Role, rosterKey, lineupKey } from './core/player';
 import { freeDraft, creditDraft } from './core/draft';
 import { startGame, recordPlay, endGame, getGame, type PlayEvent } from './core/game';
 import {
@@ -85,6 +85,24 @@ export const appRouter = t.router({
         const username = await requireUsername();
         const result = await setLineupSlot(username, input.role as Role, input.playerId);
         if (!result.success) throw new TRPCError({ code: 'FORBIDDEN', message: 'Player not in roster' });
+        return result;
+      }),
+
+    // Full-lineup replace — client sends the complete {role: playerId} map.
+    setLineup: publicProcedure
+      .input(z.object({
+        lineup: z.object({
+          PG: z.number().int().positive().optional(),
+          SG: z.number().int().positive().optional(),
+          SF: z.number().int().positive().optional(),
+          PF: z.number().int().positive().optional(),
+          C:  z.number().int().positive().optional(),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        const username = await requireUsername();
+        const result = await setLineup(username, input.lineup as Partial<Record<Role, number>>);
+        if (!result.success) throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid lineup (unowned or duplicate player)' });
         return result;
       }),
 

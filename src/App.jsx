@@ -10,7 +10,7 @@ function tryExpand(nativeEvent) {
   try { requestExpandedMode(nativeEvent, 'game'); } catch {}
 }
 
-import { TitleScreen, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreenNew, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FtueIntroVideo } from './components/index.js';
+import { TitleScreen, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FtueIntroVideo } from './components/index.js';
 import TeamSetupView from '../lobby/team-setup.jsx';
 import '../lobby/team-setup.css';
 import '../lobby/mobile-team-setup.css';
@@ -222,11 +222,12 @@ export default function App() {
       )}
 
       {!isInline && scene === 'collection' && (
-        <CollectionScreenNew
+        <CollectionScreen
           roster={rawRoster}
           lineup={rawLineup}
           username={username}
           credits={serverCredits}
+          onLineupChange={(next) => setRawLineup({ ...next })}
           onBack={() => setScene('title')}
         />
       )}

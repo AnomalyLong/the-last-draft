@@ -110,7 +110,45 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const firstLevelUpDoneRef = useRef(false); // first home level-up always grants an ability
   const [playPickState, setPlayPickState] = useState(false);
   const [defensePickState, setDefensePickState] = useState(false);
+  const [defenseFtueState, setDefenseFtueState] = useState(false);
   const defensePickTimerRef = useRef(null);
+  const firstDefensePickDoneRef = useRef(false);
+  // Continuation to run once the user picks a defense (or auto-dismiss fires).
+  const afterDefensePickRef = useRef(null);
+
+  // Show the defense picker (or FTUE the first time). Pauses the game while shown.
+  // `onContinue` is invoked once the user picks or auto-dismiss fires.
+  // Safe to call only when no animations are in flight (e.g. at loop entry).
+  const showDefensePicker = (onContinue) => {
+    afterDefensePickRef.current = onContinue ?? null;
+    gamePausedRef.current = true;
+    stopTimer();
+    // FTUE explainer only for actual first-time users — once isFtue flips,
+    // skip straight to the picker on subsequent sessions.
+    if (isFtue && !firstDefensePickDoneRef.current) {
+      firstDefensePickDoneRef.current = true;
+      setDefenseFtueState(true);
+      return;
+    }
+    setDefensePickState(true);
+    if (defensePickTimerRef.current) clearTimeout(defensePickTimerRef.current);
+    defensePickTimerRef.current = setTimeout(() => {
+      onPickDefenseRef.current?.(null); // auto-dismiss → same flow as a manual pick
+    }, DEFENSE_PICK_MS);
+  };
+
+  const onDismissDefenseFtue = () => {
+    setDefenseFtueState(false);
+    // Now show the picker with the regular auto-dismiss timer.
+    setDefensePickState(true);
+    if (defensePickTimerRef.current) clearTimeout(defensePickTimerRef.current);
+    defensePickTimerRef.current = setTimeout(() => {
+      onPickDefenseRef.current?.(null);
+    }, DEFENSE_PICK_MS);
+  };
+
+  // Ref so showDefensePicker's setTimeout can call the latest onPickDefense without TDZ issues.
+  const onPickDefenseRef = useRef(null);
   const [xpFlyup, setXpFlyup] = useState(null);
   const xpFlyupIdRef = useRef(0);
   const [stealFlyup, setStealFlyup] = useState(null);
@@ -640,15 +678,6 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
                 // Give ball directly to PG and move both teams into formation.
                 // Loop fires as soon as the PG arrives — zero idle gap.
                 
-                // Show 3-second defense picker (no logic wired yet — just UI).
-                if (stealer.team === 'away') {
-                  setDefensePickState(true);
-                  if (defensePickTimerRef.current) clearTimeout(defensePickTimerRef.current);
-                  defensePickTimerRef.current = setTimeout(() => {
-                    setDefensePickState(false);
-                    defensePickTimerRef.current = null;
-                  }, DEFENSE_PICK_MS);
-                }
                 const pgId = stealer.team === 'home' ? 1 : 6;
                 playersRef.current = playersRef.current.map(p => ({
                   ...p, hasBall: p.id === pgId,
@@ -934,17 +963,6 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         playersRef.current = playersRef.current.map(p => p.id === rebounder.id ? { ...p, hasBall: true } : p);
         setPlayers(prev => prev.map(p => p.id === rebounder.id ? { ...p, hasBall: true } : p));
         addLog(`${rebounder.role} (${rebounder.team}) grabs the board!`);
-
-        // Defense picker only when the shooter was home and away ended up with the ball.
-        const shooter = playersRef.current.find(p => p.id === excludeId);
-        if (rebounder.team === 'away' && shooter?.team === 'home') {
-          setDefensePickState(true);
-          if (defensePickTimerRef.current) clearTimeout(defensePickTimerRef.current);
-          defensePickTimerRef.current = setTimeout(() => {
-            setDefensePickState(false);
-            defensePickTimerRef.current = null;
-          }, DEFENSE_PICK_MS);
-        }
 
         if (onComplete) onComplete();
       });
@@ -1368,14 +1386,6 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     ];
     otherMoves.forEach(({ id, gx, gy }) => smoothMoveTo(gx, gy, id, id <= 5 ? true : false));
     addLog('away throw-in...');
-
-    // Show 3-second defense picker (no logic wired yet — just UI).
-    setDefensePickState(true);
-    if (defensePickTimerRef.current) clearTimeout(defensePickTimerRef.current);
-    defensePickTimerRef.current = setTimeout(() => {
-      setDefensePickState(false);
-      defensePickTimerRef.current = null;
-    }, DEFENSE_PICK_MS);
 
     setTimeout(() => {
       const startCx = 660, startCy = 216;
@@ -1918,24 +1928,27 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   loopAwayRef.current = () => {
     if (!gameLoopActiveRef.current || gamePausedRef.current) return;
     ensurePGHasBall('away', () => {
-      if (!gameLoopActiveRef.current || gamePausedRef.current) return;
-      startWander('away');
-      startGuarding('home');
+      if (!gameLoopActiveRef.current) return;
 
-//TODO: Check to see what User selected as Defense
-      
-      /** Motion offence: 1-3 passes after getting into position **/
-      triggerMotionOffence(() => {
-        if (!gameLoopActiveRef.current || gamePausedRef.current) return;
-        const finishMake = () => {
-          if (!gameLoopActiveRef.current || gamePausedRef.current) {
-            resumeAfterPauseRef.current = finishMake;
-            return;
-          }
-          triggerThrowInHome(() => loopHomeRef.current?.());
-        };
-        attemptShotRef.current(finishMake);
-      }, onPassSteal);
+      // Defense picker fires at loop entry — nothing is in motion, so pausing is safe.
+      // The continuation runs after the user picks (or auto-dismiss).
+      showDefensePicker(() => {
+        if (!gameLoopActiveRef.current) return;
+        startWander('away');
+        startGuarding('home');
+
+        triggerMotionOffence(() => {
+          if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+          const finishMake = () => {
+            if (!gameLoopActiveRef.current || gamePausedRef.current) {
+              resumeAfterPauseRef.current = finishMake;
+              return;
+            }
+            triggerThrowInHome(() => loopHomeRef.current?.());
+          };
+          attemptShotRef.current(finishMake);
+        }, onPassSteal);
+      });
     });
   };
 
@@ -2083,6 +2096,18 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
 
       } else if (op === 'testGamePlay') {
         if (gameLoopActiveRef.current) { addLog('already running — type stopGamePlay', 'err'); return; }
+        // Reset end-of-game state from any previous match — otherwise the
+        // GameOverScreen / quarter summary from the last game would reappear
+        // immediately when the new game scene mounts.
+        setGameOver(null);
+        setQuarterSummary(null);
+        setQuarterAnnouncement(null);
+        setHomeScore(0);  homeScoreRef.current = 0;
+        setAwayScore(0);  awayScoreRef.current = 0;
+        setQuarter(1);
+        setTime(60);
+        setTotalCredits(0); totalCreditsRef.current = 0;
+        setPlayerAlpha(1);
         gameLoopActiveRef.current = true;
         bgMusic.start();
         startTimer(1);
@@ -2161,13 +2186,12 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         setPlayPickState(true);
 
       } else if (op === 'testPickDefense') {
-        addLog('testPickDefense — opening defense picker overlay (3s)');
-        setDefensePickState(true);
-        if (defensePickTimerRef.current) clearTimeout(defensePickTimerRef.current);
-        defensePickTimerRef.current = setTimeout(() => {
-          setDefensePickState(false);
-          defensePickTimerRef.current = null;
-        }, DEFENSE_PICK_MS);
+        addLog('testPickDefense — opening defense picker overlay');
+        showDefensePicker();
+
+      } else if (op === 'resetDefenseFtue') {
+        firstDefensePickDoneRef.current = false;
+        addLog('defense FTUE reset — next testPickDefense will show the explainer');
 
       } else if (op === 'testHomePG') {
         setPlayers(prev => prev.map(p => ({ ...p, hasBall: p.id === 1 })));
@@ -2254,7 +2278,13 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     if (def) addLog(`Defense: ${def.name}`);
     setDefensePickState(false);
     if (defensePickTimerRef.current) { clearTimeout(defensePickTimerRef.current); defensePickTimerRef.current = null; }
+    gamePausedRef.current = false;
+    startTimer(timerSpeedRef.current);
+    const cont = afterDefensePickRef.current;
+    afterDefensePickRef.current = null;
+    if (cont) setTimeout(cont, 100);
   };
+  onPickDefenseRef.current = onPickDefense;
 
   const onPickPlay = (play) => {
     if (play) addLog(`Play called: ${play.name}`);
@@ -2341,5 +2371,5 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     });
   };
 
-  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, defensePickState, onPickDefense, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
+  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, defensePickState, onPickDefense, defenseFtueState, onDismissDefenseFtue, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
 }

@@ -18,12 +18,12 @@ const POS_COLORS = {
 
 // Tier defs: gold = OVR≥71 (best, biggest burst), blue = OVR 64-70, silver = OVR<64
 const TIER_DEFS = {
-  silver: { label: 'SILVER PICK', color: '#b0b8c8', glow: '#d8dde6', rarity: 0, burstDur: 0,   burstSpeed: 0, sparkles: 0  },
-  blue:   { label: 'BLUE PICK',   color: '#30c0e0', glow: '#60d8f0', rarity: 1, burstDur: 138, burstSpeed: 5, sparkles: 12 },
-  gold:   { label: 'GOLD PICK',   color: '#ffc94a', glow: '#ffe080', rarity: 2, burstDur: 175, burstSpeed: 7, sparkles: 20 },
+  silver: { label: 'RARE',       color: '#b0b8c8', glow: '#d8dde6', rarity: 0, burstDur: 0,   burstSpeed: 0, sparkles: 0  },
+  blue:   { label: 'SUPER RARE', color: '#30c0e0', glow: '#60d8f0', rarity: 1, burstDur: 138, burstSpeed: 5, sparkles: 12 },
+  gold:   { label: 'ULTRA RARE', color: '#ffc94a', glow: '#ffe080', rarity: 2, burstDur: 175, burstSpeed: 7, sparkles: 20 },
 };
 function getPlayerTierKey(ovr) { return ovr >= 71 ? 'gold' : ovr >= 64 ? 'blue' : 'silver'; }
-function tierToRarity(ovr) { return ovr >= 75 ? 'legendary' : ovr >= 71 ? 'rare' : 'common'; }
+function tierToRarity(ovr) { return ovr >= 71 ? 'ultra_rare' : ovr >= 64 ? 'super_rare' : ovr >= 58 ? 'rare' : 'common'; }
 
 const ABILITY_RARITY_COLORS = { 1: '#20c8a0', 2: '#c060e0', 3: '#e8c060' };
 
@@ -855,16 +855,22 @@ function getFtueLine(phase, pickNum, total, tick, hasAbility = false) {
     return "Downloading the genetic blueprints...";
   }
   if (phase === 'ready') {
-    if (pickNum === 1) return "Tap a card to reveal — or FLIP ALL.";
+    if (pickNum === 1) return "Tap a card to reveal all three.";
     if (pickNum === total) return "Last pick! Make it count.";
-    return `Pick ${pickNum} of ${total}. Three new candidates incoming.`;
+    if (pickNum === 2) return "Second pick! 4 more to go!";
+    return null;
   }
   if (phase === 'revealed') {
     if (hasAbility) return "Lucky! A player with an ability!";
     if (pickNum === 1) return "Pick one! Look at the OVR.";
+    if (pickNum === 2) return "Acc influences Shot accuracy.";
+    if (pickNum === 3) return "Jmp helps with blocking and jump ball.";
+    if (pickNum === 4) return "Spd helps with steals and dunks.";
+    if (pickNum === 5) return "Dex helps with steals and blocks.";
     return "Pick the one that fits your team.";
   }
   if (phase === 'confirmed') return "Nice pick! Locking it in...";
+  if (phase === 'assign') return "Want me to help? Just click Auto Assign";
   return FTUE_IDLE_LINES[Math.floor((tick ?? 0) / 220) % FTUE_IDLE_LINES.length];
 }
 
@@ -1013,11 +1019,10 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
   const handleCardClick = (i) => {
     if (!entryDone || picked!=null) return;
     if (coachActive) return; // user must dismiss the FTUE coach first
-    if (flipTicks[i]==null) {
-      setFlipTicks(ft => ft.map((v,j) => j===i ? tick+4 : v));
-      playFlip();
-    } else if (allRevealed) {
+    if (allRevealed) {
       pickPlayer(i);
+    } else {
+      flipAll();
     }
   };
 
@@ -1100,22 +1105,33 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
     onMenu?.(lineup);
   };
 
-  const resetDraft = () => {
-    playCancel();
-    setRoster([]);
-    setPhase('draft');
-    setAssignments({});
+  // Brute-force best permutation of roster → positions by total weighted OVR.
+  const autoAssign = () => {
+    if (roster.length < POS_ORDER.length) return;
+    const players = roster.slice(0, POS_ORDER.length);
+    let best = null, bestSum = -1;
+    const perm = (arr, k = 0) => {
+      if (k === arr.length - 1) {
+        let sum = 0;
+        for (let i = 0; i < arr.length; i++) sum += calcOvr(POS_ORDER[i], arr[i]);
+        if (sum > bestSum) { bestSum = sum; best = arr.slice(); }
+        return;
+      }
+      for (let i = k; i < arr.length; i++) {
+        [arr[k], arr[i]] = [arr[i], arr[k]];
+        perm(arr, k + 1);
+        [arr[k], arr[i]] = [arr[i], arr[k]];
+      }
+    };
+    perm(players);
+    if (!best) return;
+    const next = {};
+    POS_ORDER.forEach((pos, i) => {
+      next[pos] = { ...best[i], ovr: calcOvr(pos, best[i]) };
+    });
+    setAssignments(next);
     setSelectedId(null);
-    setStarted(false);
-    setRunning(false);
-    setCards([]);
-    setFlipTicks([null,null,null]);
-    setPicked(null);
-    setSeqKey(0);
-    tickBaseRef.current = 0;
-    advancingRef.current = false;
-    setCoachIntro(false);
-    setIntroIdx(0);
+    playSelect();
   };
 
   // ── Drag-and-drop ────────────────────────────────────────────────────────
@@ -1211,7 +1227,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
     tick < SCAN_S1_END && started  ? 'ANOMALY SCAN'      :
     tick < SCAN_S2_END && started  ? 'UNIVERSE LOCATOR'  :
     tick < SCAN_S3_END && started  ? 'DNA ACQUISITION'   :
-    !entryDone && started          ? 'PROJECTING GENOMES':
+    !entryDone && started          ? 'LOCKING ONTO GENOMES':
     phase==='assign'               ? 'ASSIGN POSITIONS'  :
                                      'AVAILABLE PLAYERS';
 
@@ -1225,17 +1241,22 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
   // The coach blocks card / FLIP-ALL clicks until the user taps to dismiss.
   // Dismissal resets whenever the line text changes.
   const hasAbility = cards.some(c => c?.ability);
-  const coachLine = isFtue ? getFtueLine(draftPhaseLabel, roster.length + 1, ROSTER_SIZE, tick, hasAbility) : null;
+  const assignedCount = Object.keys(assignments).length;
+  const coachPhaseLabel = phase === 'assign' ? 'assign' : draftPhaseLabel;
+  const coachLine = isFtue ? getFtueLine(coachPhaseLabel, roster.length + 1, ROSTER_SIZE, tick, hasAbility) : null;
   // Hide during downloading/revealing/confirmed — coach only appears in
-  // the stable interactive moments (ready, revealed).
-  const coachShowing = isFtue && phase === 'draft' && started
-    && draftPhaseLabel !== 'downloading'
-    && draftPhaseLabel !== 'revealing'
-    && draftPhaseLabel !== 'confirmed';
+  // the stable interactive moments (ready, revealed, assign).
+  const coachShowing = isFtue && started && (
+    (phase === 'draft'
+      && draftPhaseLabel !== 'downloading'
+      && draftPhaseLabel !== 'revealing'
+      && draftPhaseLabel !== 'confirmed')
+    || (phase === 'assign' && assignedCount === 0)
+  );
   // Only one stable line per phase: stage to drive the dismiss reset.
-  const coachStage = `${draftPhaseLabel}-${roster.length}-${seqKey}-${hasAbility ? 'A' : 'N'}`;
+  const coachStage = `${coachPhaseLabel}-${roster.length}-${seqKey}-${hasAbility ? 'A' : 'N'}`;
   React.useEffect(() => { setCoachDismissed(false); }, [coachStage]);
-  const coachActive = coachShowing && !coachDismissed;
+  const coachActive = coachShowing && !coachDismissed && !!coachLine;
 
   // Burst centers (1920×1080 viewport space)
   const burstCenters = [
@@ -1346,12 +1367,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
               </div>
             )}
             {entryDone && picked==null && flipTicks.some(ft => ft==null) && (
-              <>
-                <button className="da-btn primary" onClick={flipAll}>
-                  <span>⚡</span><span>FLIP {noneFlipped ? 'ALL' : 'REST'}</span>
-                </button>
-                <div className="da-hint">OR · TAP A CARD TO FLIP IT</div>
-              </>
+              <div className="da-hint pulse">TAP A CARD TO REVEAL</div>
             )}
             {draftPhaseLabel==='revealed' && (
               <div className="da-hint pulse">TAP A CARD TO DRAFT IT</div>
@@ -1466,16 +1482,18 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
               <span>▶</span>
               <span>{saving ? 'SAVING...' : 'START GAME'}</span>
             </button>
-            {canStart && (
+            <button className="da-btn ghost"
+              disabled={saving}
+              onClick={autoAssign}>
+              <span>✨</span><span>AUTO ASSIGN</span>
+            </button>
+            {canStart && !isFtue && (
               <button className="da-btn ghost"
                 disabled={saving}
                 onClick={handleSaveMenu}>
                 <span>{saving ? 'SAVING...' : 'SAVE & MENU'}</span>
               </button>
             )}
-            <button className="da-btn danger" onClick={resetDraft}>
-              <span>↺</span><span>REDRAFT</span>
-            </button>
           </div>
 
           {/* Drag ghost — animated running sprite centered on cursor */}

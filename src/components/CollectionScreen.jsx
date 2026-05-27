@@ -1,364 +1,550 @@
-import React from 'react';
-import { ZOOM_W, TOTAL_H, JERSEY_BASE } from '../constants.js';
-import { PixelText, PixelTextC } from './PixelText.jsx';
-import { IDLE_FRAMES, RUN_FRAMES, HEAD_PORTRAIT } from '../sprites/index.js';
-import { playCursor, playSelect, playCancel } from '../sound/ui.js';
-import COLLECTION_DATA from '../data/collection.json';
+import React, { useState, useEffect, useRef } from 'react';
+import '../../lobby/collection.css';
+import '../../lobby/collection-grid.css';
+import '../../lobby/mobile-collection.css';
+import { IDLE_FRAMES } from '../sprites/idle.js';
+import { JERSEY_BASE } from '../constants.js';
+import { trpc } from '../trpc';
 
-const POS_COLORS = { PG: '#2a7adf', SG: '#6a5ade', SF: '#28b050', PF: '#d07030', C: '#c03838' };
-const STAT_DEFS = [
-  { key: 'spd', label: 'SPD', color: '#20c8e0' },
-  { key: 'dex', label: 'DEX', color: '#9860e0' },
-  { key: 'jmp', label: 'JMP', color: '#30d060' },
-  { key: 'acc', label: 'ACC', color: '#e09030' },
-];
-const RARITY_COLORS = { 1: '#20c8a0', 2: '#c060e0', 3: '#e8c060' };
+// ─── Pixel sprite renderer ──────────────────────────────────────
+// When `className` is passed (e.g. "px-sprite px-band"), the SVG has no
+// explicit width/height so CSS rules control its display size; aspect-ratio
+// keeps proportions. Without className, `scale` sets the rendered pixel size.
+function PixelSprite({ frames = IDLE_FRAMES, frameInterval = 120, scale = 4, jerseyColor = '#19e6c4', className, style }) {
+  const [frameIdx, setFrameIdx] = useState(0);
+  const rafRef = useRef(null);
 
-const MOCK_PLAYERS = COLLECTION_DATA;
+  useEffect(() => {
+    let start = null;
+    const tick = (now) => {
+      if (!start) start = now;
+      setFrameIdx(Math.floor((now - start) / frameInterval) % frames.length);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [frames, frameInterval]);
 
-// ─── Layout ──────────────────────────────────────────────────────────────────
+  const pixels = frames[frameIdx] ?? frames[0];
+  let maxX = 0, maxY = 0;
+  for (const [x, y] of pixels) {
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  }
+  const gridW = maxX + 1;
+  const gridH = maxY + 1;
 
-const HEADER_H  = 24;
-const GRID_COLS = 4;
-const COL_W     = 78; // center-to-center spacing (~45px visual gap between sprites)
-const SPRITE_SCALE = 3;
-const SPRITE_W  = 11 * SPRITE_SCALE; // 33
-const SPRITE_H  = 16 * SPRITE_SCALE; // 48
-const ROW_H     = SPRITE_H + 30;     // sprite + label space
-const GRID_Y    = HEADER_H + 24;
-
-// Detail panel split
-const DETAIL_SPLIT = Math.round(ZOOM_W * 2 / 3); // ~272 — left section width
-const PORT_SCALE = 12;
-const PORT_W    = 5 * PORT_SCALE; // 60
-const PORT_H    = 6 * PORT_SCALE; // 72
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const RUN_SPRITE_W = 14 * SPRITE_SCALE; // run frames are 14px wide vs idle's 11px
-
-function MiniPlayer({ x, y, jerseyColor, phase = 0, running = false }) {
-  const [tick, setTick] = React.useState(0);
-  React.useEffect(() => {
-    const interval = running ? 80 : 120;
-    const id = setInterval(() => setTick(t => t + 1), interval);
-    return () => clearInterval(id);
-  }, [running]);
-  const frames = running ? RUN_FRAMES : IDLE_FRAMES;
-  const frame = frames[(tick + phase) % frames.length];
-  return (
-    <g shapeRendering="crispEdges">
-      {frame.map(([px, py, col], i) => (
-        <rect key={i}
-          x={x + px * SPRITE_SCALE} y={y + py * SPRITE_SCALE}
-          width={SPRITE_SCALE} height={SPRITE_SCALE}
-          fill={col === JERSEY_BASE ? jerseyColor : col} />
-      ))}
-    </g>
-  );
-}
-
-function Portrait({ x, y, jerseyColor }) {
-  return (
-    <g shapeRendering="crispEdges">
-      {HEAD_PORTRAIT.map(([px, py, col], i) => (
-        <rect key={i}
-          x={x + px * PORT_SCALE} y={y + py * PORT_SCALE}
-          width={PORT_SCALE} height={PORT_SCALE}
-          fill={col === JERSEY_BASE ? jerseyColor : col} />
-      ))}
-    </g>
-  );
-}
-
-function StatRow({ x, y, label, value, color }) {
-  const BAR_X  = x + 22;
-  const BAR_W  = 80;
-  const filled = Math.round((value / 99) * BAR_W);
-  return (
-    <g>
-      <PixelText text={label} x={x} y={y} scale={1} fill="#4888b0" outline={null} />
-      <rect x={BAR_X} y={y + 1} width={BAR_W} height={4} rx={1}
-        fill="#162440" shapeRendering="crispEdges" />
-      {filled > 0 && (
-        <rect x={BAR_X} y={y + 1} width={filled} height={4} rx={1}
-          fill={color} shapeRendering="crispEdges" />
-      )}
-      <PixelText text={String(value)} x={BAR_X + BAR_W + 5} y={y}
-        scale={1} fill="#a0c8e0" outline={null} />
-    </g>
-  );
-}
-
-// ─── Character slot ───────────────────────────────────────────────────────────
-
-function CharSlot({ player, cx, y, number, selected, locked, onClick }) {
-  const [hover, setHover] = React.useState(false);
-  const active      = selected || hover;
-  const posColor    = locked ? '#3a4a60' : (POS_COLORS[player.pos] || '#888');
-  const effectiveW  = selected && !locked ? RUN_SPRITE_W : SPRITE_W;
-  const spriteX     = cx - Math.floor(effectiveW / 2);
-  const feetY       = y + SPRITE_H;
+  // CSS-driven size: viewBox uses grid coords (1 unit = 1 pixel), aspect-ratio
+  // lets CSS width drive height. Scale-driven size: multiply by scale.
+  const cssDriven = !!className;
+  const vW = cssDriven ? gridW : gridW * scale;
+  const vH = cssDriven ? gridH : gridH * scale;
+  const ps = cssDriven ? 1 : scale;
 
   return (
-    <g data-testid={`collection-slot-${player.id}`}
-      onClick={() => { playCursor(); onClick(); }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{ cursor: 'pointer' }}>
-
-      {/* Ground glow — only when active */}
-      {active && !locked && (
-        <ellipse cx={cx} cy={feetY + 4} rx={22} ry={6}
-          fill="#ffffff" opacity={0.35} />
-      )}
-      {selected && !locked && (
-        <ellipse cx={cx} cy={feetY + 4} rx={16} ry={4}
-          fill="#ffffff" opacity={0.18} />
-      )}
-
-      {/* Sprite — dimmed when not active */}
-      <g opacity={locked ? 0.18 : active ? 1 : 0.32}>
-        <MiniPlayer x={spriteX} y={y} jerseyColor={posColor} phase={player.id} running={selected && !locked} />
-      </g>
-
-      {/* Lock icon on locked slots */}
-      {locked && (
-        <>
-          <rect x={cx - 5} y={y + SPRITE_H / 2 - 4} width={10} height={8} rx={1}
-            fill="#1e2e48" shapeRendering="crispEdges" />
-          <path d={`M${cx - 3} ${y + SPRITE_H / 2 - 4} a3 3 0 0 1 6 0`}
-            fill="none" stroke="#2a4870" strokeWidth={1.5} />
-        </>
-      )}
-
-      {/* Number label — bright when selected, dim otherwise */}
-      <PixelTextC
-        text={`NO. ${number}`}
-        cx={cx} y={feetY + 10}
-        scale={1}
-        fill={selected && !locked ? '#ffffff' : '#2a4060'}
-        outline={null}
-      />
-    </g>
-  );
-}
-
-// ─── Trade confirm overlay ────────────────────────────────────────────────────
-
-function TradeOverlay({ player, onClose }) {
-  const cx = ZOOM_W / 2;
-  return (
-    <g data-testid="trade-overlay">
-      <rect x={0} y={0} width={ZOOM_W} height={TOTAL_H} fill="rgba(0,0,0,0.70)" />
-      <rect x={56} y={118} width={ZOOM_W - 112} height={88} rx={4}
-        fill="#0d1a2c" shapeRendering="crispEdges" />
-      <rect x={56} y={118} width={ZOOM_W - 112} height={88} rx={4}
-        fill="none" stroke="#2a4070" strokeWidth={1.5} />
-      <PixelTextC text="TRADE PLAYER?" cx={cx} y={128} scale={2} fill="#e8c060" outline="#000" />
-      <PixelTextC text={player.lastName ?? player.name} cx={cx} y={150} scale={1} fill="#e0e8ff" outline={null} />
-      <PixelTextC text="TRADING COMING IN A FUTURE UPDATE" cx={cx} y={164} scale={1} fill="#4888b0" outline={null} />
-      <g onClick={() => { playCancel(); onClose(); }} style={{ cursor: 'pointer' }}
-        data-testid="trade-cancel">
-        <rect x={cx - 32} y={180} width={64} height={16} rx={2} fill="#1a2a40" shapeRendering="crispEdges" />
-        <rect x={cx - 32} y={180} width={64} height={16} rx={2}
-          fill="none" stroke="#2a4070" strokeWidth={1} />
-        <PixelTextC text="CANCEL" cx={cx} y={183} scale={1} fill="#4888b0" outline={null} />
-      </g>
-    </g>
-  );
-}
-
-// ─── Main screen ─────────────────────────────────────────────────────────────
-
-export function CollectionScreen({ roster = [], onBack }) {
-  const displayRoster = roster.length > 0 ? roster : MOCK_PLAYERS;
-  const isEmpty       = false;
-
-  const [selectedIdx, setSelectedIdx] = React.useState(0);
-  const [tradeOpen,   setTradeOpen]   = React.useState(false);
-
-  const selected = displayRoster[selectedIdx] ?? null;
-
-  const EVEN_START = Math.floor(COL_W / 2) + 60; // extra left margin on even rows
-  const ODD_START  = Math.ceil(SPRITE_W / 2) + 50; // extra left margin on odd rows
-  const charPositions = displayRoster.map((_, i) => {
-    let remaining = i, row = 0;
-    while (true) {
-      if (remaining < GRID_COLS) break;
-      remaining -= GRID_COLS;
-      row++;
-    }
-    const col   = remaining;
-    const isOdd = row % 2 === 1;
-    const cx    = isOdd
-      ? ODD_START + col * COL_W
-      : EVEN_START + col * COL_W;
-    return { cx, y: GRID_Y + row * ROW_H };
-  });
-
-  const rowCount = charPositions.length > 0
-    ? Math.floor(charPositions[charPositions.length - 1].y / ROW_H) - Math.floor(GRID_Y / ROW_H) + 1
-    : 1;
-  const DETAIL_CONTENT_H = 84; // portrait (78px) + 3px top + 3px bottom
-  const detailY  = TOTAL_H - DETAIL_CONTENT_H - 4;
-  const detailH  = DETAIL_CONTENT_H;
-
-  // Detail panel internals
-  const leftW    = DETAIL_SPLIT - 4;
-  const rightX   = DETAIL_SPLIT + 4;
-  const rightW   = ZOOM_W - rightX - 4;
-
-  const portX    = 9 + 2;  // 2px left margin
-  const nameY    = detailY + 3 + 2;   // 2px top margin
-  const portY    = nameY;
-  const infoX    = portX + PORT_W + 10;
-  const statsY   = nameY + 14;        // one line below name
-
-  return (
-    <g data-testid="collection-screen">
-      {/* Background */}
-      <rect x={0} y={0} width={ZOOM_W} height={TOTAL_H} fill="#0d1220" />
-
-      {/* Subtle grid-area tint */}
-      <rect x={0} y={HEADER_H} width={ZOOM_W} height={detailY - HEADER_H}
-        fill="#0f1828" shapeRendering="crispEdges" />
-
-      {/* Header */}
-      <rect x={0} y={0} width={ZOOM_W} height={HEADER_H} fill="#111830" shapeRendering="crispEdges" />
-      <PixelTextC text="COLLECTION" cx={ZOOM_W / 2} y={7} scale={2} fill="#e8c060" outline="#000" />
-
-      {/* Back button */}
-      <g data-testid="collection-back" onClick={() => { playCancel(); onBack(); }}
-        style={{ cursor: 'pointer' }}>
-        <rect x={4} y={5} width={30} height={14} rx={2} fill="#1a2a40" shapeRendering="crispEdges" />
-        <PixelTextC text="MENU" cx={19} y={8} scale={1} fill="#4888b0" outline={null} />
-      </g>
-
-      {/* Player count in header */}
-      <PixelText text={`${displayRoster.length} PLAYERS`}
-        x={ZOOM_W - 56} y={8} scale={1} fill="#1eb8d8" outline={null} />
-
-      {/* Character grid */}
-      {displayRoster.map((player, i) => (
-        <CharSlot
-          key={player.id}
-          player={player}
-          cx={charPositions[i].cx}
-          y={charPositions[i].y}
-          number={i + 1}
-          selected={selectedIdx === i}
-          locked={isEmpty}
-          onClick={() => setSelectedIdx(i)}
+    <svg
+      viewBox={`0 0 ${vW} ${vH}`}
+      {...(!cssDriven && { width: vW, height: vH })}
+      className={className}
+      shapeRendering="crispEdges"
+      style={{
+        imageRendering: 'pixelated',
+        display: 'block',
+        ...(cssDriven && { aspectRatio: `${gridW} / ${gridH}` }),
+        ...style,
+      }}
+    >
+      {pixels.map(([x, y, fill], i) => (
+        <rect
+          key={i}
+          x={x * ps} y={y * ps}
+          width={ps} height={ps}
+          fill={fill === JERSEY_BASE ? jerseyColor : fill}
         />
       ))}
+    </svg>
+  );
+}
 
-      {/* Reddit avatar — right-aligned, bottom flush with detail panel */}
-      {(() => {
-        const imgW      = 81;
-        const imgH      = 111;
-        const labelH    = 4; // text height
-        const marginBot = 14; // gap between label and top of detail panel
-        const labelY    = detailY - marginBot;
-        const imgY      = labelY - labelH - imgH;
-        return (
-          <g>
-            <image
-              href="/jxts5wo9u41e1.png"
-              x={ZOOM_W - imgW - 6}
-              y={imgY}
-              width={imgW}
-              height={imgH}
-              preserveAspectRatio="xMidYMid meet"
-            />
-            <PixelTextC text="u/TestUser"
-              cx={ZOOM_W - imgW / 2 - 6} y={labelY}
-              scale={1} fill="#4888b0" outline={null} />
-          </g>
-        );
-      })()}
+// ─── Rarity config ─────────────────────────────────────────────
+const RARITY = {
+  common:     { color: '#5a6a7a', accent: '#8090a0', label: 'COMMON' },
+  rare:       { color: '#40c070', accent: '#70e098', label: 'RARE' },
+  super_rare: { color: '#30c0e0', accent: '#60d8f8', label: 'SUPER RARE' },
+  ultra_rare: { color: '#ffc94a', accent: '#ffe080', label: 'ULTRA RARE' },
+};
 
-      {/* Detail panel */}
-      {selected && detailH > 30 && (
-        <g data-testid="collection-detail">
-          {/* Panel background */}
-          <rect x={4} y={detailY} width={ZOOM_W - 8} height={detailH} rx={3}
-            fill="rgba(8,12,28,0.88)" shapeRendering="crispEdges" />
-          <rect x={4} y={detailY} width={ZOOM_W - 8} height={detailH} rx={3}
-            fill="none" stroke="#1e3a60" strokeWidth={1} />
+const ABILITY_RARITY_COLORS = { 1: '#b0b8c8', 2: '#c060e0', 3: '#e8c060' };
 
-          {/* Divider between left and right sections */}
-          <rect x={DETAIL_SPLIT} y={detailY + 6} width={1} height={detailH - 12}
-            fill="#1e3a60" shapeRendering="crispEdges" />
+const POS_COLORS = { PG: '#2a7adf', SG: '#6a5ade', SF: '#28b050', PF: '#d07030', C: '#c03838' };
+const POS_ORDER  = ['PG', 'SG', 'SF', 'PF', 'C'];
 
-          {/* ── Left section: portrait + info ── */}
+// ─── OVR computation ────────────────────────────────────────────
+const OVR_WEIGHTS = {
+  PG: { spd: 0.35, dex: 0.30, jmp: 0.10, acc: 0.25 },
+  SG: { spd: 0.20, dex: 0.30, jmp: 0.15, acc: 0.35 },
+  SF: { spd: 0.25, dex: 0.25, jmp: 0.25, acc: 0.25 },
+  PF: { spd: 0.15, dex: 0.25, jmp: 0.35, acc: 0.25 },
+  C:  { spd: 0.10, dex: 0.20, jmp: 0.45, acc: 0.25 },
+};
+function calcOvr(player, pos) {
+  const w  = OVR_WEIGHTS[pos] ?? { spd: 0.25, dex: 0.25, jmp: 0.25, acc: 0.25 };
+  const sb = player.statBonuses ?? {};
+  return Math.round(
+    ((player.spd + (sb.spd ?? 0)) * w.spd) +
+    ((player.dex + (sb.dex ?? 0)) * w.dex) +
+    ((player.jmp + (sb.jmp ?? 0)) * w.jmp) +
+    ((player.acc + (sb.acc ?? 0)) * w.acc),
+  );
+}
 
-          {/* Portrait */}
-          <Portrait x={portX} y={portY}
-            jerseyColor={isEmpty ? '#2a3a50' : (POS_COLORS[selected.pos] || '#888')} />
+const XP_FOR_LEVEL = level => level * 100;
 
-          {/* Pos badge */}
-          <rect x={infoX} y={nameY} width={22} height={10} rx={1}
-            fill={isEmpty ? '#1e2e48' : (POS_COLORS[selected.pos] || '#888')} shapeRendering="crispEdges" />
-          <PixelTextC text={selected.pos} cx={infoX + 11} y={nameY + 2}
-            scale={1} fill={isEmpty ? '#2a4870' : '#fff'} outline={null} />
+// ─── Dev fallback mock data ─────────────────────────────────────
+const ROSTER = [
+  { id: 1, owner: 'TestUser', name: 'KAEL THORNE', level: 5, xp: 340, source: 'draft', rarity: 'ultra_rare', spd: 81, dex: 73, jmp: 58, acc: 70, ability: { id: 7, name: 'SHARPSHOOTER', desc: 'FADE AWAY', rarity: 1 }, abilities: [], statBonuses: { spd: 2, dex: 0, jmp: 0, acc: 1 } },
+  { id: 2, owner: 'TestUser', name: 'NOVA STRAND',  level: 3, xp: 180, source: 'draft', rarity: 'rare', spd: 66, dex: 77, jmp: 60, acc: 80, ability: null, abilities: [], statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 } },
+  { id: 3, owner: 'TestUser', name: 'ZEX FROST',    level: 8, xp: 620, source: 'draft', rarity: 'super_rare', spd: 70, dex: 74, jmp: 72, acc: 73, ability: { id: 5, name: 'PLAY MAKER', desc: 'PASS INCREASE SHOT %', rarity: 2 }, abilities: [{ id: 3, name: 'SPEEDY', desc: 'SPD BURST', rarity: 1 }], statBonuses: { spd: 0, dex: 4, jmp: 2, acc: 0 } },
+  { id: 4, owner: 'TestUser', name: 'JAX STEELE',   level: 2, xp: 80,  source: 'draft', rarity: 'rare', spd: 53, dex: 61, jmp: 79, acc: 57, ability: null, abilities: [], statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 } },
+  { id: 5, owner: 'TestUser', name: 'REX VOLKOV',   level: 6, xp: 460, source: 'draft', rarity: 'super_rare', spd: 47, dex: 53, jmp: 84, acc: 56, ability: { id: 2, name: 'IRON BLOCK', desc: 'BLOCK BONUS', rarity: 1 }, abilities: [], statBonuses: { spd: 0, dex: 0, jmp: 3, acc: 0 } },
+];
+const DEFAULT_LINEUP = { PG: 1, SG: 2, SF: 3, PF: 4, C: 5 };
 
-          {/* Name + OVR */}
-          <PixelText text={selected.name}
-            x={infoX + 28} y={nameY + 2}
-            scale={1} fill={isEmpty ? '#2a4870' : '#e0e8ff'} outline={null} />
-          <PixelText text={`OVR ${selected.ovr}`}
-            x={infoX + 28 + selected.name.length * 6 + 6} y={nameY + 2}
-            scale={1} fill={isEmpty ? '#1e3050' : '#e8c060'} outline={null} />
+// ─── Helpers ───────────────────────────────────────────────────
+const countAbilities = p => [p?.ability, ...(p?.abilities ?? [])].filter(Boolean).length;
 
-          {/* Vertical stat list */}
-          {STAT_DEFS.map((s, si) => (
-            <StatRow key={s.key}
-              x={infoX}
-              y={statsY + si * 11}
-              label={s.label}
-              value={selected[s.key]}
-              color={isEmpty ? '#1e3050' : s.color}
+// ─── Stars ─────────────────────────────────────────────────────
+function Stars({ count, size = 14 }) {
+  if (!count) return null;
+  return (
+    <div className="stars" style={{ '--star-size': `${size}px` }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <span key={i} className="star on">★</span>
+      ))}
+    </div>
+  );
+}
+
+// ─── Squad slot ─────────────────────────────────────────────────
+function SquadSlot({ pos, player, isFirst, selected, onClick }) {
+  const rc       = player ? (RARITY[player.rarity] ?? RARITY.common) : null;
+  const posColor = POS_COLORS[pos];
+  const ovr      = player ? calcOvr(player, pos) : null;
+
+  if (!player) {
+    return (
+      <button className="squad-slot empty" onClick={onClick}
+              style={{ '--c': posColor, '--ca': posColor }}>
+        <span className="squad-pos" style={{ background: posColor }}>{pos}</span>
+        <span className="empty-mark">+</span>
+        <span className="empty-lbl">EMPTY</span>
+      </button>
+    );
+  }
+  return (
+    <button
+      className={`squad-slot ${isFirst ? 'leader' : ''} ${selected ? 'selected' : ''}`}
+      onClick={onClick}
+      style={{ '--c': rc.color, '--ca': rc.accent }}
+    >
+      {isFirst && <div className="leader-banner">LEADER</div>}
+      <div className="squad-portrait" style={{
+        background: `radial-gradient(ellipse at 50% 30%, ${rc.color}66, transparent 70%),
+                     linear-gradient(180deg, ${rc.color}22, ${rc.color}05)`,
+      }}>
+        <PixelSprite className="px-sprite" jerseyColor={rc.color} style={{ filter: `drop-shadow(0 0 6px ${rc.color}80)` }} />
+      </div>
+      <div className="squad-overlay" />
+      <div className="squad-pos" style={{ background: posColor }}>{pos}</div>
+      <div className="squad-info">
+        <span className="squad-lvl">Lv<b>{player.level}</b></span>
+        <span className="squad-ovr">{ovr}</span>
+      </div>
+      <Stars count={countAbilities(player)} size={8} />
+    </button>
+  );
+}
+
+// ─── Player band (grid card) ────────────────────────────────────
+function PlayerBand({ player, lineupPos, selected, onClick }) {
+  const rc = RARITY[player.rarity] ?? RARITY.common;
+  return (
+    <button
+      className={`player-band ${selected ? 'selected' : ''}`}
+      onClick={() => onClick(player.id)}
+      style={{ '--c': rc.color, '--ca': rc.accent }}
+    >
+      <div className="band-bg">
+        <div className="band-pattern" data-pat={player.id % 4} />
+        <div className="band-tint" />
+      </div>
+      <div className="band-portrait">
+        <PixelSprite className="px-sprite px-band" jerseyColor={rc.color} style={{ filter: `drop-shadow(0 4px 12px rgba(0,0,0,0.6))` }} />
+      </div>
+      {lineupPos && (
+        <div className="band-badge" style={{ background: POS_COLORS[lineupPos] }}>
+          {lineupPos}
+        </div>
+      )}
+      <div className="band-vlevel">
+        <span>LV</span>
+        <span>{player.level}</span>
+      </div>
+      <div className="band-name">{player.name}</div>
+      <div className="band-bottom">
+        <Stars count={countAbilities(player)} size={11} />
+      </div>
+    </button>
+  );
+}
+
+// ─── Detail panel ───────────────────────────────────────────────
+function DetailPanel({ player, lineupPos, lineup, rosterCount, onAssign, onRemove, onAction }) {
+  const [pickingPos, setPickingPos] = useState(false);
+  if (!player) return null;
+  const rc           = RARITY[player.rarity] ?? RARITY.common;
+  const sb           = player.statBonuses ?? {};
+  const ovr          = calcOvr(player, lineupPos);
+  const xpMax        = XP_FOR_LEVEL(player.level);
+  const allAbilities = [player.ability, ...(player.abilities ?? [])].filter(Boolean);
+
+  const stats = [
+    { lbl: 'SPD', base: player.spd, bonus: sb.spd ?? 0, color: '#20c8e0' },
+    { lbl: 'DEX', base: player.dex, bonus: sb.dex ?? 0, color: '#9860e0' },
+    { lbl: 'JMP', base: player.jmp, bonus: sb.jmp ?? 0, color: '#30d060' },
+    { lbl: 'ACC', base: player.acc, bonus: sb.acc ?? 0, color: '#e09030' },
+  ];
+
+  return (
+    <div className="detail-panel" style={{ '--c': rc.color, '--ca': rc.accent }}>
+
+      {/* Portrait */}
+      <div className="detail-portrait" style={{
+        background: `radial-gradient(ellipse at 50% 35%, ${rc.color}55, transparent 65%),
+                     linear-gradient(180deg, ${rc.color}1f 0%, ${rc.color}06 60%, transparent 100%)`,
+      }}>
+        <div className="dp-scan" />
+        <div className="dp-floor" />
+        <span className="dp-corner tl" /><span className="dp-corner tr" />
+        <span className="dp-corner bl" /><span className="dp-corner br" />
+        <span className="dp-tag">{rc.label}</span>
+        <span className="dp-id">ID·{String(player.id).padStart(4, '0')}</span>
+        <PixelSprite className="dp-sprite" jerseyColor={rc.color} style={{
+          filter: `drop-shadow(0 6px 14px rgba(0,0,0,0.7)) drop-shadow(0 0 8px ${rc.color}80)`,
+          animation: 'dpHover 2.4s ease-in-out infinite',
+        }} />
+      </div>
+
+      {/* Info */}
+      <div className="detail-l">
+        <div className="detail-head">
+          <span className="dl-lvl">
+            Lv <b>{player.level}</b>
+            <span className="slash"> / 50</span>
+          </span>
+          {lineupPos && (
+            <span className="dl-pos" style={{ background: POS_COLORS[lineupPos] }}>
+              {lineupPos}
+            </span>
+          )}
+          <span className="dl-role">{player.source.toUpperCase()}</span>
+          <span className="dl-ovr">{ovr}<em>OVR</em></span>
+        </div>
+        <div className="detail-name">
+          <span className="dn-en">{player.name}</span>
+          <Stars count={allAbilities.length} size={16} />
+        </div>
+        <button className="detail-view">
+          <span className="ico">⌕</span>
+          <span>VIEW FULL</span>
+        </button>
+        <div className="detail-stats">
+          {stats.map((s) => {
+            const effective = s.base + s.bonus;
+            return (
+              <div key={s.lbl} className="stat-line">
+                <span className="sl-lbl">{s.lbl}</span>
+                <span className="sl-bar">
+                  <span className="sl-fill" style={{
+                    width: `${Math.min(100, effective)}%`,
+                    background: `linear-gradient(90deg, ${s.color}, ${s.color}cc)`,
+                    boxShadow: `0 0 8px ${s.color}80`,
+                  }} />
+                </span>
+                <span className="sl-val">
+                  {effective}
+                  {s.bonus > 0 && (
+                    <em style={{ fontSize: 10, color: '#30d060', marginLeft: 3 }}>+{s.bonus}</em>
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="detail-skill">
+          {allAbilities.length === 0 ? (
+            <span className="ds-h none">NO ABILITIES</span>
+          ) : allAbilities.map((ab, i) => {
+            const abColor = ABILITY_RARITY_COLORS[ab.rarity] ?? '#888';
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+                <span className="ability-chip" style={{
+                  background: `linear-gradient(135deg, ${abColor}, ${abColor}aa)`,
+                }}>
+                  {ab.name}
+                </span>
+                <span className="ds-body">{ab.desc}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="detail-r">
+        {pickingPos ? (
+          <div className="actions">
+            <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, letterSpacing: '0.2em', color: '#888', marginBottom: 4 }}>ASSIGN POSITION</div>
+            {POS_ORDER.map(pos => {
+              const isMySlot   = lineupPos === pos;
+              const isOccupied = !isMySlot && lineup[pos] != null;
+              return (
+                <button key={pos} className={`act-btn ${isMySlot ? 'primary' : ''}`}
+                  style={{ '--c': POS_COLORS[pos], borderColor: isMySlot ? POS_COLORS[pos] : undefined }}
+                  onClick={() => { isMySlot ? onRemove(pos) : onAssign(player.id, pos); setPickingPos(false); }}>
+                  <span className="ab-glyph" style={{ background: POS_COLORS[pos], color: '#fff' }}>{pos}</span>
+                  <span className="ab-lbl">{isMySlot ? 'REMOVE' : isOccupied ? 'SWAP' : 'SET'}</span>
+                </button>
+              );
+            })}
+            <button className="act-btn" onClick={() => setPickingPos(false)}>
+              <span className="ab-lbl">CANCEL</span>
+            </button>
+          </div>
+        ) : (
+          <div className="actions">
+            <button className="act-btn primary" onClick={() => setPickingPos(true)}>
+              <span className="ab-glyph" style={lineupPos ? { background: POS_COLORS[lineupPos], color: '#fff' } : {}}>
+                {lineupPos ?? '＋'}
+              </span>
+              <span className="ab-lbl">{lineupPos ? 'CHANGE POS' : 'ASSIGN POS'}</span>
+            </button>
+            <button className="act-btn" onClick={() => onAction('auction')}>
+              <span className="ab-glyph">¤</span>
+              <span className="ab-lbl">AUCTION</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+}
+
+// ─── Squad bar ──────────────────────────────────────────────────
+function SquadBar({ roster, lineup, selectedId, onSlotClick }) {
+  const byId     = new Map(roster.map(p => [p.id, p]));
+  const totalOvr = POS_ORDER.reduce((sum, pos) => {
+    const p = byId.get(Number(lineup[pos]));
+    return sum + (p ? calcOvr(p, pos) : 0);
+  }, 0);
+
+  return (
+    <div className="squad-bar">
+      <div className="sqb-l">
+        <div className="party-tag">
+          <span className="pt-h">LINEUP</span>
+        </div>
+        <div className="squad-row">
+          {POS_ORDER.map((pos, i) => (
+            <SquadSlot
+              key={pos}
+              pos={pos}
+              player={byId.get(Number(lineup[pos])) ?? null}
+              isFirst={i === 0}
+              selected={Number(lineup[pos]) === selectedId}
+              onClick={() => onSlotClick(pos)}
             />
           ))}
+        </div>
+      </div>
+      <div className="sqb-r">
+        <div className="power">
+          <span className="pw-lbl">TEAM OVR</span>
+          <span className="pw-val">{totalOvr}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-          {/* Ability badge */}
-          {!isEmpty && (() => {
-            const abilityY = statsY + 4 * 11 + 4;
-            return abilityY < detailY + detailH ? (
-              <>
-                <rect x={infoX} y={abilityY} width={leftW - infoX - 4} height={10} rx={1}
-                  fill="rgba(0,0,0,0.40)" shapeRendering="crispEdges" />
-                <PixelText
-                  text={selected.ability ? selected.ability.name : 'NO ABILITY'}
-                  x={infoX + 4} y={abilityY + 2}
-                  scale={1}
-                  fill={selected.ability ? RARITY_COLORS[selected.ability.rarity] : '#2a4060'}
-                  outline={null} />
-              </>
-            ) : null;
-          })()}
+// ─── Root component ─────────────────────────────────────────────
+export function CollectionScreen({ roster = [], lineup: lineupProp = {}, username = '', credits = 0, onBack, onAuction, onLineupChange, isMobile: isMobileProp }) {
+  const activeRoster = roster.length ? roster : ROSTER;
+  const [selectedId, setSelectedId]       = useState(null);
+  const [lineup, setLineup]               = useState(() =>
+    Object.keys(lineupProp).length ? { ...lineupProp } : { ...DEFAULT_LINEUP }
+  );
+  const containerRef = useRef(null);
 
-          {/* ── Right section: trade ── */}
-          {!isEmpty && (
-            <g data-testid="collection-trade-btn"
-              onClick={() => { playSelect(); setTradeOpen(true); }}
-              style={{ cursor: 'pointer' }}>
-              <rect x={rightX + 8} y={detailY + detailH - 22} width={rightW - 16} height={14} rx={2}
-                fill="#1a4028" shapeRendering="crispEdges" />
-              <rect x={rightX + 8} y={detailY + detailH - 22} width={rightW - 16} height={14} rx={2}
-                fill="none" stroke="#40a060" strokeWidth={1} />
-              <PixelTextC text="OFFER TRADE" cx={rightX + rightW / 2} y={detailY + detailH - 19}
-                scale={1} fill="#40d080" outline={null} />
-            </g>
-          )}
-        </g>
-      )}
+  useEffect(() => {
+    if (Object.keys(lineupProp).length) setLineup({ ...lineupProp });
+  }, [lineupProp]);
 
-      {/* Trade overlay */}
-      {tradeOpen && selected && !isEmpty && (
-        <TradeOverlay player={selected} onClose={() => setTradeOpen(false)} />
-      )}
-    </g>
+  // Set body.is-mobile so mobile-collection.css overrides apply.
+  // If isMobileProp is explicitly passed (story/test), use that; otherwise auto-detect.
+  useEffect(() => {
+    if (isMobileProp !== undefined) {
+      document.body.classList.toggle('is-mobile', isMobileProp);
+      return () => document.body.classList.remove('is-mobile');
+    }
+    const update = () => {
+      document.body.classList.toggle('is-mobile', window.innerWidth < window.innerHeight);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      document.body.classList.remove('is-mobile');
+    };
+  }, [isMobileProp]);
+
+  // Set body.is-narrow / body.is-xs based on collection container width.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width;
+      document.body.classList.toggle('is-narrow', w < 900);
+      document.body.classList.toggle('is-xs', w < 430);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.body.classList.remove('is-narrow');
+      document.body.classList.remove('is-xs');
+    };
+  }, []);
+
+  const selected  = selectedId ? activeRoster.find(p => p.id === selectedId) : null;
+  const lineupPos = selected
+    ? (Object.entries(lineup).find(([, id]) => Number(id) === selectedId)?.[0] ?? null)
+    : null;
+
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = e => { if (e.key === 'Escape') setSelectedId(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selected]);
+
+  const handleSlotClick = (pos) => {
+    const pid = lineup[pos];
+    if (pid) setSelectedId(Number(pid));
+  };
+
+  // Persist the full lineup to the server (full-replace; validates ownership
+  // and rejects duplicates server-side). Fire-and-forget — local state is the
+  // source of truth for the session, and onLineupChange keeps the parent synced.
+  const persistLineup = (next) => {
+    onLineupChange?.(next);
+    if (!username) return;
+    const payload = {};
+    for (const p of POS_ORDER) if (next[p] != null) payload[p] = Number(next[p]);
+    trpc.user.setLineup.mutate({ lineup: payload }).catch(() => {});
+  };
+
+  const handleAssign = (playerId, pos) => {
+    const pid = Number(playerId);
+    const next = { ...lineup };
+    // Where the incoming player currently sits (if anywhere).
+    const oldPos = POS_ORDER.find(p => Number(next[p]) === pid) ?? null;
+    // Who currently occupies the target slot (if anyone).
+    const displaced = next[pos] != null ? Number(next[pos]) : null;
+
+    next[pos] = pid;
+    if (oldPos && oldPos !== pos) {
+      // True swap: the displaced player takes the incoming player's old slot.
+      if (displaced != null && displaced !== pid) next[oldPos] = displaced;
+      else delete next[oldPos];
+    }
+    // If the incoming player had no prior slot, the displaced player is simply
+    // bumped to the bench (their slot is now the incoming player's).
+    setLineup(next);
+    persistLineup(next);
+  };
+
+  const handleRemove = (pos) => {
+    const next = { ...lineup };
+    delete next[pos];
+    setLineup(next);
+    persistLineup(next);
+  };
+
+  const handleAction = action => {
+    if (action === 'auction' && onAuction) onAuction(selectedId);
+  };
+
+  const rc = selected ? (RARITY[selected.rarity] ?? RARITY.common) : null;
+
+  return (
+    <div ref={containerRef} data-state="collection" style={{ position: 'absolute', inset: 0, overflowY: 'auto' }}>
+      <div className="collection">
+        <div className="col-topnav">
+          <button className="back-btn" onClick={onBack}>
+            <span className="bk-glyph">◀</span>
+          </button>
+          <div className="col-title">
+            <span className="ct-big">COLLECTION</span>
+            <span className="ct-sub">PLAYER REGISTRY</span>
+          </div>
+        </div>
+
+        <SquadBar
+          roster={activeRoster}
+          lineup={lineup}
+          selectedId={selectedId}
+          onSlotClick={handleSlotClick}
+        />
+
+        {selected && (
+          <div className="col-detail-inline"
+               style={{ '--c': rc.color, '--ca': rc.accent }}>
+            <button className="col-detail-close" onClick={() => setSelectedId(null)}>
+              <span className="cdc-glyph">✕</span>
+              <span className="cdc-lbl">CLOSE</span>
+            </button>
+            <DetailPanel
+              player={selected}
+              lineupPos={lineupPos}
+              lineup={lineup}
+              rosterCount={activeRoster.length}
+              onAssign={handleAssign}
+              onRemove={handleRemove}
+              onAction={handleAction}
+            />
+          </div>
+        )}
+
+        <div className="collection-grid-wrap">
+          <div className="cgw-hint">SELECT A PLAYER TO VIEW OR ASSIGN TO LINEUP</div>
+          <div className="collection-grid">
+            {activeRoster.map(p => {
+              const pPos = Object.entries(lineup).find(([, id]) => Number(id) === p.id)?.[0] ?? null;
+              return (
+                <PlayerBand
+                  key={p.id}
+                  player={p}
+                  lineupPos={pPos}
+                  selected={selectedId === p.id}
+                  onClick={setSelectedId}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+    </div>
   );
 }

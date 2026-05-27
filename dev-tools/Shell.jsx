@@ -10,8 +10,7 @@ const NAV_ITEMS = [
   { id: 'teamSelect',  label: '🏀 Team Select' },
   { id: 'draft',       label: '📋 Draft Screen' },
   { id: 'matchmaking', label: '🔍 Matchmaking' },
-  { id: 'collection',  label: '🃏 Collection' },
-  { id: 'collection2', label: '🃏 Collection (New)' },
+  { id: 'collection2', label: '🃏 Collection (Full)' },
   { id: 'court',       label: '🏟 Court (Live)' },
   { id: 'admin',       label: '🔧 Admin' },
 ];

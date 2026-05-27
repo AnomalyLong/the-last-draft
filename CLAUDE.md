@@ -364,7 +364,7 @@ Each player is stored as a Redis hash at `player:{id}` with these fields:
 | `level` | number | Starts at 1; increases via `updatePlayerProgress` |
 | `xp` | number | Starts at 0 |
 | `source` | `'draft' \| 'credit' \| 'purchase'` | How the player was acquired |
-| `rarity` | `'common' \| 'rare' \| 'epic' \| 'legendary'` | Derived from OVR at draft time via `tierToRarity()` |
+| `rarity` | `'rare' \| 'super_rare' \| 'ultra_rare'` | Derived from OVR at draft time via `tierToRarity()` — OVR<64=rare, 64–70=super_rare, ≥71=ultra_rare |
 | `spd` `dex` `jmp` `acc` | number (0–99) | Base stats set at mint; ranges depend on position archetype in `DraftScreen.jsx` |
 | `ability` | JSON string or `''` | Single ability rolled at draft: `{ name, rarity, desc, id }` — see `src/abilities.js` |
 | `abilities` | JSON string (array) | Abilities earned from level-ups; appended by `updatePlayerProgress` |

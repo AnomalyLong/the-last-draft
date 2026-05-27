@@ -157,6 +157,41 @@ export const setLineupSlot = async (
   return { success: true };
 };
 
+// Replaces the entire lineup hash atomically from a full {role: playerId} map.
+// Used by the collection screen's assign/swap UI, which computes the complete
+// 5-slot lineup client-side. Validates ownership of every assigned player and
+// rejects duplicate player IDs across slots before writing.
+export const setLineup = async (
+  username: string,
+  lineup: Partial<Record<Role, number>>,
+): Promise<{ success: boolean }> => {
+  // Collect the assigned (role, playerId) pairs in canonical order.
+  const entries: Array<[Role, number]> = [];
+  const seen = new Set<number>();
+  for (const role of ROLES) {
+    const pid = lineup[role];
+    if (pid == null) continue;
+    if (seen.has(pid)) return { success: false }; // same player in two slots
+    seen.add(pid);
+    entries.push([role, pid]);
+  }
+
+  // Every assigned player must be owned by this user.
+  for (const [, pid] of entries) {
+    const inRoster = await redis.zScore(rosterKey(username), String(pid));
+    if (inRoster === null) return { success: false };
+  }
+
+  const key = lineupKey(username);
+  await redis.del(key);
+  if (entries.length) {
+    const hash: Record<string, string> = {};
+    for (const [role, pid] of entries) hash[role] = String(pid);
+    await redis.hSet(key, hash);
+  }
+  return { success: true };
+};
+
 // Removes a player from the lineup (e.g. after a trade sends them away).
 export const clearPlayerFromLineup = async (username: string, playerId: number): Promise<void> => {
   const key = lineupKey(username);

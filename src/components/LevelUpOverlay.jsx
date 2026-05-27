@@ -36,24 +36,29 @@ function DiagBeam({ x, color, w }) {
 }
 
 function RainbowBurst({ tick, cameraX }) {
-  const BURST_DUR = 110;
-  if (tick <= 0 || tick >= BURST_DUR) return null;
+  if (tick <= 0) return null;
 
-  const t       = tick / BURST_DUR;
-  const fadeIn  = Math.min(1, tick / 5);
-  const fadeOut = Math.max(0, 1 - Math.max(0, t - 0.4) / 0.6);
-  const alpha   = Math.min(fadeIn, fadeOut) * 0.85;
+  // Beams scroll continuously for the whole overlay. Only the flash + ring
+  // are part of the initial burst and fade out within the first ~110 ticks.
+  const fadeIn = Math.min(1, tick / 5);
+  const alpha  = fadeIn * 0.85;
 
   const SKEW   = 30;
-  const N      = 9;
-  const BEAM_W = Math.ceil((ZOOM_W + SKEW) / N) + 2;
-  const SPEED  = 5;
-  const offset = (tick * SPEED) % (N * BEAM_W);
+  // Render one giant strip much wider than the screen so it scrolls indefinitely
+  // without ever needing to wrap. At SPEED=2 (≈120 px/s) and 80-px beams, the
+  // strip lasts ~30 seconds before running out — plenty for an overlay.
+  const BEAM_W = 80;
+  const N      = 60;                                // 60 * 80 = 4800 px strip
+  const SPEED  = 2;
+  const offset = tick * SPEED;                      // no modulo — never wraps
 
-  const beams = Array.from({ length: N + 2 }, (_, i) => ({
-    x:     cameraX + i * BEAM_W - offset - SKEW,
-    color: RAINBOW_COLS[(i + Math.floor(tick * 0.16)) % RAINBOW_COLS.length],
-  }));
+  const beams = Array.from({ length: N }, (_, i) => {
+    const x = cameraX + i * BEAM_W - offset - SKEW;
+    // Cull beams that have scrolled off the left edge
+    if (x + BEAM_W + SKEW < cameraX) return null;
+    if (x > cameraX + ZOOM_W) return null;
+    return { x, color: RAINBOW_COLS[i % RAINBOW_COLS.length] };
+  }).filter(Boolean);
 
   const flashOp = Math.max(0, 0.38 - tick * 0.022);
   const ringR   = Math.min(tick * 11, 320);
