@@ -78,7 +78,7 @@ function generateDraftPool() {
 function rollAbilityForPlayer(ovr) {
   const bonus  = Math.max(0, Math.floor((ovr-65)/5)) * 0.05;
   const chance = Math.min(0.55, 0.25+bonus);
-  if (Math.random() >= chance) return null;
+  if (ovr < 76 && Math.random() >= chance) return null;
   const lw = ovr>=75 ? 15 : ovr>=70 ? 8 : 3;
   const ew = ovr>=70 ? 25 : 18;
   const pool = ABILITIES.flatMap(a => Array(a.rarity===3 ? lw : a.rarity===2 ? ew : 40).fill(a));
