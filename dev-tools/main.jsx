@@ -11,10 +11,12 @@ import CourtStory from './stories/CourtStory.jsx';
 import AdminStory from './AdminStory.jsx';
 import MatchmakingStory from './stories/MatchmakingStory.jsx';
 import LobbyStory from './stories/LobbyStory.jsx';
+import SplashStory from './stories/SplashStory.jsx';
 
 const pages = {
   lobby:        LobbyStory,
   sprites:      SpritePreview,
+  splash:       SplashStory,
   title:        TitleStory,
   options:      OptionsStory,
   teamSelect:   TeamSelectStory,

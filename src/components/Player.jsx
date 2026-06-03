@@ -2,7 +2,17 @@ import React from 'react';
 import { JERSEY_HOME, JERSEY_BASE, JERSEY_DARK_BASE, SHOOT_JUMP_OFFSETS, BLOCK_JUMP_OFFSETS, JUMP_BALL_JUMP_OFFSETS } from '../constants.js';
 import { SPRITE_PIXELS, IDLE_FRAMES, RUN_FRAMES, RUN_BALL_FRAMES, SHOOT_CHAR_FRAMES, DUNK_FRAMES, DUNK_BALL_OFFSETS, BALL_FRAMES, BLOCK_JUMP_FRAMES, IRON_BLOCK_FRAMES, JUMP_BALL_FRAMES, STEAL_FRAMES, PICKPOCKET_FRAMES, SPIN_MOVE_FRAMES, DASH_FRAMES, FADEAWAY_FRAMES, STAGGER_FRAMES } from '../sprites/index.js';
 
-export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isBlocking = false, isIronBlocking = false, isJumpBall = false, isStealing = false, isPickPocketing = false, isSpinning = false, isDashing = false, isFadingAway = false, isStaggering = false, facingRight = false }) {
+// multiply an "#rrggbb" colour by a 0..1 factor to derive shadow tones
+function darken(hex, k) {
+  const h = hex.replace('#','');
+  const r = Math.round(parseInt(h.slice(0,2),16) * k);
+  const g = Math.round(parseInt(h.slice(2,4),16) * k);
+  const b = Math.round(parseInt(h.slice(4,6),16) * k);
+  const p = (n) => n.toString(16).padStart(2,'0');
+  return `#${p(r)}${p(g)}${p(b)}`;
+}
+
+export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isBlocking = false, isIronBlocking = false, isJumpBall = false, isStealing = false, isPickPocketing = false, isSpinning = false, isDashing = false, isFadingAway = false, isStaggering = false, facingRight = false }) {
   const [frameIdx, setFrameIdx] = React.useState(0);
   const rafRef = React.useRef(null);
 
@@ -120,9 +130,16 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, hasBall =
   }, [hasBall, isMoving, isShooting, isDunking, isBlocking, isIronBlocking, isJumpBall, isStealing, isPickPocketing, isSpinning, isDashing, isFadingAway, isStaggering]);
 
   const jerseyDark = jerseyColor + '99';
+  // Optional skin override — remap the two skin tones from the sprite atlas.
+  // Default (skinColor unset) preserves the original sprite palette.
+  const skinDark = skinColor ? darken(skinColor, 0.78) : null;
 
   const applyColors = (pixels) => pixels.map(([x, y, fill], i) => {
-    const c = fill === JERSEY_BASE ? jerseyColor : fill === JERSEY_DARK_BASE ? jerseyDark : fill;
+    let c = fill;
+    if      (fill === JERSEY_BASE)      c = jerseyColor;
+    else if (fill === JERSEY_DARK_BASE) c = jerseyDark;
+    else if (skinColor && fill === '#D9A066') c = skinColor;
+    else if (skinColor && fill === '#B17F4C') c = skinDark;
     return <rect key={i} x={x * scale} y={y * scale} width={scale} height={scale} fill={c} />;
   });
 

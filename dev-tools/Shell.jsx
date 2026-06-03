@@ -5,6 +5,7 @@ const NAV_W = 180;
 const NAV_ITEMS = [
   { id: 'lobby',       label: '🏙 Lobby Screen' },
   { id: 'sprites',     label: '🎨 Sprites' },
+  { id: 'splash',      label: '✨ Splash (Inline)' },
   { id: 'title',       label: '🏠 Title Screen' },
   { id: 'options',     label: '⚙️ Options Screen' },
   { id: 'teamSelect',  label: '🏀 Team Select' },

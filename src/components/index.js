@@ -9,6 +9,7 @@ export { PowerBar } from './PowerBar.jsx';
 export { ScorePopup } from './ScorePopup.jsx';
 export { CRTOverlay } from './CRTOverlay.jsx';
 export { TitleScreen } from './TitleScreen.jsx';
+export { SplashScreen } from './SplashScreen.jsx';
 export { TeamSelect } from './TeamSelect.jsx';
 export { PixelText, PixelTextC } from './PixelText.jsx';
 export { DraftScreen } from './DraftScreen.jsx';

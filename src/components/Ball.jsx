@@ -11,7 +11,7 @@ export function Ball({ cx, cy, scale = 1 }) {
     const tick = (now) => {
       const t = ((now - start) % PERIOD) / PERIOD;
       const bounce = Math.sin(t * Math.PI);
-      setYOff(bounce * 10);
+      setYOff(bounce * 10 * scale);
       setFrame(bounce < 0.25 ? 'up' : bounce < 0.65 ? 'mid' : 'flat');
       rafRef.current = requestAnimationFrame(tick);
     };
