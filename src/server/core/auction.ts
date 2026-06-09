@@ -120,7 +120,8 @@ export const getTopBid = async (
 ): Promise<BidData | null> => {
   const bidsKey = auctionBidsKey(auctionId, playerId);
   // zRange ascending — last element has the highest score (bid)
-  const members = await redis.zRange(bidsKey, 0, -1);
+  const raw: any[] = (await redis.zRange(bidsKey, 0, -1)) as any;
+  const members = raw.map((m: any) => typeof m === 'object' ? m.member as string : m as string);
   if (!members.length) return null;
   const topUsername = members[members.length - 1]!;
   const amount = await redis.zScore(bidsKey, topUsername);
@@ -130,7 +131,8 @@ export const getTopBid = async (
 // Returns all bids for a player, highest first.
 export const getAllBids = async (auctionId: number, playerId: number): Promise<BidData[]> => {
   const bidsKey = auctionBidsKey(auctionId, playerId);
-  const members = await redis.zRange(bidsKey, 0, -1);
+  const raw: any[] = (await redis.zRange(bidsKey, 0, -1)) as any;
+  const members = raw.map((m: any) => typeof m === 'object' ? m.member as string : m as string);
   const bids = await Promise.all(
     members.map(async (username) => ({
       username,
@@ -209,7 +211,7 @@ export const settleAuction = async (auctionId: number): Promise<void> => {
       // Transfer player: remove from seller roster/lineup, add to winner roster
       if (seller !== 'system') {
         await Promise.all([
-          redis.zRem(rosterKey(seller), String(playerId)),
+          redis.zRem(rosterKey(seller), [String(playerId)]),
           clearPlayerFromLineup(seller, playerId),
         ]);
       }

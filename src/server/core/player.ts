@@ -121,6 +121,79 @@ export const getPlayer = async (id: number): Promise<PlayerData | null> => {
   };
 };
 
+// Position-weighted OVR — mirrors calcOvr / OVR_WEIGHTS in lobby/collection.jsx
+// so a player's overall reads the same on the Challenge card as in the
+// collection screen. Operates on already-bonused stats (no statBonuses here).
+const OVR_WEIGHTS: Record<Role, { spd: number; dex: number; jmp: number; acc: number }> = {
+  PG: { spd: 0.35, dex: 0.30, jmp: 0.10, acc: 0.25 },
+  SG: { spd: 0.20, dex: 0.30, jmp: 0.15, acc: 0.35 },
+  SF: { spd: 0.25, dex: 0.25, jmp: 0.25, acc: 0.25 },
+  PF: { spd: 0.15, dex: 0.25, jmp: 0.35, acc: 0.25 },
+  C:  { spd: 0.10, dex: 0.20, jmp: 0.45, acc: 0.25 },
+};
+const calcOvr = (pos: Role, s: { spd: number; dex: number; jmp: number; acc: number }): number => {
+  const w = OVR_WEIGHTS[pos];
+  return Math.round(s.spd * w.spd + s.dex * w.dex + s.jmp * w.jmp + s.acc * w.acc);
+};
+
+export type BuiltPlayer = {
+  pos: Role;
+  name: string;
+  spd: number; dex: number; jmp: number; acc: number;
+  overall: number;
+  rarity: PlayerRarity;
+  ability: PlayerAbility | null;
+  abilities: PlayerAbility[];
+  level: number;
+  xp: number;
+  serverId?: number;
+};
+
+// Joins a user's roster + lineup into the ordered 5-player team shape the game
+// and cards consume (PG→C), applying stat bonuses. Mirrors the client-side
+// join in App.jsx. `includeServerId` MUST be false for opponent payloads
+// (Challenge Me) so the away team is structurally un-persistable — see
+// TODO.md "Challenge Me — Symmetric Progression Refactor".
+export const buildRosterForUser = async (
+  username: string,
+  opts: { includeServerId?: boolean } = {},
+): Promise<BuiltPlayer[]> => {
+  const [ids, lineup] = await Promise.all([
+    getUserRoster(username),
+    getUserLineup(username),
+  ]);
+  const players = (await Promise.all(ids.map(getPlayer))).filter(Boolean) as PlayerData[];
+  const byId = new Map(players.map(p => [p.id, p]));
+
+  const built: BuiltPlayer[] = [];
+  for (const pos of ROLES) {
+    const pid = lineup[pos];
+    if (!pid) continue;
+    const p = byId.get(Number(pid));
+    if (!p) continue;
+    const sb = p.statBonuses ?? { spd: 0, dex: 0, jmp: 0, acc: 0 };
+    const stats = {
+      spd: p.spd + (sb.spd ?? 0),
+      dex: p.dex + (sb.dex ?? 0),
+      jmp: p.jmp + (sb.jmp ?? 0),
+      acc: p.acc + (sb.acc ?? 0),
+    };
+    built.push({
+      pos,
+      name: p.name,
+      ...stats,
+      overall: calcOvr(pos, stats),
+      rarity: p.rarity,
+      ability: p.ability,
+      abilities: p.abilities ?? [],
+      level: p.level,
+      xp: p.xp,
+      ...(opts.includeServerId ? { serverId: p.id } : {}),
+    });
+  }
+  return built;
+};
+
 export const getUserRoster = async (username: string): Promise<number[]> => {
   const raw: any[] = (await redis.zRange(rosterKey(username), 0, -1)) as any;
   return raw.map((m: any) => Number(typeof m === 'object' ? m.member : m)).filter(n => !isNaN(n));
@@ -151,7 +224,7 @@ export const setLineupSlot = async (
     ([, v]) => v === String(playerId),
   )?.[0];
 
-  if (existingRole) await redis.hDel(key, existingRole);
+  if (existingRole) await redis.hDel(key, [existingRole]);
   await redis.hSet(key, { [role]: String(playerId) });
 
   return { success: true };
@@ -197,7 +270,7 @@ export const clearPlayerFromLineup = async (username: string, playerId: number):
   const key = lineupKey(username);
   const raw = await redis.hGetAll(key);
   const slot = Object.entries(raw ?? {}).find(([, v]) => v === String(playerId))?.[0];
-  if (slot) await redis.hDel(key, slot);
+  if (slot) await redis.hDel(key, [slot]);
 };
 
 // Persists level-up results: new level/xp, optional earned abilities, and optional stat deltas.

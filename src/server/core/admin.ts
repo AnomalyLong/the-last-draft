@@ -15,7 +15,7 @@ export const addAdmin = async (username: string): Promise<void> => {
 };
 
 export const removeAdmin = async (username: string): Promise<void> => {
-  await redis.hDel(ADMINS_KEY, username);
+  await redis.hDel(ADMINS_KEY, [username]);
 };
 
 export const getAdmins = async (): Promise<{ username: string; grantedAt: number }[]> => {
@@ -60,8 +60,8 @@ export const approveGame = async (gameId: number, adminUsername: string): Promis
 
   await Promise.all([
     redis.del(playsKey(gameId)),
-    redis.zRem('games:pending', String(gameId)),
-    redis.zRem('games:flagged', String(gameId)),
+    redis.zRem('games:pending', [String(gameId)]),
+    redis.zRem('games:flagged', [String(gameId)]),
     redis.hSet(GAME_REVIEWS_KEY, {
       [String(gameId)]: `${adminUsername}|approved|${now}`,
     }),
@@ -96,8 +96,8 @@ export const rejectGame = async (gameId: number, adminUsername: string): Promise
       reviewedAt: String(now),
     }),
     redis.del(playsKey(gameId)),
-    redis.zRem('games:pending', String(gameId)),
-    redis.zRem('games:flagged', String(gameId)),
+    redis.zRem('games:pending', [String(gameId)]),
+    redis.zRem('games:flagged', [String(gameId)]),
     redis.hSet(GAME_REVIEWS_KEY, {
       [String(gameId)]: `${adminUsername}|rejected|${now}`,
     }),
