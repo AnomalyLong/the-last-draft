@@ -1159,6 +1159,9 @@
 
 /* ─────────────────────────────────────────────────────────
    FTUE DIM — darken the lobby, leave coach + PLAY bright.
+   The bottom nav (z=60) and coach (z=72) sit above the dim (z=55).
+   Inside the bnav we dim the non-PLAY items via opacity so the
+   PLAY button visually pops as the only bright nav action.
    ───────────────────────────────────────────────────────── */
 .lobby2-ftue::after {
   content: '';
@@ -1168,16 +1171,11 @@
   z-index: 55;
   pointer-events: none;
 }
-/* Lift the PLAY button above the dim by isolating its bnav-item stacking */
-.lobby2-ftue .bnav { z-index: 50; }
+.lobby2-ftue .bnav-bg { opacity: 0.35; }
+.lobby2-ftue .bnav-item { opacity: 0.35; pointer-events: none; }
 .lobby2-ftue .bnav-play {
-  position: relative;
-  z-index: 70;
-  /* Re-emit shadow so it reads as "spotlighted" against the dim */
   filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.25));
 }
-/* Dim the other nav buttons explicitly so the PLAY button pops */
-.lobby2-ftue .bnav-item { opacity: 0.35; pointer-events: none; }
 @keyframes lb2CoachIn {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
