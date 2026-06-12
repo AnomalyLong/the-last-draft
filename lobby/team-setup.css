@@ -133,7 +133,7 @@
   justify-content: center;
   gap: 18px;
   flex: none;
-  margin-top: 4px;
+  margin-top: 28px;
 }
 .ts-section-h .ts-line {
   flex: 1;
@@ -159,6 +159,7 @@
   align-items: center;
   flex: none;
   min-height: 0;
+  margin-top: 20px;
 }
 /* Preview first (visual hierarchy) */
 .ts-preview {
@@ -734,9 +735,13 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 12px;
   flex: none;
-  padding-top: 8px;
+  margin-top: auto;          /* pin to bottom of the .tsetup flex column */
+  padding: 12px 0 8px;
+  position: sticky;
+  bottom: 16px;
+  z-index: 2;
 }
 .ts-foot-hint {
   font-family: var(--f-mono);

@@ -10,3 +10,5 @@ webroot
 dist
 coverage
 .claude/settings.local.json
+
+.vercel

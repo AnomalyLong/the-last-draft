@@ -8,8 +8,10 @@ export function FtueIntroVideo({ onDone }) {
   const [muted, setMuted] = React.useState(true);
   const [needsTap, setNeedsTap] = React.useState(true);
   const [canSkip, setCanSkip] = React.useState(false);
+  const [confirmSkip, setConfirmSkip] = React.useState(false);
   const [error, setError] = React.useState(null);
   const [ready, setReady] = React.useState(false);
+  const confirmTimerRef = React.useRef(null);
 
   const finish = () => { onDone?.(); };
 
@@ -27,8 +29,23 @@ export function FtueIntroVideo({ onDone }) {
       setTimeout(() => setCanSkip(true), 800);
       return;
     }
-    if (canSkip) finish();
+    if (!canSkip) return;
+    if (!confirmSkip) {
+      // First skip-tap: ask for confirmation. Auto-clear after a few seconds
+      // so an idle tap doesn't permanently arm the skip.
+      setConfirmSkip(true);
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = setTimeout(() => setConfirmSkip(false), 3000);
+      return;
+    }
+    // Second tap while confirm is showing → actually skip.
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    finish();
   };
+
+  React.useEffect(() => () => {
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+  }, []);
 
   return (
     <div
@@ -83,20 +100,37 @@ export function FtueIntroVideo({ onDone }) {
       )}
       {needsTap && !error && (
         <div style={{
-          position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          position: 'absolute', top: 24, left: '50%', transform: 'translateX(-50%)',
           color: '#fff', fontFamily: 'monospace', fontSize: 14, fontWeight: 700,
           background: 'rgba(0,0,0,0.7)', padding: '8px 14px', borderRadius: 2,
           letterSpacing: 2, pointerEvents: 'none',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
           animation: 'tappulse 1.4s ease-in-out infinite',
-        }}>▸ TAP TO ENABLE SOUND</div>
+        }}>
+          <span style={{ lineHeight: 1 }}>TAP TO ENABLE SOUND</span>
+          <span style={{
+            fontSize: 22, lineHeight: 1, display: 'block',
+            animation: 'fingerTap 1s ease-in-out infinite',
+          }}>👆</span>
+          <style>{`@keyframes fingerTap { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }`}</style>
+        </div>
       )}
-      {canSkip && !needsTap && (
+      {canSkip && !needsTap && !confirmSkip && (
         <div style={{
           position: 'absolute', bottom: 16, right: 16,
           color: '#fff', fontFamily: 'monospace', fontSize: 12,
           background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: 2,
           letterSpacing: 1, pointerEvents: 'none',
         }}>TAP TO SKIP</div>
+      )}
+      {confirmSkip && (
+        <div style={{
+          position: 'absolute', top: 24, left: '50%', transform: 'translateX(-50%)',
+          color: '#ffeb3b', fontFamily: 'monospace', fontSize: 14, fontWeight: 700,
+          background: 'rgba(0,0,0,0.85)', padding: '8px 14px', borderRadius: 2,
+          letterSpacing: 2, pointerEvents: 'none',
+          border: '1px solid #ffeb3b',
+        }}>SKIP INTRO? TAP AGAIN</div>
       )}
     </div>
   );

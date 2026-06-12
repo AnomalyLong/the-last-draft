@@ -77,6 +77,8 @@ function TeamSetupView({ initialName = "", onBack, onContinue }) {
   // Color and emblem are locked for now — always the unlocked defaults.
   const [color, setColor] = useStateTS(UNLOCKED_COLOR);
   const [emblem, setEmblem] = useStateTS(UNLOCKED_EMBLEM);
+  // Step-by-step flow: name → color → emblem → submit
+  const [step, setStep] = useStateTS('name');
   const inputRef = useRefTS(null);
 
   // Live-apply chosen color to CSS vars so dossier preview + chrome update in real time.
@@ -115,22 +117,44 @@ function TeamSetupView({ initialName = "", onBack, onContinue }) {
   };
 
   const handleKey = (e) => {
-    if (e.key === "Enter" && canContinue) {
+    if (e.key === "Enter" && step === 'name' && canContinue) {
       e.preventDefault();
+      setStep('color');
+    }
+  };
+
+  const handleAdvance = () => {
+    if (step === 'name') {
+      if (!canContinue) return;
+      setStep('color');
+    } else if (step === 'color') {
+      setStep('emblem');
+    } else if (step === 'emblem') {
       handleSubmit();
     }
   };
+
+  const handleStepBack = () => {
+    if (step === 'emblem') setStep('color');
+    else if (step === 'color') setStep('name');
+    else onBack && onBack();
+  };
+
+  const stepLabel =
+    step === 'name'   ? { num: '01', total: '03', heading: 'NAME YOUR TEAM' } :
+    step === 'color'  ? { num: '02', total: '03', heading: 'PICK YOUR UNIFORM' } :
+                        { num: '03', total: '03', heading: 'PICK YOUR LOGO' };
 
   return (
     <div className="tsetup">
       {/* Top nav */}
       <div className="ts-topnav">
-        <button className="ts-back-btn" onClick={onBack} aria-label="Back">
+        <button className="ts-back-btn" onClick={handleStepBack} aria-label="Back">
           <span>◀</span>
         </button>
         <div className="ts-title">
           <span className="ts-big">TEAM SETUP</span>
-          <span className="ts-sub">ESTABLISH TEAM</span>
+          <span className="ts-sub">STEP {stepLabel.num} / {stepLabel.total}</span>
         </div>
         <div className="ts-topnav-spacer" aria-hidden="true" />
       </div>
@@ -138,100 +162,106 @@ function TeamSetupView({ initialName = "", onBack, onContinue }) {
       {/* Section header */}
       <div className="ts-section-h">
         <span className="ts-line"></span>
-        <span className="ts-label">IDENTIFY YOUR TEAM</span>
+        <span className="ts-label">{stepLabel.heading}</span>
         <span className="ts-line"></span>
       </div>
 
       {/* Main grid */}
       <div className="ts-grid">
-        {/* LEFT: form */}
+        {/* LEFT: form — one step visible at a time */}
         <div className="ts-form">
-          {/* Team name */}
-          <div className="ts-panel">
-            <div className="ts-panel-h">
-              <span className="ts-h-num">01 ·</span>
-              <span className="ts-h-name">TEAM NAME</span>
-              <span className="ts-h-hint">2 – {MAX_NAME} CHARS</span>
-            </div>
-            <div className="ts-name-row">
-              <span className="ts-name-prefix">▸</span>
-              <input
-                ref={inputRef}
-                className="ts-name-input"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value.slice(0, MAX_NAME + 4))}
-                onKeyDown={handleKey}
-                placeholder="CALL SIGN"
-                maxLength={MAX_NAME + 4}
-                autoComplete="off"
-                spellCheck="false"
-              />
-              <span className={`ts-counter ${over ? "over" : ""}`}>
-                <b>{len}</b> / {MAX_NAME}
-              </span>
-            </div>
-            <div className="ts-name-suggest">
-              <span className="ts-suggest-lbl">▸ SUGGEST</span>
-              {NAME_SUGGESTIONS.map((s) => (
-                <button key={s}
-                        type="button"
-                        className="ts-suggest-chip"
-                        onClick={() => setName(s)}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Color */}
-          <div className="ts-panel">
-            <div className="ts-panel-h">
-              <span className="ts-h-num">02 ·</span>
-              <span className="ts-h-name">TEAM COLOR</span>
-              <span className="ts-h-hint">UNIFORM · BANNER · UI</span>
-            </div>
-            <div className="ts-swatches">
-              {TEAM_COLORS.map((c) => (
-                <ColorSwatch key={c.id}
-                             c={c}
-                             active={color === c.id}
-                             locked={c.id !== UNLOCKED_COLOR}
-                             onClick={() => setColor(c.id)}/>
-              ))}
-            </div>
-          </div>
-
-          {/* Emblem */}
-          <div className="ts-panel">
-            <div className="ts-panel-h">
-              <span className="ts-h-num">03 ·</span>
-              <span className="ts-h-name">LOGO</span>
-              <span className="ts-h-hint">TEAM LOGO</span>
-            </div>
-            <div className="ts-emblems">
-              {EMBLEMS.map((e) => {
-                const locked = e.id !== UNLOCKED_EMBLEM;
-                return (
-                  <button key={e.id}
+          {/* Step 01 — Team name */}
+          {step === 'name' && (
+            <div className="ts-panel">
+              <div className="ts-panel-h">
+                <span className="ts-h-num">01 ·</span>
+                <span className="ts-h-name">TEAM NAME</span>
+                <span className="ts-h-hint">2 – {MAX_NAME} CHARS</span>
+              </div>
+              <div className="ts-name-row">
+                <span className="ts-name-prefix">▸</span>
+                <input
+                  ref={inputRef}
+                  className="ts-name-input"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value.slice(0, MAX_NAME + 4))}
+                  onKeyDown={handleKey}
+                  placeholder="TEAM NAME"
+                  maxLength={MAX_NAME + 4}
+                  autoComplete="off"
+                  spellCheck="false"
+                />
+                <span className={`ts-counter ${over ? "over" : ""}`}>
+                  <b>{len}</b> / {MAX_NAME}
+                </span>
+              </div>
+              <div className="ts-name-suggest">
+                <span className="ts-suggest-lbl">▸ SUGGEST</span>
+                {NAME_SUGGESTIONS.map((s) => (
+                  <button key={s}
                           type="button"
-                          className={`ts-em ${emblem === e.id ? "is-active" : ""} ${locked ? "is-locked" : ""}`}
-                          onClick={locked ? undefined : () => setEmblem(e.id)}
-                          disabled={locked}
-                          aria-disabled={locked || undefined}
-                          aria-label={`Logo ${e.id}${locked ? " (locked)" : ""}`}
-                          title={locked ? "Locked" : undefined}>
-                    <svg viewBox="0 0 100 100" width="36" height="36">
-                      <g fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
-                        {e.paths}
-                      </g>
-                    </svg>
-                    {locked && <span className="ts-em-lock" aria-hidden="true">🔒</span>}
+                          className="ts-suggest-chip"
+                          onClick={() => setName(s)}>
+                    {s}
                   </button>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Step 02 — Uniform color */}
+          {step === 'color' && (
+            <div className="ts-panel">
+              <div className="ts-panel-h">
+                <span className="ts-h-num">02 ·</span>
+                <span className="ts-h-name">UNIFORM</span>
+                <span className="ts-h-hint">UNIFORM · BANNER · UI</span>
+              </div>
+              <div className="ts-swatches">
+                {TEAM_COLORS.map((c) => (
+                  <ColorSwatch key={c.id}
+                               c={c}
+                               active={color === c.id}
+                               locked={c.id !== UNLOCKED_COLOR}
+                               onClick={() => setColor(c.id)}/>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 03 — Team logo */}
+          {step === 'emblem' && (
+            <div className="ts-panel">
+              <div className="ts-panel-h">
+                <span className="ts-h-num">03 ·</span>
+                <span className="ts-h-name">TEAM LOGO</span>
+                <span className="ts-h-hint">TEAM LOGO</span>
+              </div>
+              <div className="ts-emblems">
+                {EMBLEMS.map((e) => {
+                  const locked = e.id !== UNLOCKED_EMBLEM;
+                  return (
+                    <button key={e.id}
+                            type="button"
+                            className={`ts-em ${emblem === e.id ? "is-active" : ""} ${locked ? "is-locked" : ""}`}
+                            onClick={locked ? undefined : () => setEmblem(e.id)}
+                            disabled={locked}
+                            aria-disabled={locked || undefined}
+                            aria-label={`Logo ${e.id}${locked ? " (locked)" : ""}`}
+                            title={locked ? "Locked" : undefined}>
+                      <svg viewBox="0 0 100 100" width="36" height="36">
+                        <g fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+                          {e.paths}
+                        </g>
+                      </svg>
+                      {locked && <span className="ts-em-lock" aria-hidden="true">🔒</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
@@ -239,12 +269,12 @@ function TeamSetupView({ initialName = "", onBack, onContinue }) {
       {/* Footer */}
       <div className="ts-footer">
         <div className="ts-foot-hint">
-          ▸ <b>STEP 01</b> NAME &amp; COLORS · <b>STEP 02</b> DRAFT ROSTER
+          ▸ <b>STEP {stepLabel.num}</b> {stepLabel.heading}
         </div>
         <button className="ts-btn primary"
-                onClick={handleSubmit}
-                disabled={!canContinue}>
-          <span>CONTINUE TO DRAFT</span>
+                onClick={handleAdvance}
+                disabled={step === 'name' && !canContinue}>
+          <span>{step === 'emblem' ? 'CONTINUE TO DRAFT' : 'CONFIRM'}</span>
           <span className="ts-btn-arrow">▶</span>
         </button>
       </div>
