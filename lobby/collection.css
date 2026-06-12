@@ -36,12 +36,20 @@
 
 /* ── Top nav ── */
 .col-topnav {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   height: 56px;
   flex: none;
+}
+/* Center the title in the bar regardless of the back button's width (matches
+   the draft header), instead of letting space-between shove it to the right. */
+.col-topnav .col-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 .col-topnav .back-btn,
 .col-topnav .filter-btn {
@@ -74,14 +82,16 @@
 .ct-big {
   font-family: var(--f-head);
   font-weight: 900;
-  font-size: 36px;
+  font-size: 32px;        /* match the draft header */
   letter-spacing: 0.32em;
   color: var(--c-ink);
   text-shadow: 0 0 18px rgba(255,255,255,0.25);
+  line-height: 1;
+  white-space: nowrap;
 }
 .ct-sub {
-  font-family: var(--f-jp);
-  font-size: 13px;
+  font-family: var(--f-mono);
+  font-size: 11px;        /* match the draft header */
   letter-spacing: 0.22em;
   color: var(--c-ink-dim);
 }

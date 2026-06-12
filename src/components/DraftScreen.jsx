@@ -17,13 +17,13 @@ const POS_COLORS = {
 };
 
 // Tier defs: gold = OVR≥71 (best, biggest burst), blue = OVR 64-70, silver = OVR 58-63, common = OVR<58
-const TIER_DEFS = {
+export const TIER_DEFS = {
   common: { label: 'COMMON',     color: '#b0b8c8', glow: '#d8dde6', rarity: 0, burstDur: 0,   burstSpeed: 0, sparkles: 0  },
   silver: { label: 'UNCOMMON',   color: '#b0b8c8', glow: '#d8dde6', rarity: 0, burstDur: 0,   burstSpeed: 0, sparkles: 0  },
   blue:   { label: 'RARE',       color: '#30c0e0', glow: '#60d8f0', rarity: 1, burstDur: 138, burstSpeed: 5, sparkles: 12 },
   gold:   { label: 'ULTRA RARE', color: '#ffc94a', glow: '#ffe080', rarity: 2, burstDur: 175, burstSpeed: 7, sparkles: 20 },
 };
-function getPlayerTierKey(ovr, ability) { if (ability) return 'gold'; return ovr >= 76 ? 'gold' : ovr >= 68 ? 'blue' : ovr >= 62 ? 'silver' : 'common'; }
+export function getPlayerTierKey(ovr, ability) { if (ability) return 'gold'; return ovr >= 76 ? 'gold' : ovr >= 68 ? 'blue' : ovr >= 62 ? 'silver' : 'common'; }
 function tierToRarity(ovr, ability) { if (ability) return 'ultra_rare'; return ovr >= 76 ? 'ultra_rare' : ovr >= 68 ? 'super_rare' : ovr >= 62 ? 'rare' : 'common'; }
 
 const ABILITY_RARITY_COLORS = { 1: '#20c8a0', 2: '#c060e0', 3: '#e8c060' };
@@ -678,7 +678,7 @@ function CardBack({ card, idx, tick }) {
 }
 
 // ─── Card Front ────────────────────────────────────────────────────────────
-function CardFront({ card, tier, pulseBorderW, pulse, shimmerX, revealed, universeId }) {
+export function CardFront({ card, tier, pulseBorderW, pulse, shimmerX, revealed, universeId }) {
   // POS_COLORS still drives the jersey color for visual variety — players
   // have a stat archetype internally, but we don't surface "PG/SG/..." anywhere.
   const posColor     = POS_COLORS[card.pos] || '#888';
@@ -875,14 +875,23 @@ function getFtueLine(phase, pickNum, total, tick, hasAbility = false) {
   return FTUE_IDLE_LINES[Math.floor((tick ?? 0) / 220) % FTUE_IDLE_LINES.length];
 }
 
-export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack, onMenu }) {
+export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', onStart, onBack, onMenu, onPaidComplete }) {
+  // mode: 'free'  → FTUE/free 5-player draft (uses freeDrafts, then assign to lineup)
+  //       'credit'→ paid SINGLE-player draft (server charges the monthly doubling
+  //                 cost, the player lands in the collection — no lineup assign).
+  const paidMode = mode === 'credit';
+  const targetCount = paidMode ? 1 : ROSTER_SIZE;
+
   // Draft state
   const [draftPool]   = React.useState(() => generateDraftPool());
   const [roster,      setRoster]      = React.useState([]);
-  const [phase,       setPhase]       = React.useState('draft'); // 'draft' | 'assign'
+  const [phase,       setPhase]       = React.useState('draft'); // 'draft' | 'assign' | 'paidResult'
   const [assignments, setAssignments] = React.useState({});
   const [selectedId,  setSelectedId]  = React.useState(null);
   const [saving,      setSaving]      = React.useState(false);
+  // Paid (credit) draft result: the minted player, or an error message.
+  const [paidResult,  setPaidResult]  = React.useState(null);
+  const [paidError,   setPaidError]   = React.useState(null);
 
   // FTUE coach state
   const [coachDismissed, setCoachDismissed] = React.useState(false);
@@ -1039,9 +1048,14 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
     setRoster(newRoster);
 
     setTimeout(() => {
-      if (newRoster.length >= ROSTER_SIZE) {
+      if (newRoster.length >= targetCount) {
         setRunning(false);
-        setPhase('assign');
+        if (paidMode) {
+          // Single paid pick → charge + mint server-side, then show the result.
+          handlePaidComplete(newRoster[0]);
+        } else {
+          setPhase('assign');
+        }
         advancingRef.current = false;
         return;
       }
@@ -1065,6 +1079,27 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
   };
 
   // ── Backend ──────────────────────────────────────────────────────────────
+  // Paid single draft: charge + mint on the server (cost is computed there from
+  // the monthly doubling schedule), then surface the result. The player lands in
+  // the collection; the user slots it via the Collection screen.
+  const handlePaidComplete = async (player) => {
+    setSaving(true);
+    try {
+      const res = await trpc.draft.credit.mutate({
+        name: player.name,
+        rarity: tierToRarity(player.ovr, player.ability),
+        spd: player.spd, dex: player.dex, jmp: player.jmp, acc: player.acc,
+        ability: player.ability ?? null,
+      });
+      setPaidResult({ ...player, serverId: res?.player?.id ?? null, costPaid: res?.cost ?? null });
+    } catch (e) {
+      setPaidError(e?.message || 'Draft failed — your credits were not charged.');
+    } finally {
+      setSaving(false);
+      setPhase('paidResult');
+    }
+  };
+
   const saveRosterToServer = async (lineup) => {
     const saves = await Promise.allSettled(
       lineup.map(player => trpc.draft.free.mutate({
@@ -1266,7 +1301,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
     { x:1920*0.70, y:1080*0.50 },
   ];
 
-  const picksLeft = ROSTER_SIZE - roster.length;
+  const picksLeft = targetCount - roster.length;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -1378,6 +1413,45 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, onStart, onBack
             )}
           </div>
         </>
+      )}
+
+      {/* ── PAID RESULT PHASE (credit draft) ── */}
+      {phase === 'paidResult' && (
+        <div className="paid-result">
+          {paidError ? (
+            <>
+              <div className="paid-result-title err">DRAFT FAILED</div>
+              <div className="paid-result-sub">{paidError}</div>
+              <button className="paid-result-btn" onClick={() => { playCancel(); onPaidComplete?.(null); }}>
+                BACK TO DRAFT HUB
+              </button>
+            </>
+          ) : paidResult ? (() => {
+            const ovr = paidResult.ovr;
+            const ability = paidResult.ability ?? null;
+            const tier = TIER_DEFS[getPlayerTierKey(ovr, ability)];
+            const cardObj = { id: paidResult.id, pos: paidResult.pos, name: paidResult.name, spd: paidResult.spd, dex: paidResult.dex, jmp: paidResult.jmp, acc: paidResult.acc, ovr, ability };
+            return (
+              <>
+                <div className="paid-result-title">✓ DRAFTED</div>
+                <div className="paid-result-card">
+                  <div className="draft-card-anim revealed">
+                    <CardFront card={cardObj} tier={tier} revealed={false} pulseBorderW={0} pulse={0} shimmerX={0} universeId={String(paidResult.serverId ?? paidResult.id).padStart(3, '0')} />
+                  </div>
+                </div>
+                <div className="paid-result-sub">
+                  {paidResult.name} joined your collection{typeof paidResult.costPaid === 'number' ? ` · ${paidResult.costPaid.toLocaleString()} CR` : ''}
+                </div>
+                <div className="paid-result-hint">Set your lineup in the Collection screen.</div>
+                <button className="paid-result-btn" onClick={() => { playSelect(); onPaidComplete?.(paidResult); }}>
+                  DONE
+                </button>
+              </>
+            );
+          })() : (
+            <div className="paid-result-title">DRAFTING…</div>
+          )}
+        </div>
       )}
 
       {/* ── ASSIGN PHASE ── */}

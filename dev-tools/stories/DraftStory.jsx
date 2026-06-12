@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { PhoneFrameExpanded, DEVICES } from '../PhoneFrame.jsx';
 import { CrtOverlay } from '../StoryFrame.jsx';
 import { DraftScreen } from '@src/components/DraftScreen.jsx';
+import { DraftHubScreen } from '@src/components/DraftHubScreen.jsx';
 
 const TEAM_NAMES = ['BULLS', 'WOLVES', 'HAWKS', 'NETS', 'KINGS'];
 
@@ -28,6 +29,12 @@ export default function DraftStory() {
   const [desktopH, setDesktopH] = useState(548);
   const [scanlines, setScanlines] = useState(0.5);
   const [vignette, setVignette]   = useState(0.75);
+  const [screen, setScreen] = useState('draft');   // 'draft' | 'hub'
+  const [draftMode, setDraftMode] = useState('free'); // 'free' | 'credit'
+  const [credits, setCredits] = useState(8000);
+  const [freeDrafts, setFreeDrafts] = useState(0);
+  const [paidPicks, setPaidPicks] = useState(0);
+  const [nextDraftCost, setNextDraftCost] = useState(2500);
   const push = (msg) => setLog((l) => [`${new Date().toLocaleTimeString()} ${msg}`, ...l].slice(0, 10));
 
   return (
@@ -109,6 +116,47 @@ export default function DraftStory() {
           <input type="checkbox" checked={isFtue} onChange={(e) => setIsFtue(e.target.checked)} />
           FTUE (coach dialogue)
         </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          Screen
+          <select value={screen} onChange={e => setScreen(e.target.value)}
+            style={{ background: '#1a1a1a', border: '1px solid #444', color: '#ccc', borderRadius: 3, padding: '2px 6px', fontSize: 12 }}>
+            <option value="draft">Draft</option>
+            <option value="hub">Hub</option>
+          </select>
+        </label>
+        {screen === 'draft' ? (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            Mode
+            <select value={draftMode} onChange={e => setDraftMode(e.target.value)}
+              style={{ background: '#1a1a1a', border: '1px solid #444', color: '#ccc', borderRadius: 3, padding: '2px 6px', fontSize: 12 }}>
+              <option value="free">Free (5)</option>
+              <option value="credit">Credit (1)</option>
+            </select>
+          </label>
+        ) : (
+          <>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Credits
+              <input type="number" value={credits} onChange={e => setCredits(Number(e.target.value))}
+                style={{ width: 70, background: '#1a1a1a', border: '1px solid #444', color: '#ccc', borderRadius: 3, padding: '2px 6px', fontSize: 12 }} />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Next cost
+              <input type="number" value={nextDraftCost} onChange={e => setNextDraftCost(Number(e.target.value))}
+                style={{ width: 70, background: '#1a1a1a', border: '1px solid #444', color: '#ccc', borderRadius: 3, padding: '2px 6px', fontSize: 12 }} />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Free picks
+              <input type="number" value={freeDrafts} onChange={e => setFreeDrafts(Number(e.target.value))}
+                style={{ width: 50, background: '#1a1a1a', border: '1px solid #444', color: '#ccc', borderRadius: 3, padding: '2px 6px', fontSize: 12 }} />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Paid picks
+              <input type="number" value={paidPicks} onChange={e => setPaidPicks(Number(e.target.value))}
+                style={{ width: 50, background: '#1a1a1a', border: '1px solid #444', color: '#ccc', borderRadius: 3, padding: '2px 6px', fontSize: 12 }} />
+            </label>
+          </>
+        )}
         <button
           onClick={() => setKey((k) => k + 1)}
           style={{ background: '#1a1a1a', border: '1px solid #444', color: '#aaa', borderRadius: 3, padding: '3px 10px', cursor: 'pointer', fontSize: 12 }}
@@ -120,14 +168,30 @@ export default function DraftStory() {
       {/* Preview */}
       {mobile ? (
         <PhoneFrameExpanded device={DEVICES[deviceKey]}>
-          <DraftScreen
-            key={`${key}-${teamName}-${isFtue}-m`}
-            homeTeamName={teamName}
-            isFtue={isFtue}
-            onStart={(roster) => push(`onStart (${roster?.length ?? 0} players)`)}
-            onBack={() => push('onBack')}
-            onMenu={(roster) => push(`onMenu (${roster?.length ?? 0} players)`)}
-          />
+          {screen === 'hub' ? (
+            <DraftHubScreen
+              freeDrafts={freeDrafts}
+              paidPicks={paidPicks}
+              credits={credits}
+              rosterCount={3}
+              nextDraftCost={nextDraftCost}
+              onUsePick={() => push('onUsePick')}
+              onBuyDraft={() => { push('onBuyDraft (charge + bank)'); setPaidPicks(p => p + 1); }}
+              onCreditDraft={() => push('onCreditDraft (use banked pick)')}
+              onBack={() => push('onBack')}
+            />
+          ) : (
+            <DraftScreen
+              key={`${key}-${teamName}-${isFtue}-${draftMode}-m`}
+              homeTeamName={teamName}
+              isFtue={isFtue}
+              mode={draftMode}
+              onStart={(roster) => push(`onStart (${roster?.length ?? 0} players)`)}
+              onPaidComplete={(p) => push(`onPaidComplete (${p?.name ?? 'cancel'})`)}
+              onBack={() => push('onBack')}
+              onMenu={(roster) => push(`onMenu (${roster?.length ?? 0} players)`)}
+            />
+          )}
           <CrtOverlay scanlines={scanlines} vignette={vignette} />
         </PhoneFrameExpanded>
       ) : (
@@ -140,14 +204,30 @@ export default function DraftStory() {
           background: '#02060a',
           flexShrink: 0,
         }}>
-          <DraftScreen
-            key={`${key}-${teamName}-${isFtue}`}
-            homeTeamName={teamName}
-            isFtue={isFtue}
-            onStart={(roster) => push(`onStart (${roster?.length ?? 0} players)`)}
-            onBack={() => push('onBack')}
-            onMenu={(roster) => push(`onMenu (${roster?.length ?? 0} players)`)}
-          />
+          {screen === 'hub' ? (
+            <DraftHubScreen
+              freeDrafts={freeDrafts}
+              paidPicks={paidPicks}
+              credits={credits}
+              rosterCount={3}
+              nextDraftCost={nextDraftCost}
+              onUsePick={() => push('onUsePick')}
+              onBuyDraft={() => { push('onBuyDraft (charge + bank)'); setPaidPicks(p => p + 1); }}
+              onCreditDraft={() => push('onCreditDraft (use banked pick)')}
+              onBack={() => push('onBack')}
+            />
+          ) : (
+            <DraftScreen
+              key={`${key}-${teamName}-${isFtue}-${draftMode}`}
+              homeTeamName={teamName}
+              isFtue={isFtue}
+              mode={draftMode}
+              onStart={(roster) => push(`onStart (${roster?.length ?? 0} players)`)}
+              onPaidComplete={(p) => push(`onPaidComplete (${p?.name ?? 'cancel'})`)}
+              onBack={() => push('onBack')}
+              onMenu={(roster) => push(`onMenu (${roster?.length ?? 0} players)`)}
+            />
+          )}
           <CrtOverlay scanlines={scanlines} vignette={vignette} />
         </div>
       )}

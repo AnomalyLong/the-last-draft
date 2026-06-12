@@ -35,7 +35,63 @@ function useWrap() {
   return { busy, msg, wrap, setMsg };
 }
 
-const PAGE_SIZE = 30;
+// Shared usernames list — loads up to 500 most-recently-seen usernames once
+// and exposes them for autocomplete (datalist) and the browse chip list.
+function useUsernames() {
+  const [users, setUsers] = useState([]);
+  const [total, setTotal] = useState(0);
+  useEffect(() => {
+    trpc.admin.listUsers.query({ offset: 0, limit: 500 })
+      .then(data => { setUsers(data.users); setTotal(data.total); })
+      .catch(() => {});
+  }, []);
+  return { users, total };
+}
+
+// <datalist> source for browser-native autocomplete on username inputs.
+// Rendered once per panel; multiple inputs can share the same id.
+function UsernameDatalist({ id, users }) {
+  return (
+    <datalist id={id}>
+      {users.map(u => <option key={u} value={u} />)}
+    </datalist>
+  );
+}
+
+// Compact filterable chip list — click to populate the username field.
+// Used by both UserPanel and MissionsPanel.
+function UsernameBrowser({ users, total, selected, onPick, busy }) {
+  const [filter, setFilter] = useState('');
+  const matches = filter
+    ? users.filter(u => u.toLowerCase().includes(filter.toLowerCase()))
+    : users;
+  return (
+    <div>
+      <input
+        style={{ ...S.input, width: '100%', marginBottom: 8, boxSizing: 'border-box' }}
+        placeholder={`Filter ${total || users.length} user${(total || users.length) !== 1 ? 's' : ''}…`}
+        value={filter}
+        onChange={e => setFilter(e.target.value)}
+      />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8, maxHeight: 120, overflowY: 'auto', padding: 2 }}>
+        {matches.slice(0, 200).map(u => (
+          <button key={u} onClick={() => onPick(u)} disabled={busy}
+            style={{
+              background: selected === u ? '#1a3a6a' : '#0a1220',
+              border: `1px solid ${selected === u ? '#3a6aaa' : '#2a3a58'}`,
+              color: selected === u ? '#e0e0e0' : '#778',
+              padding: '3px 10px', borderRadius: 12, cursor: 'pointer',
+              fontFamily: 'monospace', fontSize: 11,
+            }}>
+            {u}
+          </button>
+        ))}
+        {matches.length === 0 && <span style={{ color: '#334', fontSize: 11 }}>no matches</span>}
+        {matches.length > 200 && <span style={{ color: '#334', fontSize: 11 }}>… {matches.length - 200} more — refine filter</span>}
+      </div>
+    </div>
+  );
+}
 
 const RARITY_COLOR = { common: '#778', rare: '#3a8fd4', epic: '#a060e0', legendary: '#e0a030' };
 
@@ -45,19 +101,9 @@ function UserPanel() {
   const [roster, setRoster] = useState(null);
   const [credits, setCredits] = useState('');
   const [freeDrafts, setFreeDrafts] = useState('');
-  const [page, setPage] = useState(0);
-  const [filter, setFilter] = useState('');
-  const [listData, setListData] = useState(null); // { users, total }
   const [confirmReset, setConfirmReset] = useState(false);
   const { busy, msg, wrap, setMsg } = useWrap();
-
-  const fetchPage = (p) => {
-    trpc.admin.listUsers.query({ offset: p * PAGE_SIZE, limit: PAGE_SIZE })
-      .then(data => { setListData(data); setPage(p); setFilter(''); })
-      .catch(() => {});
-  };
-
-  useEffect(() => { fetchPage(0); }, []);
+  const { users, total } = useUsernames();
 
   const load = (name) => {
     const target = (name ?? username).trim();
@@ -118,47 +164,20 @@ function UserPanel() {
 
   const fmt = (ts) => ts ? new Date(ts).toLocaleString() : '—';
 
-  const totalPages = listData ? Math.ceil(listData.total / PAGE_SIZE) : 0;
-  const visibleUsers = listData
-    ? (filter ? listData.users.filter(u => u.toLowerCase().includes(filter.toLowerCase())) : listData.users)
-    : [];
-
   return (
     <div>
       <div style={S.heading}>
         Users
-        {listData && <span style={{ color: '#445', marginLeft: 8 }}>{listData.total} total</span>}
+        {total > 0 && <span style={{ color: '#445', marginLeft: 8 }}>{total} total</span>}
       </div>
 
-      {listData && (
-        <>
-          <input
-            style={{ ...S.input, width: '100%', marginBottom: 8, boxSizing: 'border-box' }}
-            placeholder="Filter this page…"
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-          />
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8, minHeight: 28 }}>
-            {visibleUsers.map(u => (
-              <button key={u} onClick={() => load(u)} disabled={busy}
-                style={{ background: username === u ? '#1a3a6a' : '#0a1220', border: `1px solid ${username === u ? '#3a6aaa' : '#2a3a58'}`, color: username === u ? '#e0e0e0' : '#778', padding: '3px 10px', borderRadius: 12, cursor: 'pointer', fontFamily: 'monospace', fontSize: 11 }}>
-                {u}
-              </button>
-            ))}
-            {visibleUsers.length === 0 && <span style={{ color: '#334', fontSize: 11 }}>no matches</span>}
-          </div>
-          {totalPages > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <button style={S.btn()} onClick={() => fetchPage(page - 1)} disabled={page === 0}>←</button>
-              <span style={{ color: '#556', fontSize: 11 }}>page {page + 1} / {totalPages}</span>
-              <button style={S.btn()} onClick={() => fetchPage(page + 1)} disabled={page >= totalPages - 1}>→</button>
-            </div>
-          )}
-        </>
-      )}
+      <UsernameBrowser users={users} total={total} selected={username}
+        onPick={(u) => load(u)} busy={busy} />
 
+      <UsernameDatalist id="admin-usernames" users={users} />
       <div style={{ ...S.row, marginBottom: 4 }}>
         <input style={S.input} placeholder="Reddit username" value={username}
+          list="admin-usernames" autoComplete="off"
           onChange={e => setUsername(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()} />
         <button style={S.btn()} onClick={() => load()} disabled={busy || !username.trim()}>Load</button>
@@ -172,6 +191,7 @@ function UserPanel() {
               ['Credits', user.credits],
               ['Energy', `${user.energy} / 5`],
               ['Free Drafts', user.freeDrafts],
+              ['Paid Picks', user.paidPicks ?? 0],
               ['Games Played', user.gamesPlayed],
               ['Credits Earned', user.creditsEarned],
               ['First Seen', fmt(user.firstSeen)],
@@ -372,7 +392,259 @@ function AdminsPanel() {
   );
 }
 
-const TABS = ['User', 'Games', 'Admins'];
+function CatalogEditor() {
+  const [data, setData] = useState(null); // { catalog, defaults }
+  const [edits, setEdits] = useState({}); // { [id]: { label, sub, reward, total, accent } }
+  const { busy, msg, wrap, setMsg } = useWrap();
+
+  const load = () => wrap(async () => {
+    const fresh = await trpc.admin.getMissionCatalog.query();
+    setData(fresh);
+    setEdits({});
+  });
+
+  useEffect(() => { load(); }, []);
+
+  const startEdit = (m) => setEdits(e => ({ ...e, [m.id]: { ...m } }));
+  const cancelEdit = (id) => setEdits(e => { const n = { ...e }; delete n[id]; return n; });
+  const patchEdit = (id, field, v) => setEdits(e => ({ ...e, [id]: { ...e[id], [field]: v } }));
+
+  const saveEdit = (m) => wrap(async () => {
+    const draft = edits[m.id];
+    const updates = {
+      id: m.id,
+      label: draft.label,
+      sub: draft.sub,
+      reward: Number(draft.reward),
+      total: Number(draft.total),
+      accent: draft.accent,
+    };
+    await trpc.admin.updateMissionDef.mutate(updates);
+    cancelEdit(m.id);
+    await load();
+    setMsg({ text: `Saved ${m.id}.`, ok: true });
+  });
+
+  const moveMission = (id, toType) => wrap(async () => {
+    await trpc.admin.moveMissionType.mutate({ id, toType });
+    await load();
+    setMsg({ text: `Moved ${id} → ${toType}.`, ok: true });
+  });
+
+  const resetCatalog = () => wrap(async () => {
+    if (!window.confirm('Reset the global mission catalog to defaults? Per-user progress is not affected.')) return;
+    await trpc.admin.resetMissionCatalog.mutate();
+    await load();
+    setMsg({ text: 'Catalog reset to defaults.', ok: true });
+  });
+
+  if (!data) return <div style={{ color: '#556' }}>Loading catalog…</div>;
+
+  const renderRow = (m, type) => {
+    const draft = edits[m.id];
+    if (draft) {
+      return (
+        <tr key={m.id}>
+          <td style={{ ...S.td, verticalAlign: 'top' }} colSpan={2}>
+            <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr', gap: 6, alignItems: 'center' }}>
+              <span style={{ color: '#556', fontSize: 10 }}>ID</span>
+              <span style={{ color: '#aab', fontSize: 11 }}>{m.id}</span>
+              <span style={{ color: '#556', fontSize: 10 }}>Label</span>
+              <input style={{ ...S.input, width: '100%' }} value={draft.label} onChange={e => patchEdit(m.id, 'label', e.target.value)} />
+              <span style={{ color: '#556', fontSize: 10 }}>Sub</span>
+              <input style={{ ...S.input, width: '100%' }} value={draft.sub} onChange={e => patchEdit(m.id, 'sub', e.target.value)} />
+              <span style={{ color: '#556', fontSize: 10 }}>Reward</span>
+              <input type="number" style={{ ...S.input, width: 90 }} value={draft.reward} onChange={e => patchEdit(m.id, 'reward', e.target.value)} />
+              <span style={{ color: '#556', fontSize: 10 }}>Total</span>
+              <input type="number" style={{ ...S.input, width: 90 }} value={draft.total} onChange={e => patchEdit(m.id, 'total', e.target.value)} />
+              <span style={{ color: '#556', fontSize: 10 }}>Accent</span>
+              <select style={{ ...S.input, width: 120 }} value={draft.accent} onChange={e => patchEdit(m.id, 'accent', e.target.value)}>
+                <option value="cyan">cyan</option>
+                <option value="magenta">magenta</option>
+                <option value="gold">gold</option>
+                <option value="ink">ink</option>
+              </select>
+            </div>
+            <div style={{ ...S.row, marginTop: 8, marginBottom: 0 }}>
+              <button style={S.btn('#1a4a2a')} onClick={() => saveEdit(m)} disabled={busy}>Save</button>
+              <button style={S.btn()} onClick={() => cancelEdit(m.id)} disabled={busy}>Cancel</button>
+            </div>
+          </td>
+        </tr>
+      );
+    }
+    return (
+      <tr key={m.id}>
+        <td style={{ ...S.tdKey }}>
+          <div style={{ color: '#cde', fontWeight: 700 }}>{m.label}</div>
+          <div style={{ color: '#556', fontSize: 10, marginTop: 2 }}>{m.id} · +{m.reward}CR · {m.total}× · {m.accent}</div>
+          <div style={{ color: '#556', fontSize: 10, marginTop: 1 }}>{m.sub}</div>
+        </td>
+        <td style={{ ...S.td }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button style={{ ...S.btn(), padding: '4px 10px', fontSize: 11 }} onClick={() => startEdit(m)} disabled={busy}>Edit</button>
+            {type === 'daily' ? (
+              <button style={{ ...S.btn('#4a3a1a'), padding: '4px 10px', fontSize: 11 }}
+                onClick={() => moveMission(m.id, 'weekly')} disabled={busy}>
+                → Weekly
+              </button>
+            ) : (
+              <button style={{ ...S.btn('#1a4a3a'), padding: '4px 10px', fontSize: 11 }}
+                onClick={() => moveMission(m.id, 'daily')} disabled={busy}>
+                → Daily
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ ...S.row, justifyContent: 'space-between' }}>
+        <div style={S.heading}>Global Mission Catalog</div>
+        <button style={S.danger} onClick={resetCatalog} disabled={busy}>Reset to defaults</button>
+      </div>
+      {msg && <div style={msg.ok ? S.success : S.error}>{msg.text}</div>}
+      <div style={{ ...S.heading, color: '#7aaff0', marginTop: 12, marginBottom: 6 }}>DAILY (recurring)</div>
+      <table style={S.table}><tbody>{data.catalog.daily.map(m => renderRow(m, 'daily'))}</tbody></table>
+      <div style={{ ...S.heading, color: '#7aaff0', marginTop: 16, marginBottom: 6 }}>WEEKLY</div>
+      <table style={S.table}><tbody>{data.catalog.weekly.map(m => renderRow(m, 'weekly'))}</tbody></table>
+    </div>
+  );
+}
+
+function MissionsPanel() {
+  const [username, setUsername] = useState('');
+  const [missions, setMissions] = useState(null); // { daily, weekly }
+  const [editProg, setEditProg] = useState({});   // { [missionId]: string }
+  const { busy, msg, wrap, setMsg } = useWrap();
+  const { users, total } = useUsernames();
+
+  const load = (name) => {
+    const target = (name ?? username).trim();
+    if (!target) return;
+    setUsername(target);
+    wrap(async () => {
+      const data = await trpc.admin.getUserMissions.query(target);
+      setMissions(data);
+      setEditProg({});
+    });
+  };
+
+  const reload = () => trpc.admin.getUserMissions.query(username.trim()).then(setMissions).catch(() => {});
+
+  const resetAll = () => wrap(async () => {
+    if (!window.confirm(`Reset ALL current-period missions for "${username}"? They'll be able to complete and re-claim everything this period.`)) return;
+    await trpc.admin.resetUserMissions.mutate(username.trim());
+    await reload();
+    setMsg({ text: `Reset missions for ${username}.`, ok: true });
+  });
+
+  const setProgress = (type, missionId) => wrap(async () => {
+    const raw = editProg[missionId];
+    const n = parseInt(raw, 10);
+    if (isNaN(n) || n < 0) { setMsg({ text: 'Enter a non-negative integer.', ok: false }); return; }
+    await trpc.admin.setMissionProgress.mutate({ username: username.trim(), type, missionId, progress: n });
+    setEditProg(p => ({ ...p, [missionId]: '' }));
+    await reload();
+    setMsg({ text: `Set ${missionId} → ${n}.`, ok: true });
+  });
+
+  const complete = (type, missionId) => wrap(async () => {
+    const result = await trpc.admin.completeMission.mutate({ username: username.trim(), type, missionId });
+    await reload();
+    setMsg({
+      text: result.awarded
+        ? `Completed ${missionId} and awarded credits.`
+        : `${missionId} already awarded this period; progress maxed.`,
+      ok: true,
+    });
+  });
+
+  const renderGroup = (type, rows) => (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ ...S.heading, color: '#7aaff0', marginBottom: 8 }}>{type.toUpperCase()}</div>
+      <table style={S.table}>
+        <tbody>
+          {rows.map(m => {
+            const pct = Math.min(100, Math.round((m.progress / m.total) * 100));
+            return (
+              <tr key={m.id}>
+                <td style={{ ...S.tdKey, color: '#88a' }}>
+                  <div style={{ color: '#cde', fontWeight: 700 }}>{m.label}</div>
+                  <div style={{ color: '#556', fontSize: 10, marginTop: 2 }}>{m.id} · +{m.reward}CR</div>
+                </td>
+                <td style={S.td}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 80, height: 6, background: '#1a2030', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: m.awarded ? '#5bf2d4' : '#3a8fd4' }} />
+                    </div>
+                    <span style={{ fontSize: 11, color: '#aab', minWidth: 36, textAlign: 'right' }}>
+                      {m.progress}/{m.total}
+                    </span>
+                    {m.awarded && <span style={{ ...S.tag('#1a4a3a'), color: '#5bf2d4' }}>AWARDED</span>}
+                  </div>
+                  <div style={{ ...S.row, marginTop: 6, marginBottom: 0, gap: 6 }}>
+                    <input
+                      style={{ ...S.input, width: 60, padding: '4px 8px', fontSize: 11 }}
+                      placeholder="N"
+                      type="number"
+                      value={editProg[m.id] ?? ''}
+                      onChange={e => setEditProg(p => ({ ...p, [m.id]: e.target.value }))}
+                    />
+                    <button style={{ ...S.btn(), padding: '4px 10px', fontSize: 11 }}
+                      onClick={() => setProgress(type, m.id)} disabled={busy || (editProg[m.id] ?? '') === ''}>
+                      Set
+                    </button>
+                    <button style={{ ...S.btn('#1a4a2a'), padding: '4px 10px', fontSize: 11 }}
+                      onClick={() => complete(type, m.id)} disabled={busy || m.awarded}>
+                      Complete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <div>
+      <CatalogEditor />
+      <hr style={S.divider} />
+      <div style={S.heading}>
+        User Missions
+        {total > 0 && <span style={{ color: '#445', marginLeft: 8 }}>{total} total</span>}
+      </div>
+      <UsernameBrowser users={users} total={total} selected={username}
+        onPick={(u) => load(u)} busy={busy} />
+      <UsernameDatalist id="admin-mission-usernames" users={users} />
+      <div style={S.row}>
+        <input style={S.input} placeholder="Reddit username" value={username}
+          list="admin-mission-usernames" autoComplete="off"
+          onChange={e => setUsername(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && load()} />
+        <button style={S.btn()} onClick={() => load()} disabled={busy || !username.trim()}>Load</button>
+        {missions && (
+          <button style={S.danger} onClick={resetAll} disabled={busy}>Reset All (current period)</button>
+        )}
+      </div>
+      {msg && <div style={msg.ok ? S.success : S.error}>{msg.text}</div>}
+      {missions && (
+        <div style={{ marginTop: 14 }}>
+          {renderGroup('daily', missions.daily)}
+          {renderGroup('weekly', missions.weekly)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const TABS = ['User', 'Games', 'Missions', 'Admins'];
 
 export function AdminOverlay({ onClose }) {
   const [tab, setTab] = useState(0);
@@ -398,7 +670,8 @@ export function AdminOverlay({ onClose }) {
         <div style={S.body}>
           {tab === 0 && <UserPanel />}
           {tab === 1 && <GamesPanel />}
-          {tab === 2 && <AdminsPanel />}
+          {tab === 2 && <MissionsPanel />}
+          {tab === 3 && <AdminsPanel />}
         </div>
       </div>
     </div>

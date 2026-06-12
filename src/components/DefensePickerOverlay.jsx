@@ -65,9 +65,16 @@ function DefenseCard({ def, x, y, onClick }) {
 
 export function DefensePickerOverlay({ cameraX, onPick }) {
   const [tick, setTick] = React.useState(0);
+  const startMsRef = React.useRef(null);
+  const [elapsedMs, setElapsedMs] = React.useState(0);
   React.useEffect(() => {
     let rafId;
-    const loop = () => { setTick(t => t + 1); rafId = requestAnimationFrame(loop); };
+    startMsRef.current = performance.now();
+    const loop = () => {
+      setTick(t => t + 1);
+      setElapsedMs(performance.now() - startMsRef.current);
+      rafId = requestAnimationFrame(loop);
+    };
     rafId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafId);
   }, []);
@@ -75,7 +82,6 @@ export function DefensePickerOverlay({ cameraX, onPick }) {
   const dlgX    = cameraX + Math.round((ZOOM_W - DLG_W) / 2);
   const panelCX = cameraX + ZOOM_W / 2;
 
-  const elapsedMs   = tick * 16.67;
   const remainingS  = Math.max(0, Math.ceil((AUTO_DISMISS_MS - elapsedMs) / 1000));
 
   const fadeIn  = Math.min(tick / 12, 1);

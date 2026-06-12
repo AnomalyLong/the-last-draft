@@ -115,10 +115,14 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* `safe center` keeps the stack centered when it fits, but on short viewports
+     (e.g. Reddit's 528-wide portrait) where the content overflows it aligns to
+     the top instead of overflowing UPWARD into the DRAFT PICKS header. */
+  justify-content: safe center;
   gap: 22px;
   padding: 0 24px 12px;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .dh-counter {
@@ -237,6 +241,47 @@
   letter-spacing: 0.22em;
   color: var(--c-ink-dim);
   text-align: center;
+}
+
+/* ── Credit (paid) draft block ── */
+.dh-credit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 6px;
+}
+.dh-credit-h {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+}
+.dh-btn.credit {
+  background: linear-gradient(180deg, rgba(255, 217, 122, 0.22), #0a0702);
+  border: 1px solid #ffd97a;
+  color: #ffe9bb;
+  text-shadow: 0 0 10px rgba(255, 217, 122, 0.7);
+  box-shadow:
+    0 0 18px rgba(255, 201, 74, 0.28),
+    inset 0 0 16px rgba(255, 201, 74, 0.12);
+}
+.dh-btn.credit:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(255, 217, 122, 0.32), #0a0702);
+  box-shadow:
+    0 0 26px rgba(255, 201, 74, 0.5),
+    inset 0 0 22px rgba(255, 201, 74, 0.18);
+}
+.dh-credit-note {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--c-ink-dim);
+  text-align: center;
+  line-height: 1.4;
 }
 
 /* ── Compact (mobile / narrow embed) ── */

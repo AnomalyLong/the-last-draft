@@ -2,6 +2,7 @@ import React from 'react';
 import '../styles/lobby.css';
 import { RUN_FRAMES } from '../sprites/run.js';
 import { JERSEY_BASE } from '../constants.js';
+import { BballTip } from './BballTip.jsx';
 
 const POS_COLORS = { PG: '#3ea6ff', SG: '#a855f7', SF: '#19e6c4', PF: '#ff7a3c', C: '#ffc94a' };
 const RARITY_COLORS = { common: '#b0b8c8', rare: '#b0b8c8', super_rare: '#30c0e0', ultra_rare: '#ffc94a' };
@@ -85,6 +86,7 @@ const CARD_GAP = 8;
 function RosterStrip({ roster, onOpen }) {
   const [startIdx, setStartIdx] = React.useState(0);
   const [collapsed, setCollapsed] = React.useState(() => roster.length > 0);
+  const [selectedIdx, setSelectedIdx] = React.useState(0);
   const outerRef = React.useRef(null);
   const [outerW, setOuterW] = React.useState(500);
 
@@ -137,8 +139,9 @@ function RosterStrip({ roster, onOpen }) {
     );
   }
 
-  const leader = roster[0];
-  const leaderAbilities = [leader.ability, ...(leader.abilities ?? [])].map(abilityName).filter(Boolean);
+  const safeIdx = Math.min(selectedIdx, roster.length - 1);
+  const selected = roster[safeIdx];
+  const selectedAbilities = [selected.ability, ...(selected.abilities ?? [])].map(abilityName).filter(Boolean);
 
   return (
     <div className={`lb2-rstrip${collapsed ? ' collapsed' : ''}`} data-testid="roster-strip">
@@ -161,9 +164,9 @@ function RosterStrip({ roster, onOpen }) {
                   const rarityColor = RARITY_COLORS[p.rarity] ?? '#b0b8c8';
                   return (
                     <div key={i}
-                         className={`lb2-rs-card tier-${tier} ${i === 0 ? 'leader' : ''}`}
+                         className={`lb2-rs-card tier-${tier} ${i === 0 ? 'leader' : ''} ${i === safeIdx ? 'selected' : ''}`}
                          style={{ '--pos-c': posColor, '--char-c': posColor, '--rc': rarityColor }}
-                         onClick={onOpen}>
+                         onClick={e => { e.stopPropagation(); setSelectedIdx(i); }}>
                       {i === 0 && <div className="lb2-rs-leader">CAPTAIN</div>}
                       <div className="lb2-rs-pos">{p.pos}</div>
                       <div className="lb2-rs-img">
@@ -194,17 +197,27 @@ function RosterStrip({ roster, onOpen }) {
           </div>
         )}
       </div>
-      {!collapsed && leaderAbilities.length > 0 && (
+      {!collapsed && (
         <div className="lb2-rstrip-buff">
           <span className="lb2-rs-bufftag">ABILITIES</span>
           <span className="lb2-rs-bufftxt">
-            {leaderAbilities.map((a, i) => (
-              <React.Fragment key={i}>
-                {i > 0 && <span className="lb2-rs-buffsep"> · </span>}
-                <b>{a}</b>
-              </React.Fragment>
-            ))}
+            {selectedAbilities.length > 0 ? (
+              selectedAbilities.map((a, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <span className="lb2-rs-buffsep"> · </span>}
+                  <b>{a}</b>
+                </React.Fragment>
+              ))
+            ) : (
+              <span style={{ opacity: 0.5 }}>NONE</span>
+            )}
           </span>
+          <button
+            className="lb2-rs-details"
+            onClick={e => { e.stopPropagation(); onOpen?.(); }}
+          >
+            VIEW DETAILS ▸
+          </button>
         </div>
       )}
     </div>
@@ -212,7 +225,7 @@ function RosterStrip({ roster, onOpen }) {
 }
 
 // ── Featured section (hero card) ─────────────────────────
-function FeaturedSection({ onUnavailable }) {
+export function FeaturedSection({ onUnavailable }) {
   return (
     <div className="lb2-featured">
       <div className="lb2-ft-h">
@@ -227,7 +240,7 @@ function FeaturedSection({ onUnavailable }) {
         </div>
         <div className="lb2-ft-hero-tag">
           <span className="lb2-ft-pulse" />
-          <span>LIVE EVENT</span>
+          <span>LIVE EVENTS - COMING SOON</span>
         </div>
         <div className="lb2-ft-hero-body">
           <div className="lb2-ft-hero-eyebrow">OPEN COURT · SEASON 1</div>
@@ -272,24 +285,87 @@ function NotifDropdown() {
   );
 }
 
-// ── Missions ──────────────────────────────────────────────
-const MISSIONS = {
-  daily: [
-    { id: 'win1',   label: 'WIN A GAME',     sub: 'Complete any match',         reward: 50,  progress: 0, total: 1, accent: 'cyan' },
-    { id: 'draft1', label: 'DRAFT A PLAYER', sub: 'Use a free or credit draft', reward: 25,  progress: 0, total: 1, accent: 'magenta' },
-    { id: 'play3',  label: 'PLAY 3 GAMES',   sub: 'Any mode counts',            reward: 100, progress: 0, total: 3, accent: 'gold' },
-  ],
-  weekly: [
-    { id: 'wwin5',  label: 'WIN 5 GAMES',    sub: 'Any mode',                   reward: 300, progress: 0, total: 5, accent: 'cyan' },
-    { id: 'wdraft', label: 'DRAFT 3 PLAYERS',sub: 'Free or credit drafts',      reward: 150, progress: 0, total: 3, accent: 'magenta' },
-    { id: 'wranked',label: 'PLAY RANKED',    sub: 'Complete a ranked match',    reward: 200, progress: 0, total: 1, accent: 'gold' },
-  ],
-};
+// ── Warp lines ────────────────────────────────────────────
+// Hyperspace-style streaks shooting radially outward from the modal center.
+// Lines are positioned at the center, rotated to a per-streak --angle, then
+// the keyframes translate them outward + scale them longer. Bright "head" on
+// the outer end via a gradient. Memoised so each modal has a stable layout
+// for its lifetime.
+const WARP_COLORS = [
+  '#ffffff', '#ffffff', '#ffffff',     // mostly white — like starlight
+  '#5bf2d4',                            // cyan accent (matches modal border)
+  '#ffd97a',                            // gold accent (matches reward number)
+];
+function WarpLines({ count = 48 }) {
+  const lines = React.useMemo(() => Array.from({ length: count }, (_, i) => {
+    const color = WARP_COLORS[i % WARP_COLORS.length];
+    return {
+      id: i,
+      angle: Math.random() * 360,
+      delay: Math.random() * 1400,
+      duration: 800 + Math.random() * 900,
+      length: 60 + Math.random() * 140,
+      thickness: 1 + Math.random() * 1.6,
+      color,
+    };
+  }), [count]);
+  return (
+    <div className="lb2-warp" aria-hidden="true">
+      {lines.map(l => (
+        <span key={l.id} className="lb2-warp-line"
+          style={{
+            width: `${l.length}px`,
+            height: `${l.thickness}px`,
+            background: `linear-gradient(90deg, transparent 0%, ${l.color} 80%, #ffffff 100%)`,
+            boxShadow: `0 0 6px ${l.color}`,
+            animationDelay: `${l.delay}ms`,
+            animationDuration: `${l.duration}ms`,
+            '--angle': `${l.angle}deg`,
+          }} />
+      ))}
+    </div>
+  );
+}
 
-function DailyMissionsSection() {
+// ── Missions ──────────────────────────────────────────────
+// Time until next UTC midnight / Monday 00:00 UTC, formatted "Xh Ym" or "Xd Yh".
+function formatResetCountdown(type, now = Date.now()) {
+  const d = new Date(now);
+  let target;
+  if (type === 'daily') {
+    target = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 0, 0);
+  } else {
+    // Days until next Monday UTC (1 = Monday). If today is Monday, +7.
+    const dow = d.getUTCDay();
+    const daysToMon = ((1 - dow + 7) % 7) || 7;
+    target = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + daysToMon, 0, 0, 0);
+  }
+  const ms = Math.max(0, target - now);
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  if (h >= 24) {
+    const days = Math.floor(h / 24);
+    return `${days}d ${h % 24}h`;
+  }
+  return `${h}h ${m}m`;
+}
+
+function DailyMissionsSection({ missions, animatingIds, onCreateChallenge, challengeActive, onViewChallenge }) {
   const [tab, setTab] = React.useState('daily');
-  const missions = MISSIONS[tab];
-  const resetLabel = 'MISSIONS DISABLED CURRENTLY';
+  const [, forceTick] = React.useState(0);
+  // Re-render once a minute so the reset countdown stays current.
+  React.useEffect(() => {
+    const id = setInterval(() => forceTick(x => x + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Featured missions (e.g. CREATE A CHALLENGE ME) live in the weekly list but
+  // are surfaced in BOTH tabs. On the daily tab we prepend them; on the weekly
+  // tab they're already present in the list, so we don't double them up.
+  const featured = (missions?.weekly ?? []).filter(m => m.featured);
+  const baseRows = missions?.[tab] ?? [];
+  const rows = tab === 'daily' ? [...featured, ...baseRows] : baseRows;
+  const resetLabel = `RESETS IN ${formatResetCountdown(tab)}`;
 
   return (
     <div className="lb2-missions" data-testid="missions">
@@ -302,22 +378,51 @@ function DailyMissionsSection() {
         <span className="meta">{resetLabel}</span>
       </div>
       <div className="lb2-ft-news">
-        {missions.map(m => (
-          <div key={m.id} className={`lb2-ft-news-row accent-${m.accent}`}>
-            <div className="lb2-ft-news-tag" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-              <span style={{ fontSize: 13, fontWeight: 900, lineHeight: 1 }}>{m.reward}</span>
-              <span style={{ fontSize: 8, letterSpacing: '0.1em', opacity: 0.7 }}>CR</span>
-            </div>
-            <div className="lb2-ft-news-body">
-              <div className="lb2-ft-news-title">{m.label}</div>
-              <div className="lb2-ft-news-sub">{m.sub}</div>
-              <div className="lb2-mission-bar">
-                <div className="lb2-mission-bar-fill" style={{ width: `${Math.round((m.progress / m.total) * 100)}%` }} />
+        {rows.map(m => {
+          const done = m.progress >= m.total;
+          const animating = animatingIds?.has?.(m.id);
+          return (
+            <div key={m.id} className={`lb2-ft-news-row accent-${m.accent}${done ? ' done' : ''}${animating ? ' just-completed' : ''}`}>
+              <div className="lb2-ft-news-tag" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                <span style={{ fontSize: 13, fontWeight: 900, lineHeight: 1 }}>{m.reward}</span>
+                <span style={{ fontSize: 8, letterSpacing: '0.1em', opacity: 0.7 }}>CR</span>
+              </div>
+              <div className="lb2-ft-news-body">
+                <div className="lb2-ft-news-title">{m.label}</div>
+                <div className="lb2-ft-news-sub">{m.sub}</div>
+                <div className="lb2-mission-bar">
+                  <div className="lb2-mission-bar-fill" style={{ width: `${Math.round((m.progress / m.total) * 100)}%` }} />
+                </div>
+              </div>
+              <div className="lb2-ft-news-time">
+                {m.featured ? (
+                  // CTA is driven by whether a live challenge post exists, not by
+                  // mission progress — so a deleted post (challengeActive=false)
+                  // flips back to POST NOW even though the weekly mission already
+                  // credited. challengeActive → VIEW (open results), else POST NOW.
+                  <button
+                    className="lb2-mission-cta"
+                    data-testid="mission-create-challenge"
+                    onClick={(e) => { e.stopPropagation(); challengeActive ? onViewChallenge?.() : onCreateChallenge?.(); }}
+                    style={{
+                      background: 'linear-gradient(180deg,#ffe9bb,#ffd97a 55%,#d6a155)',
+                      color: '#2a1a04',
+                      border: '1px solid #ffe9bb',
+                      borderRadius: 4,
+                      padding: '5px 10px',
+                      fontFamily: 'inherit', fontSize: 9, fontWeight: 900, letterSpacing: '0.08em',
+                      cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {challengeActive ? '✓ VIEW' : 'POST NOW ▸'}
+                  </button>
+                ) : (
+                  done ? <span style={{ color: '#5bf2d4' }}>✓ DONE</span> : `${m.progress}/${m.total}`
+                )}
               </div>
             </div>
-            <div className="lb2-ft-news-time">{m.progress}/{m.total}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -351,7 +456,7 @@ function QueueButton({ q, selected, onSelect, onUnavailable }) {
 }
 
 // ── Bottom nav ────────────────────────────────────────────
-function BottomNav({ onPlay, onCollection, onDraft, onAuction, onOptions, draftDisabled }) {
+export function BottomNav({ onPlay, onCollection, onDraft, onAuction, onOptions, draftDisabled }) {
   return (
     <nav className="bnav" data-testid="bottom-nav">
       <div className="bnav-bg" />
@@ -430,13 +535,96 @@ function BottomNav({ onPlay, onCollection, onDraft, onAuction, onOptions, draftD
 }
 
 // ── Main LobbyScreen ──────────────────────────────────────
-export default function LobbyScreen({ username, credits, homeRoster, isFtue, onPlay, onCollection, onDraft, onAuction, onOptions }) {
+export default function LobbyScreen({ username, credits, homeRoster, missions, isFtue, onPlay, onCollection, onDraft, onAuction, onOptions, onEvents, onCreateChallenge, challengeActive, onViewChallenge }) {
   const [selectedMode, setSelectedMode] = React.useState('training');
   const [modal, setModal] = React.useState(() => !username ? 'guest' : null);
   const [showNotifs, setShowNotifs] = React.useState(false);
+  const [coachDismissed, setCoachDismissed] = React.useState(false);
+  const [coachIdx, setCoachIdx] = React.useState(0);
+  const COACH_LINES = [
+    "Howdy! Welcome to the MBA!",
+    "Tap the PLAY button in the middle to begin!",
+  ];
+  const advanceCoach = () => {
+    setCoachIdx(i => {
+      if (i + 1 >= COACH_LINES.length) {
+        setCoachDismissed(true);
+        return i;
+      }
+      return i + 1;
+    });
+  };
   const showModal = (type) => setModal(type);
   const closeModal = () => setModal(null);
   const hasDraft = homeRoster.length >= 5;
+
+  // Mission-complete celebration. Diff the incoming missions snapshot
+  // against the previous one — any mission that flipped from
+  // not-awarded → awarded triggers a sequence:
+  //   1. progress bar slides to 100% + row pulses (~800ms via CSS)
+  //   2. modal pops with warp streaks
+  //
+  // Baseline rules (important on re-login):
+  //   - The initial render has missions = { daily: [], weekly: [] } (empty
+  //     placeholder before the server fetch resolves). We MUST NOT treat
+  //     this as the prev snapshot, or the first real fetch will look like
+  //     "everything just got awarded" and fire celebrations for missions
+  //     completed in prior sessions.
+  //   - prevAwardedRef stays null until the first NON-EMPTY snapshot
+  //     arrives. That snapshot becomes the baseline (no animation). Only
+  //     subsequent diffs fire celebrations.
+  const BAR_FILL_MS = 750;
+  const prevAwardedRef = React.useRef(null);
+  const [missionQueue, setMissionQueue] = React.useState([]);
+  const [animatingIds, setAnimatingIds] = React.useState(() => new Set());
+  // Track in-flight timers so we can clear them on unmount only. We must
+  // NOT clear them on every missions re-render — a refresh that lands
+  // between BAR_FILL_MS and the popTimer's scheduled fire would otherwise
+  // cancel the modal pop entirely (this was the "2 missions completed at
+  // the same time → only 1 popup" bug — game.end fires refreshMissions,
+  // then the scene effect fires another refresh, and the second cleanup
+  // killed the still-pending timer from the first).
+  const pendingTimersRef = React.useRef([]);
+  React.useEffect(() => () => {
+    pendingTimersRef.current.forEach(clearTimeout);
+    pendingTimersRef.current = [];
+  }, []);
+  React.useEffect(() => {
+    if (!missions) return;
+    const allRows = [...(missions.daily ?? []), ...(missions.weekly ?? [])];
+    if (allRows.length === 0) return; // server hasn't returned yet
+    const currentAwarded = new Set(allRows.filter(m => m.awarded).map(m => m.id));
+    const prev = prevAwardedRef.current;
+    prevAwardedRef.current = currentAwarded;
+    if (prev === null) return; // first real snapshot is the baseline — no animation
+    const newlyAwarded = allRows.filter(m => m.awarded && !prev.has(m.id));
+    if (newlyAwarded.length === 0) return;
+
+    // Highlight rows immediately; React's commit then flips the bar widths
+    // and the CSS transition slides them to 100%.
+    setAnimatingIds(prevSet => {
+      const next = new Set(prevSet);
+      newlyAwarded.forEach(m => next.add(m.id));
+      return next;
+    });
+
+    const popTimer = setTimeout(() => {
+      setMissionQueue(q => [...q, ...newlyAwarded]);
+    }, BAR_FILL_MS);
+    // Drop the highlight a bit after the modal is up so it doesn't linger
+    // behind a dismissed modal.
+    const clearTimer = setTimeout(() => {
+      setAnimatingIds(prevSet => {
+        const next = new Set(prevSet);
+        newlyAwarded.forEach(m => next.delete(m.id));
+        return next;
+      });
+    }, BAR_FILL_MS + 1200);
+
+    pendingTimersRef.current.push(popTimer, clearTimer);
+  }, [missions]);
+  const missionPopup = missionQueue[0] ?? null;
+  const dismissMissionPopup = () => setMissionQueue(q => q.slice(1));
 
   const handlePlay = () => {
     if (isFtue || !homeRoster.length) {
@@ -454,12 +642,19 @@ export default function LobbyScreen({ username, credits, homeRoster, isFtue, onP
   };
 
   return (
-    <div className="lobby2" data-testid="lobby-screen">
+    <div className={`lobby2${isFtue && !coachDismissed && !modal ? ' lobby2-ftue' : ''}`} data-testid="lobby-screen">
 
       {/* Title strip */}
       <div className="lb2-title-strip">
         <span className="lb2-ts-dot" />
         <span className="lb2-ts-text">THE LAST DRAFT</span>
+        <button
+          className="lb2-ts-events"
+          onClick={onEvents}
+          data-testid="title-events"
+        >
+          EVENTS
+        </button>
         <div className="lb2-ts-right">
           <span className="lb2-ts-time">{(credits ?? 0).toLocaleString()} CR</span>
           <button
@@ -496,11 +691,8 @@ export default function LobbyScreen({ username, credits, homeRoster, isFtue, onP
           <RosterStrip roster={homeRoster} onOpen={handleCollection} />
         </div>
 
-        {/* Featured events */}
-        <FeaturedSection onUnavailable={() => showModal('unavailable')} />
-
         {/* Daily missions */}
-        <DailyMissionsSection />
+        <DailyMissionsSection missions={missions} animatingIds={animatingIds} onCreateChallenge={onCreateChallenge} challengeActive={challengeActive} onViewChallenge={onViewChallenge} />
 
         {/* Queue selector */}
         <div className="lb2-section-h">
@@ -549,6 +741,49 @@ export default function LobbyScreen({ username, credits, homeRoster, isFtue, onP
               GOT IT
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Mission complete celebration. Shows one at a time when a new
+          mission flipped to awarded since the previous missions snapshot.
+          The 750ms bar-fill delay (see useEffect above) plays first, then
+          the modal pops with confetti raining over the backdrop. */}
+      {missionPopup && (
+        <div data-testid="mission-complete-modal" className="lb2-mission-modal" onClick={dismissMissionPopup}>
+          {/* Re-key both children on the popup id so each queued popup
+              remounts and replays its entrance animation + warp streaks.
+              Without this, transitioning m1 → m2 in the queue swaps the
+              card's content silently and the user can miss the second one. */}
+          <WarpLines key={`warp-${missionPopup.id}`} />
+          <div key={`card-${missionPopup.id}`} className="lb2-mission-modal-card" onClick={e => e.stopPropagation()}>
+            <div className="lb2-mission-modal-tag">MISSION COMPLETE</div>
+            <div className="lb2-mission-modal-title">{missionPopup.label}</div>
+            <div className="lb2-mission-modal-sub">{missionPopup.sub}</div>
+            <div className="lb2-mission-modal-reward">
+              <span className="amt">+{missionPopup.reward}</span>
+              <span className="unit">CR</span>
+            </div>
+            <button className="lb2-mission-modal-cta" onClick={dismissMissionPopup}>
+              CLAIMED ▸
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* FTUE coach — pages through intro lines, then points at PLAY. */}
+      {isFtue && !coachDismissed && !modal && (
+        <div className="lb2-coach" onClick={advanceCoach}>
+          <svg viewBox="0 0 600 112" preserveAspectRatio="xMidYMid meet"
+            width="100%" height="112" style={{ display: 'block', cursor: 'pointer' }}>
+            <BballTip
+              text={COACH_LINES[coachIdx]}
+              charX={12} charY={12} scale={0.6}
+              dlgX={60} dlgY={32} dlgW={540} dlgH={48}
+              textScale={1.6}
+              textX={118}
+              tapHint
+            />
+          </svg>
         </div>
       )}
 

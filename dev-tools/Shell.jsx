@@ -3,9 +3,13 @@ import React, { useState } from 'react';
 const NAV_W = 180;
 
 const NAV_ITEMS = [
+  { id: 'brandGuide',  label: '📐 Brand Guide' },
   { id: 'lobby',       label: '🏙 Lobby Screen' },
+  { id: 'featuredEvents', label: '🎟 Featured Events' },
   { id: 'sprites',     label: '🎨 Sprites' },
   { id: 'splash',      label: '✨ Splash (Inline)' },
+  { id: 'bidCard',     label: '🪙 Bid Card' },
+  { id: 'challengeCard', label: '⚔ Challenge Card' },
   { id: 'title',       label: '🏠 Title Screen' },
   { id: 'options',     label: '⚙️ Options Screen' },
   { id: 'teamSelect',  label: '🏀 Team Select' },

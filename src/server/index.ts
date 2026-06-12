@@ -7,8 +7,21 @@ import { menu } from './routes/menu';
 import { triggers } from './routes/triggers';
 import { appRouter } from './trpc';
 import { createContext } from './context';
-import { userKey, ledgerKey, gamesKey, getUser, MAX_ENERGY } from './core/user';
-import { rosterKey, lineupKey } from './core/player';
+import { userKey, ledgerKey, gamesKey, getUser, MAX_ENERGY, USERS_INDEX_KEY } from './core/user';
+import { rosterKey, lineupKey, getUserRoster, getPlayer, playerKey } from './core/player';
+import { challengePostKey } from './core/post';
+import {
+  listMissions,
+  resetUserMissions,
+  adminSetMissionProgress,
+  adminCompleteMission,
+  getMissionCatalog,
+  setMissionCatalog,
+  resetMissionCatalog,
+  updateMissionDef,
+  moveMissionType,
+  DEFAULT_MISSION_CATALOG,
+} from './core/missions';
 
 const app = new Hono();
 
@@ -33,6 +46,19 @@ app.route('/internal', internal);
 if (process.env.NODE_ENV !== 'production') {
   const devAdmin = new Hono();
 
+  // Returns up to 500 most-recently-seen usernames (newest first). Powers
+  // the dev-tools admin autocomplete + browse list.
+  devAdmin.get('/users', async (c) => {
+    const limit = Math.min(500, Math.max(1, Number(c.req.query('limit')) || 200));
+    const total = await redis.zCard(USERS_INDEX_KEY);
+    if (total === 0) return c.json({ users: [], total: 0 });
+    const start = Math.max(0, total - limit);
+    const stop = total - 1;
+    const raw: any[] = (await redis.zRange(USERS_INDEX_KEY, start, stop)) as any;
+    const users = (raw.map((m: any) => typeof m === 'object' ? m.member : m) as string[]).reverse();
+    return c.json({ users, total });
+  });
+
   devAdmin.get('/user/:username', async (c) => {
     const user = await getUser(c.req.param('username'));
     if (!user) return c.json({ error: 'User not found' }, 404);
@@ -47,6 +73,9 @@ if (process.env.NODE_ENV !== 'production') {
       redis.del(ledgerKey(u)),
       redis.del(rosterKey(u)),
       redis.del(lineupKey(u)),
+      redis.del(challengePostKey(u)),
+      // Wipe current-period mission progress + awards too.
+      resetUserMissions(u),
     ]);
     return c.json({ success: true });
   });
@@ -62,6 +91,27 @@ if (process.env.NODE_ENV !== 'production') {
   devAdmin.post('/user/:username/credits', async (c) => {
     const { credits } = await c.req.json<{ credits: number }>();
     await redis.hSet(userKey(c.req.param('username')), { credits: String(credits) });
+    return c.json({ success: true });
+  });
+
+  // Roster inspection — returns each owned player's id, name, position-less
+  // record, draft ability, and the persisted `abilities` array (level-up extras).
+  devAdmin.get('/user/:username/roster', async (c) => {
+    const ids = await getUserRoster(c.req.param('username'));
+    const players = (await Promise.all(ids.map(getPlayer))).filter(Boolean);
+    return c.json({ players });
+  });
+
+  // Overwrites a player's persisted `abilities` array (the level-up extras
+  // stored on the player hash). Body: { abilities: PlayerAbility[] }.
+  // Pass an empty array to clear everything, or a deduped list to fix
+  // accidental duplicates from the old pickLevelUpChoices bug.
+  devAdmin.post('/player/:id/abilities', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isFinite(id)) return c.json({ error: 'Bad player id' }, 400);
+    const { abilities } = await c.req.json<{ abilities: unknown[] }>();
+    if (!Array.isArray(abilities)) return c.json({ error: 'abilities must be an array' }, 400);
+    await redis.hSet(playerKey(id), { abilities: JSON.stringify(abilities) });
     return c.json({ success: true });
   });
 
@@ -83,6 +133,76 @@ if (process.env.NODE_ENV !== 'production') {
   devAdmin.delete('/games/flagged', async (c) => {
     await redis.del('games:flagged');
     return c.json({ success: true });
+  });
+
+  // ── Missions ──────────────────────────────────────────────
+  devAdmin.get('/missions/catalog', async (c) => {
+    return c.json({ catalog: await getMissionCatalog(), defaults: DEFAULT_MISSION_CATALOG });
+  });
+
+  devAdmin.post('/missions/catalog', async (c) => {
+    const body = await c.req.json();
+    await setMissionCatalog(body);
+    return c.json({ success: true });
+  });
+
+  devAdmin.post('/missions/catalog/update', async (c) => {
+    const body = await c.req.json<{ id: string } & Partial<Record<string, unknown>>>();
+    const { id, ...updates } = body;
+    await updateMissionDef(id, updates as any);
+    return c.json({ success: true });
+  });
+
+  devAdmin.post('/missions/catalog/move', async (c) => {
+    const body = await c.req.json<{ id: string; toType: 'daily' | 'weekly' }>();
+    await moveMissionType(body.id, body.toType);
+    return c.json({ success: true });
+  });
+
+  devAdmin.post('/missions/catalog/reset', async (c) => {
+    await resetMissionCatalog();
+    return c.json({ success: true });
+  });
+
+  // Helper — REST mission routes operate on per-user state; reject names
+  // with no user record so admins don't get phantom data back.
+  const requireExistingUser = async (username: string) => {
+    const user = await getUser(username);
+    if (!user) throw new Error(`User "${username}" not found`);
+  };
+
+  devAdmin.get('/user/:username/missions', async (c) => {
+    const username = c.req.param('username');
+    try { await requireExistingUser(username); }
+    catch (e: any) { return c.json({ error: e.message }, 404); }
+    const data = await listMissions(username);
+    return c.json(data);
+  });
+
+  devAdmin.post('/user/:username/missions/reset', async (c) => {
+    const username = c.req.param('username');
+    try { await requireExistingUser(username); }
+    catch (e: any) { return c.json({ error: e.message }, 404); }
+    await resetUserMissions(username);
+    return c.json({ success: true });
+  });
+
+  devAdmin.post('/user/:username/missions/set', async (c) => {
+    const username = c.req.param('username');
+    try { await requireExistingUser(username); }
+    catch (e: any) { return c.json({ error: e.message }, 404); }
+    const body = await c.req.json<{ type: 'daily' | 'weekly'; missionId: string; progress: number }>();
+    await adminSetMissionProgress(username, body.type, body.missionId, body.progress);
+    return c.json({ success: true });
+  });
+
+  devAdmin.post('/user/:username/missions/complete', async (c) => {
+    const username = c.req.param('username');
+    try { await requireExistingUser(username); }
+    catch (e: any) { return c.json({ error: e.message }, 404); }
+    const body = await c.req.json<{ type: 'daily' | 'weekly'; missionId: string }>();
+    const result = await adminCompleteMission(username, body.type, body.missionId);
+    return c.json(result);
   });
 
   app.route('/dev-admin', devAdmin);

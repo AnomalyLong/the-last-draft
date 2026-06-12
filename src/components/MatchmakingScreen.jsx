@@ -2,6 +2,11 @@ import React from 'react';
 import './MatchmakingScreen.css';
 import { RUN_FRAMES } from '../sprites/run.js';
 import { JERSEY_BASE, JERSEY_HOME, JERSEY_AWAY } from '../constants.js';
+// Reuse the draft's player card (front face) so the VIEW TEAM modal shows the
+// exact same card design. Importing DraftScreen.css brings the `.dc-*` styles;
+// its :root vars match the global tokens, so no color bleed.
+import { CardFront, TIER_DEFS, getPlayerTierKey } from './DraftScreen.jsx';
+import './DraftScreen.css';
 
 const { useState, useEffect, useRef } = React;
 
@@ -161,7 +166,7 @@ const RankEmblemRight = ({ label }) => (
 
 // ── Player panel (left = home, right = away) ────────────────────────────────
 
-function PlayerPanel({ side, team, revealed }) {
+function PlayerPanel({ side, team, revealed, onViewTeam }) {
   const isLeft = side === 'left';
   const TeamIcon = isLeft ? TeamIconLeft : TeamIconRight;
   const RankEm = isLeft ? RankEmblemLeft : RankEmblemRight;
@@ -186,7 +191,20 @@ function PlayerPanel({ side, team, revealed }) {
       <div className="stats">
         <div className="stat-row row-team">
           <TeamIcon />
-          <span className="val">{revealed ? formatHandle(team) : '????'}</span>
+          {revealed ? (
+            <span className="val team-id">
+              {team?.username ? (
+                <>
+                  <span className="team-user">{formatHandle({ username: team.username })}</span>
+                  {team?.name && team.name !== team.username && <span className="team-club">{team.name}</span>}
+                </>
+              ) : (
+                <span className="team-user">{team?.name ?? '—'}</span>
+              )}
+            </span>
+          ) : (
+            <span className="val">????</span>
+          )}
         </div>
         <div className="stat-row row-rp">
           <span className="val">
@@ -197,7 +215,14 @@ function PlayerPanel({ side, team, revealed }) {
           <span className="ribbon-level">
             OVR <b>{revealed ? ovr : '??'}</b>
           </span>
-          <div className="ribbon-bg">{revealed ? `GRADE ${grade}` : '— — —'}</div>
+          <button
+            type="button"
+            className="ribbon-bg view-team-btn"
+            onClick={() => revealed && onViewTeam?.(team, side)}
+            disabled={!revealed}
+          >
+            {revealed ? 'VIEW TEAM' : '— — —'}
+          </button>
         </div>
       </div>
 
@@ -348,7 +373,7 @@ function SearchingView({ elapsed, progress }) {
 
 // ── Main screen ─────────────────────────────────────────────────────────────
 
-export function MatchmakingScreen({ homeRoster, homeTeamName, awayTeam, onReady, isMobile: isMobileProp }) {
+export function MatchmakingScreen({ homeRoster, homeTeamName, homeUsername, awayTeam, onReady, isMobile: isMobileProp }) {
   const [phase, setPhase] = useState('searching'); // 'searching' | 'found' | 'vs' | 'ready'
   const [elapsed, setElapsed] = useState(0);
   const [countdown, setCountdown] = useState(5);
@@ -401,16 +426,31 @@ export function MatchmakingScreen({ homeRoster, homeTeamName, awayTeam, onReady,
   const opponentRevealed = phase === 'found' || phase === 'vs' || phase === 'ready';
 
   const homeTeam = {
-    name: homeTeamName ?? 'HOME',
-    callsign: homeTeamName ?? 'HOME',
+    username: homeUsername ?? '',
+    name: homeTeamName ?? '',
+    callsign: homeTeamName ?? '',
     players: homeRoster ?? [],
   };
+
+  // Team-view modal: { team, side } | null. Opened by each panel's VIEW TEAM
+  // button; shows that team's player cards. (The on-stage rosters are hidden —
+  // a richer view will live here.)
+  const [teamModal, setTeamModal] = useState(null);
+  // Carousel for the team modal: show as many whole cards as fit while keeping
+  // them at a readable scale; arrows page through the rest.
+  const [cardOffset, setCardOffset] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(4);
+  useEffect(() => { setCardOffset(0); }, [teamModal]);
 
   // Scale the 1920×1080 stage to fit its container. Mobile layout can be
   // forced via the `isMobile` prop (for story toggles); otherwise it's
   // auto-detected from the container's aspect ratio.
   const rootRef = useRef(null);
   const [scale, setScale] = useState(1);
+  // Scale for the VIEW TEAM modal's 5-card row. The modal renders at the
+  // unscaled root (not inside the fit-scaled stage), so cards stay readable;
+  // this fits the row (≈1522×440 natural) into the real container.
+  const [modalScale, setModalScale] = useState(1);
   const [detectedMobile, setDetectedMobile] = useState(false);
   const isMobile = isMobileProp ?? detectedMobile;
   useEffect(() => {
@@ -421,6 +461,11 @@ export function MatchmakingScreen({ homeRoster, homeTeamName, awayTeam, onReady,
       const w = r.width;
       const h = r.height;
       if (!w || !h) return;
+      // Team modal: always 4 cards at a time (the 5th via the arrows), scaled
+      // to fit the container width/height.
+      const VIEW_W = 4 * 290 + 3 * 18;
+      setVisibleCount(4);
+      setModalScale(Math.max(0.2, Math.min(1, (w - 96) / VIEW_W, (h - 150) / 472)));
       const auto = h > w;
       setDetectedMobile(auto);
       const mobile = isMobileProp ?? auto;
@@ -501,12 +546,10 @@ export function MatchmakingScreen({ homeRoster, homeTeamName, awayTeam, onReady,
           </div>
 
           {/* Side panels */}
-          <PlayerPanel side="left"  team={homeTeam} revealed={true} />
-          <PlayerPanel side="right" team={awayTeam} revealed={opponentRevealed} />
+          <PlayerPanel side="left"  team={homeTeam} revealed={true} onViewTeam={(t) => setTeamModal({ team: t, side: 'left' })} />
+          <PlayerPanel side="right" team={awayTeam} revealed={opponentRevealed} onViewTeam={(t) => setTeamModal({ team: t, side: 'right' })} />
 
-          {/* Rosters */}
-          <Roster side="left"  players={homeTeam.players} revealed={true} />
-          <Roster side="right" players={awayTeam?.players} revealed={opponentRevealed} />
+          {/* Rosters now live in the VIEW TEAM modal (below), not on the stage. */}
 
           {/* Searching overlay */}
           {phase === 'searching' && (
@@ -544,6 +587,60 @@ export function MatchmakingScreen({ homeRoster, homeTeamName, awayTeam, onReady,
           <div className="crt-glow"></div>
         </div>
       </div>
+
+      {/* VIEW TEAM modal — rendered at the unscaled root (not inside the
+          fit-scaled stage) so the player cards stay readable. The 5-card row
+          is scaled by modalScale to fit the real container. */}
+      {teamModal && (() => {
+        const players = teamModal.team?.players ?? [];
+        const VISIBLE = visibleCount;
+        const VIEW_W = VISIBLE * 290 + (VISIBLE - 1) * 18;   // natural window width
+        const maxOffset = Math.max(0, POS_ORDER.length - VISIBLE);
+        const offset = Math.min(cardOffset, maxOffset);
+        return (
+          <div className="team-modal" onClick={() => setTeamModal(null)}>
+            <div className="team-modal-card" onClick={(e) => e.stopPropagation()}>
+              <div className="team-modal-head">
+                <span>{teamModal.team?.username || teamModal.team?.name || 'TEAM'}</span>
+                <button type="button" className="team-modal-close" onClick={() => setTeamModal(null)}>✕</button>
+              </div>
+              <div className="team-modal-carousel">
+                <button type="button" className="team-modal-nav" onClick={() => setCardOffset(o => Math.max(0, o - 1))} disabled={offset <= 0} aria-label="Previous">◀</button>
+                <div className="team-modal-cards-fit" style={{ width: VIEW_W * modalScale, height: 472 * modalScale }}>
+                  <div className="team-modal-viewport" style={{ width: VIEW_W, height: 472, transform: `scale(${modalScale})`, transformOrigin: 'top left' }}>
+                    <div className="team-modal-track" style={{ transform: `translateX(${-offset * (290 + 18)}px)` }}>
+                      {POS_ORDER.map((pos, i) => {
+                        const raw = players.find(x => x.pos === pos) ?? players[i];
+                        if (!raw) return <div key={pos} className="draft-card-slot mm-card-empty" />;
+                        const ovr = calcOvr(raw);
+                        const ability = getAbilities(raw)[0] ?? null;
+                        const tier = TIER_DEFS[getPlayerTierKey(ovr, ability)];
+                        const cardObj = { id: i + 1, pos, name: raw.name, spd: raw.spd, dex: raw.dex, jmp: raw.jmp, acc: raw.acc, ovr, ability };
+                        return (
+                          <div key={pos} className="draft-card-slot">
+                            <div className="draft-card-anim revealed">
+                              <CardFront
+                                card={cardObj}
+                                tier={tier}
+                                revealed={false}
+                                pulseBorderW={0}
+                                pulse={0}
+                                shimmerX={0}
+                                universeId={String(raw.serverId ?? i + 1).padStart(3, '0')}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                <button type="button" className="team-modal-nav" onClick={() => setCardOffset(o => Math.min(maxOffset, o + 1))} disabled={offset >= maxOffset} aria-label="Next">▶</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

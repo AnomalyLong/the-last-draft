@@ -22,6 +22,7 @@ export const COMMAND_META = {
   help: { scope: 'both', help: 'help — list available commands' },
   getUserFlairBySubreddit: { scope: 'both', help: 'getUserFlairBySubreddit [sub] — check user flair (default AnomalyGamesInc)' },
   checkSubActivity: { scope: 'both', help: 'checkSubActivity [sub] — scan recent comments/posts for a sub' },
+  dumpRoster: { scope: 'both', help: 'dumpRoster — log server-side roster + lineup for the current user' },
 
   // ── Title only ────────────────────────────────────────────────────────
   admin: { scope: 'title', help: 'admin — open admin overlay (admins only)' },
@@ -42,6 +43,8 @@ export const COMMAND_META = {
   testThrowInHome:  { scope: 'game', help: 'testThrowInHome   — home C inbounds from left sideline' },
   testThrowInAway:  { scope: 'game', help: 'testThrowInAway   — away C inbounds from right sideline' },
   testDunk:         { scope: 'game', help: 'testDunk          — ball carrier drives to basket and dunks' },
+  testSpinDunk:     { scope: 'game', help: 'testSpinDunk      — ball carrier drives to basket and spin-dunks' },
+  testThreePointer: { scope: 'game', help: 'testThreePointer  — ball carrier runs to the 3-point line and shoots' },
   testGamePlay:     { scope: 'game', help: 'testGamePlay      — start continuous game loop' },
   stopGamePlay:     { scope: 'game', help: 'stopGamePlay      — stop the game loop' },
   testSpinMove:     { scope: 'game', help: 'testSpinMove      — ball carrier performs spin move animation' },
@@ -80,6 +83,17 @@ const sharedImpls = {
         ctx.addLog(`flair: text="${text}" css="${css}"`);
       })
       .catch(e => ctx.addLog(`flair error: ${e.message}`, 'err'));
+  },
+
+  dumpRoster(args, ctx) {
+    ctx.addLog('fetching server roster + lineup...');
+    Promise.all([trpc.user.roster.query(), trpc.user.lineup.query()])
+      .then(([roster, lineup]) => {
+        ctx.addLog(`roster: ${roster.length} player(s)`);
+        roster.forEach(p => ctx.addLog(`  #${p.id} ${p.name} (${p.rarity})`));
+        ctx.addLog(`lineup: ${JSON.stringify(lineup ?? {})}`);
+      })
+      .catch(e => ctx.addLog(`error: ${e.message}`, 'err'));
   },
 
   checkSubActivity(args, ctx) {

@@ -5,7 +5,7 @@ const CARD_W = 160;
 const CARD_H = 130;
 const CARD_CX = ZOOM_W / 2;
 const CARD_CY = TOTAL_H / 2 - 100;
-const SPRITE_SCALE = 5;
+const DEFAULT_spriteScale = 5;
 const ENTER_MS = 150;
 const EXIT_MS = 100;
 
@@ -41,6 +41,7 @@ export function SpecialMoveCard({
   bgColor = '#F5E6C8',
   anchorX = 20,
   anchorY = 28,
+  spriteScale = DEFAULT_spriteScale,
 }) {
   const [cardScale, setCardScale] = React.useState(0);
   const [frameIdx, setFrameIdx] = React.useState(0);
@@ -79,11 +80,11 @@ export function SpecialMoveCard({
   const pixels = frames[frameIdx] || frames[0];
   const spritePixels = pixels.map(([x, y, fill], i) => {
     const c = fill === JERSEY_BASE ? jerseyColor : fill;
-    return <rect key={i} x={x * SPRITE_SCALE} y={y * SPRITE_SCALE} width={SPRITE_SCALE} height={SPRITE_SCALE} fill={c} />;
+    return <rect key={i} x={x * spriteScale} y={y * spriteScale} width={spriteScale} height={spriteScale} fill={c} />;
   });
 
-  const spriteX = CARD_CX - anchorX * SPRITE_SCALE;
-  const spriteY = CARD_CY - anchorY * SPRITE_SCALE;
+  const spriteX = CARD_CX - anchorX * spriteScale;
+  const spriteY = CARD_CY - anchorY * spriteScale;
   const clipId = `special-card-clip-${player.id}`;
 
   return (

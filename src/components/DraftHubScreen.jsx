@@ -4,16 +4,39 @@ import { playCancel, playSelect } from '../sound/ui.js';
 
 export function DraftHubScreen({
   freeDrafts = 0,
+  paidPicks = 0,          // banked credit-draft picks (bought, not yet used)
   credits = 0,
   rosterCount = 0,
+  nextDraftCost = null,   // cost of the next paid (credit) draft this month, or null while loading
   onUsePick,
+  onBuyDraft,
+  onCreditDraft,
   onBack,
 }) {
-  const hasPicks = freeDrafts > 0;
+  // One pick = one player, whether earned (free) or bought (paid). The big
+  // counter shows the TOTAL so it never contradicts the buttons below. Free
+  // picks are consumed first (they run the 5-player draft flow); bought picks
+  // run the single-player reveal.
+  const hasFreePicks = freeDrafts > 0;
+  const hasPaidPick = paidPicks > 0;
+  const totalPicks = freeDrafts + paidPicks;
+  const hasAnyPick = totalPicks > 0;
+
   const handleUse = () => {
-    if (!hasPicks) return;
+    if (hasFreePicks) {
+      playSelect();
+      onUsePick?.();
+    } else if (hasPaidPick) {
+      playSelect();
+      onCreditDraft?.();
+    }
+  };
+
+  const canAffordCredit = nextDraftCost != null && credits >= nextDraftCost;
+  const handleBuyDraft = () => {
+    if (!canAffordCredit) return;
     playSelect();
-    onUsePick?.();
+    onBuyDraft?.();
   };
 
   return (
@@ -45,12 +68,12 @@ export function DraftHubScreen({
       <div className="dh-body">
         <div className="dh-counter">
           <div className="dh-counter-label">PICKS AVAILABLE</div>
-          <div className={`dh-counter-value ${hasPicks ? '' : 'empty'}`}>
-            {freeDrafts}
+          <div className={`dh-counter-value ${hasAnyPick ? '' : 'empty'}`}>
+            {totalPicks}
           </div>
           <div className="dh-counter-sub">
-            {hasPicks
-              ? `${freeDrafts === 1 ? 'ONE DRAFT' : `${freeDrafts} DRAFTS`} REMAINING`
+            {hasAnyPick
+              ? `${totalPicks === 1 ? 'ONE DRAFT' : `${totalPicks} DRAFTS`} REMAINING`
               : 'NO DRAFTS REMAINING'}
           </div>
         </div>
@@ -69,17 +92,40 @@ export function DraftHubScreen({
         <button
           className="dh-btn primary"
           onClick={handleUse}
-          disabled={!hasPicks}
+          disabled={!hasAnyPick}
         >
           <span>⚡</span>
-          <span>{hasPicks ? 'USE A PICK · START DRAFT' : 'NO PICKS REMAINING'}</span>
+          <span>{hasAnyPick ? 'USE A PICK · START DRAFT' : 'NO PICKS REMAINING'}</span>
         </button>
 
-        {!hasPicks && (
+        {!hasAnyPick && (
           <div className="dh-hint">
-            ▸ EARN MORE PICKS BY PLAYING GAMES
+            ▸ EARN PICKS BY PLAYING — OR BUY ONE BELOW
           </div>
         )}
+
+        {/* Buy a draft pick — banks a reusable pick (monthly doubling cost) */}
+        <div className="dh-credit">
+          <button
+            className="dh-btn credit"
+            onClick={handleBuyDraft}
+            disabled={!canAffordCredit}
+          >
+            <span>★</span>
+            <span>
+              {nextDraftCost == null
+                ? 'BUY A DRAFT'
+                : `BUY A DRAFT · ${nextDraftCost.toLocaleString()} CR`}
+            </span>
+          </button>
+          <div className="dh-credit-note">
+            {nextDraftCost == null
+              ? 'First draft each month is 2,500 CR'
+              : canAffordCredit
+                ? 'Adds a pick above · cost doubles each buy · resets monthly'
+                : `Need ${nextDraftCost.toLocaleString()} CR · cost doubles each buy`}
+          </div>
+        </div>
       </div>
     </div>
   );

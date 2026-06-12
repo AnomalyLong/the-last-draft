@@ -25,7 +25,7 @@ import { DefenseFtueOverlay } from './DefenseFtueOverlay.jsx';
 import { OptionsOverlay } from './OptionsOverlay.jsx';
 import { SpecialMoveCard } from './SpecialMoveCard.jsx';
 import { BballTip } from './BballTip.jsx';
-import { DASH_FRAMES, FADEAWAY_FRAMES, SPIN_MOVE_FRAMES, PICKPOCKET_FRAMES, IRON_BLOCK_FRAMES, PICK_FRAMES } from '../sprites/index.js';
+import { DASH_FRAMES, FADEAWAY_FRAMES, SPIN_MOVE_FRAMES, PICKPOCKET_FRAMES, IRON_BLOCK_FRAMES, PICK_FRAMES, DUNKSPIN_FRAMES } from '../sprites/index.js';
 
 // BballTip layout constants (game-screen space, inside cameraX group)
 const TIP_CHAR_X = 10;
@@ -208,22 +208,23 @@ export function GameScene({
                     ? <g transform={`scale(-1,1) translate(${-p.cx * 2}, 0)`}>
                         <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
                           hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting}
-                          isDunking={p.isDunking} isBlocking={p.isBlocking} isIronBlocking={p.isIronBlocking} isJumpBall={p.isJumpBall}
+                          isDunking={p.isDunking} isSpinDunking={p.isSpinDunking} isBlocking={p.isBlocking} isIronBlocking={p.isIronBlocking} isJumpBall={p.isJumpBall}
                           isStealing={p.isStealing} isPickPocketing={p.isPickPocketing} isSpinning={p.isSpinning} isDashing={p.isDashing}
                           isFadingAway={p.isFadingAway} isStaggering={p.isStaggering} facingRight={p.facingRight} />
                       </g>
                     : <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
                         hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting}
-                        isDunking={p.isDunking} isBlocking={p.isBlocking} isIronBlocking={p.isIronBlocking} isJumpBall={p.isJumpBall}
+                        isDunking={p.isDunking} isSpinDunking={p.isSpinDunking} isBlocking={p.isBlocking} isIronBlocking={p.isIronBlocking} isJumpBall={p.isJumpBall}
                         isStealing={p.isStealing} isPickPocketing={p.isPickPocketing} isSpinning={p.isSpinning} isDashing={p.isDashing}
                         isFadingAway={p.isFadingAway} isStaggering={p.isStaggering} facingRight={p.facingRight} />
                   }
-                  {p.hasBall && !p.isDunking && !p.isStealing && !p.isPickPocketing && !p.isSpinning && !p.isDashing && !p.isFadingAway &&
+                  {p.hasBall && !p.isDunking && !p.isSpinDunking && !p.isStealing && !p.isPickPocketing && !p.isSpinning && !p.isDashing && !p.isFadingAway &&
                     <Ball data-testid="dribble-ball"
                       cx={p.isMoving
                         ? (p.facingRight ? p.cx + 10 : p.cx - 10)
                         : (p.facingRight ? p.cx - 6 : p.cx + 6)}
-                      cy={p.cy + 1} scale={1} />}
+                      cy={p.cy + 1} scale={1} lift={p.isMoving ? 3 : 0}
+                      syncToRun={p.isMoving} phaseOffset={p.isMoving ? 0 : 0} />}
                   <text data-testid={`player-${p.id}-role`}
                     x={p.cx} y={p.cy - 14} textAnchor="middle"
                     fontSize={6} fontFamily="monospace" fill={labelColor} fontWeight="bold">
@@ -251,6 +252,7 @@ export function GameScene({
         {(() => { const dp = players.find(p => p.isDashing);    return dp ? <SpecialMoveCard key={`dash-${dp.id}`}  player={dp} frames={DASH_FRAMES}      label="SPEED BURST!" jerseyColor={dp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={60} accentColor="#44AAFF" bgColor="#C8E8FF" anchorX={9}  anchorY={17} /> : null; })()}
         {(() => { const fp = players.find(p => p.isFadingAway); return fp ? <SpecialMoveCard key={`fade-${fp.id}`} player={fp} frames={FADEAWAY_FRAMES}  label="FADEAWAY!"    jerseyColor={fp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#FF8C00" bgColor="#FFF0CC" anchorX={9}  anchorY={12} /> : null; })()}
         {(() => { const pk = players.find(p => p.isPicking);    return pk ? <SpecialMoveCard key={`pick-${pk.id}`} player={pk} frames={PICK_FRAMES}      label="SET PICK!"    jerseyColor={pk.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#C060E0" bgColor="#E8D0FF" anchorX={5}  anchorY={8}  /> : null; })()}
+        {(() => { const sd = players.find(p => p.isSpinDunking); return sd ? <SpecialMoveCard key={`sd-${sd.id}`}   player={sd} frames={DUNKSPIN_FRAMES}  label="SPIN DUNK!"   jerseyColor={sd.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={130} accentColor="#FF3399" bgColor="#FFD6E8" spriteScale={3} anchorX={8}  anchorY={14} /> : null; })()}
 
         <g transform={`translate(${cameraX + (isMobile ? Math.round(ZOOM_W * (1 / mobileZoom - 1) / 2) : 0)}, 0)`}>
           <HUD

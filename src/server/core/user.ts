@@ -13,8 +13,11 @@ export type UserData = {
   energy: number;
   energyUpdatedAt: number;
   freeDrafts: number;
+  paidPicks: number;
   gamesPlayed: number;
   teamName: string;
+  wins: number;
+  losses: number;
 };
 
 export const userKey = (username: string) => `user:${username}`;
@@ -32,8 +35,11 @@ const parseUser = (raw: Record<string, string>): UserData => ({
   energy: Number(raw.energy ?? 0),
   energyUpdatedAt: Number(raw.energyUpdatedAt ?? 0),
   freeDrafts: Number(raw.freeDrafts ?? 0),
+  paidPicks: Number(raw.paidPicks ?? 0),
   gamesPlayed: Number(raw.gamesPlayed ?? 0),
   teamName: raw.teamName ?? '',
+  wins: Number(raw.wins ?? 0),
+  losses: Number(raw.losses ?? 0),
 });
 
 export const computeEnergy = (energy: number, energyUpdatedAt: number): number => {
@@ -157,4 +163,10 @@ export const spendCredits = async (
 
 export const grantFreeDrafts = async (username: string, amount: number): Promise<void> => {
   await redis.hIncrBy(userKey(username), 'freeDrafts', amount);
+};
+
+// Increments the user's win or loss tally. Shown as the W-L record on their
+// Challenge Me card. Called from endGame for clean (non-flagged) games only.
+export const recordGameOutcome = async (username: string, won: boolean): Promise<void> => {
+  await redis.hIncrBy(userKey(username), won ? 'wins' : 'losses', 1);
 };

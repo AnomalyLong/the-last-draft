@@ -1,6 +1,6 @@
 import React from 'react';
 import { JERSEY_HOME, JERSEY_BASE, JERSEY_DARK_BASE, SHOOT_JUMP_OFFSETS, BLOCK_JUMP_OFFSETS, JUMP_BALL_JUMP_OFFSETS } from '../constants.js';
-import { SPRITE_PIXELS, IDLE_FRAMES, RUN_FRAMES, RUN_BALL_FRAMES, SHOOT_CHAR_FRAMES, DUNK_FRAMES, DUNK_BALL_OFFSETS, BALL_FRAMES, BLOCK_JUMP_FRAMES, IRON_BLOCK_FRAMES, JUMP_BALL_FRAMES, STEAL_FRAMES, PICKPOCKET_FRAMES, SPIN_MOVE_FRAMES, DASH_FRAMES, FADEAWAY_FRAMES, STAGGER_FRAMES } from '../sprites/index.js';
+import { SPRITE_PIXELS, IDLE_FRAMES, RUN_FRAMES, RUN_BALL_FRAMES, SHOOT_CHAR_FRAMES, DUNK_FRAMES, DUNK_BALL_OFFSETS, DUNKSPIN_FRAMES, DUNKSPIN_BALL_OFFSETS, BALL_FRAMES, BLOCK_JUMP_FRAMES, IRON_BLOCK_FRAMES, JUMP_BALL_FRAMES, STEAL_FRAMES, PICKPOCKET_FRAMES, SPIN_MOVE_FRAMES, DASH_FRAMES, FADEAWAY_FRAMES, STAGGER_FRAMES } from '../sprites/index.js';
 
 // multiply an "#rrggbb" colour by a 0..1 factor to derive shadow tones
 function darken(hex, k) {
@@ -12,12 +12,12 @@ function darken(hex, k) {
   return `#${p(r)}${p(g)}${p(b)}`;
 }
 
-export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isBlocking = false, isIronBlocking = false, isJumpBall = false, isStealing = false, isPickPocketing = false, isSpinning = false, isDashing = false, isFadingAway = false, isStaggering = false, facingRight = false }) {
+export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isSpinDunking = false, isBlocking = false, isIronBlocking = false, isJumpBall = false, isStealing = false, isPickPocketing = false, isSpinning = false, isDashing = false, isFadingAway = false, isStaggering = false, facingRight = false }) {
   const [frameIdx, setFrameIdx] = React.useState(0);
   const rafRef = React.useRef(null);
 
   React.useEffect(() => {
-    if (hasBall && !isMoving && !isShooting && !isDunking && !isBlocking && !isIronBlocking && !isJumpBall && !isStealing && !isPickPocketing && !isSpinning && !isDashing && !isFadingAway && !isStaggering) return;
+    if (hasBall && !isMoving && !isShooting && !isDunking && !isSpinDunking && !isBlocking && !isIronBlocking && !isJumpBall && !isStealing && !isPickPocketing && !isSpinning && !isDashing && !isFadingAway && !isStaggering) return;
     cancelAnimationFrame(rafRef.current);
     if (isJumpBall) {
       const start = performance.now();
@@ -33,6 +33,15 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor
       const tick = (now) => {
         const f = Math.floor((now - start) / 80);
         if (f < DUNK_FRAMES.length) { setFrameIdx(f); rafRef.current = requestAnimationFrame(tick); }
+      };
+      rafRef.current = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(rafRef.current);
+    }
+    if (isSpinDunking) {
+      const start = performance.now();
+      const tick = (now) => {
+        const f = Math.floor((now - start) / 80);
+        if (f < DUNKSPIN_FRAMES.length) { setFrameIdx(f); rafRef.current = requestAnimationFrame(tick); }
       };
       rafRef.current = requestAnimationFrame(tick);
       return () => cancelAnimationFrame(rafRef.current);
@@ -122,12 +131,15 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor
     const FRAME_MS = isMoving ? 80 : 120;
     const start = performance.now();
     const tick = (now) => {
-      setFrameIdx(Math.floor((now - start) / FRAME_MS) % frames.length);
+      // For the running cycle use absolute time so the dribble Ball (which can opt
+      // in via syncToRun) stays phase-locked. Idle still uses mount-relative time.
+      const ref = isMoving ? now : (now - start);
+      setFrameIdx(Math.floor(ref / FRAME_MS) % frames.length);
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(rafRef.current); setFrameIdx(0); };
-  }, [hasBall, isMoving, isShooting, isDunking, isBlocking, isIronBlocking, isJumpBall, isStealing, isPickPocketing, isSpinning, isDashing, isFadingAway, isStaggering]);
+  }, [hasBall, isMoving, isShooting, isDunking, isSpinDunking, isBlocking, isIronBlocking, isJumpBall, isStealing, isPickPocketing, isSpinning, isDashing, isFadingAway, isStaggering]);
 
   const jerseyDark = jerseyColor + '99';
   // Optional skin override — remap the two skin tones from the sprite atlas.
@@ -160,6 +172,23 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor
     const bOff = DUNK_BALL_OFFSETS[fi];
     return (
       <g transform={`translate(${cx - 7 * scale}, ${cy - 17 * scale})`} shapeRendering="crispEdges">
+        {applyColors(pixels)}
+        {bOff && BALL_FRAMES.up.map(([x, y, fill], i) => (
+          <rect key={`b${i}`}
+            x={(bOff[0] + 0.5) * scale - 3.5 + x}
+            y={(bOff[1] + 0.5) * scale - 3.5 + y}
+            width={1} height={1} fill={fill} />
+        ))}
+      </g>
+    );
+  }
+
+  if (isSpinDunking) {
+    const fi = Math.min(frameIdx, DUNKSPIN_FRAMES.length - 1);
+    const pixels = DUNKSPIN_FRAMES[fi] || DUNKSPIN_FRAMES[0];
+    const bOff = DUNKSPIN_BALL_OFFSETS[fi];
+    return (
+      <g transform={`translate(${cx - 7 * scale}, ${cy - 19 * scale})`} shapeRendering="crispEdges">
         {applyColors(pixels)}
         {bOff && BALL_FRAMES.up.map(([x, y, fill], i) => (
           <rect key={`b${i}`}

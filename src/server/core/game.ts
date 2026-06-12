@@ -1,5 +1,7 @@
 import { redis } from '@devvit/web/server';
-import { deductEnergy, awardCredits, userKey, ledgerKey, gamesKey } from './user';
+import { deductEnergy, awardCredits, recordGameOutcome, gamesKey } from './user';
+import { recordGameCompletion } from './missions';
+import { getChallengePost, recordChallengeResult } from './post';
 
 const GAME_COUNTER_KEY = 'game:id:counter';
 const SESSION_TTL_SECS = 3600;
@@ -42,13 +44,17 @@ export type PlayEvent = {
 const generateToken = (): string =>
   Array.from({ length: 32 }, () => Math.random().toString(36)[2]).join('');
 
-// Replays the stored play log. Returns verified score (for anti-cheat) and
-// credits using the same per-quarter formula as the client.
-const replayPlays = async (gameId: number): Promise<{ score: number; credits: number }> => {
+// Replays the stored play log. Returns verified score (for anti-cheat),
+// credits using the same per-quarter formula as the client, and the final
+// home/away point totals (from the most recent quarter_end event) so the
+// caller can tell whether the home team won.
+const replayPlays = async (gameId: number): Promise<{ score: number; credits: number; finalHome: number; finalAway: number }> => {
   const raw: any[] = (await redis.zRange(playsKey(gameId), 0, -1)) as any;
   let score = 0;
   let credits = 0;
   let qStats = { shots: 0, dunks: 0, blocks: 0, steals: 0 };
+  let finalHome = 0;
+  let finalAway = 0;
 
   for (const entry of raw) {
     try {
@@ -64,13 +70,19 @@ const replayPlays = async (gameId: number): Promise<{ score: number; credits: nu
         const winBonus = (play.homePoints ?? 0) > (play.awayPoints ?? 0) ? 500 : 0;
         credits += (qStats.shots + qStats.dunks + qStats.blocks + qStats.steals) * 100 + winBonus;
         qStats = { shots: 0, dunks: 0, blocks: 0, steals: 0 };
+        // homePoints/awayPoints on quarter_end are PER-QUARTER (the client
+        // resets quarterPointsRef each quarter), so accumulate them into the
+        // game totals. Overwriting here was the bug behind "won when I lost":
+        // it compared only the final quarter's points, not the full game.
+        finalHome += play.homePoints ?? 0;
+        finalAway += play.awayPoints ?? 0;
       }
     } catch {
       // malformed entry — skip silently
     }
   }
 
-  return { score, credits };
+  return { score, credits, finalHome, finalAway };
 };
 
 // Deducts energy and issues a session token. The token must be passed to
@@ -86,13 +98,24 @@ export const startGame = async (
   const token = generateToken();
   const now = Date.now();
 
+  // If this game was launched from a Challenge Me post, resolve the opponent
+  // server-side from the postId (never trusted from the client) so endGame can
+  // attribute the result to the owner's challenge log. Self-challenges (owner
+  // opening their own post) are ignored.
+  const gameHash: Record<string, string> = {
+    username,
+    postId,
+    startTime: String(now),
+    status: 'active',
+  };
+  const challenge = postId ? await getChallengePost(postId) : null;
+  if (challenge && challenge.owner !== username) {
+    gameHash.opponentUsername = challenge.owner;
+    gameHash.opponentPostId = postId;
+  }
+
   await Promise.all([
-    redis.hSet(gameKey(gameId), {
-      username,
-      postId,
-      startTime: String(now),
-      status: 'active',
-    }),
+    redis.hSet(gameKey(gameId), gameHash),
     redis.set(sessionKey(token), `${username}:${gameId}`),
     redis.expire(sessionKey(token), SESSION_TTL_SECS),
   ]);
@@ -138,11 +161,13 @@ export const endGame = async (
   const startTime = Number(raw.startTime ?? 0);
   const duration = Math.floor((now - startTime) / 1000);
   const postId = raw.postId ?? '';
+  const opponentPostId = raw.opponentPostId ?? '';
 
-  const { score: verifiedScore, credits: verifiedCredits } = await replayPlays(gameId);
+  const { score: verifiedScore, credits: verifiedCredits, finalHome, finalAway } = await replayPlays(gameId);
   const scoreMatch = verifiedScore === clientScore;
   const durationOk = duration >= MIN_DURATION_SECS;
   const isClean = scoreMatch && durationOk;
+  const won = finalHome > finalAway;
 
   const status: GameStatus = isClean ? 'pending' : 'flagged';
   const creditsEarned = isClean ? verifiedCredits : 0;
@@ -168,6 +193,36 @@ export const endGame = async (
 
   if (creditsEarned > 0) {
     await awardCredits(username, creditsEarned, String(gameId));
+  }
+
+  // Only credit-clean games count toward missions, the W-L record, and the
+  // challenge log — keeps flagged/cheating games from farming rewards or
+  // polluting an opponent's "Previous Challenges" list. Wrapped so a failure
+  // in any of these side-effects can never break game finalization / credit
+  // award (recordGameCompletion already swallows internally; this guards the
+  // W-L + challenge-log writes too).
+  if (isClean) {
+    await recordGameCompletion(username, won);
+    try {
+      await recordGameOutcome(username, won);
+      // Launched from a Challenge Me post → attribute the result to the owner's
+      // log (recorded from the challenger's perspective).
+      if (opponentPostId) {
+        // Record from the POST OWNER's perspective — their roster is the away
+        // team. 'W' = the owner's team held off the challenger, 'L' = the owner
+        // was beaten. Score is owner-first so the card reads naturally on the
+        // owner's post ("u/challenger … 4-12" with an L = owner lost 4-12).
+        const ownerWon = finalAway > finalHome;
+        await recordChallengeResult(opponentPostId, {
+          opponent: username,
+          result: ownerWon ? 'W' : 'L',
+          score: `${finalAway}-${finalHome}`,
+          gameId,
+        });
+      }
+    } catch {
+      // W-L / challenge-log tracking must not break game finalization.
+    }
   }
 
   return { id: gameId, username, postId, startTime, endTime: now, duration, score: clientScore, verifiedScore, creditsEarned, status };

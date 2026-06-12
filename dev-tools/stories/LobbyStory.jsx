@@ -11,6 +11,48 @@ const MOCK_ROSTER = [
   { pos: 'C',  name: 'SOL KAGE',   spd: 48, dex: 72, jmp: 84, acc: 66, rarity: 4, level: 31, ability: null,          abilities: [] },
 ];
 
+const MISSION_SCENARIOS = {
+  empty: {
+    label: 'Empty (fresh day)',
+    daily: [
+      { id: 'win1',   label: 'WIN A GAME',     sub: 'Complete any match',         reward: 50,  total: 1, accent: 'cyan',    progress: 0, awarded: false },
+      { id: 'draft1', label: 'DRAFT A PLAYER', sub: 'Use a free or credit draft', reward: 25,  total: 1, accent: 'magenta', progress: 0, awarded: false },
+      { id: 'play3',  label: 'PLAY 3 GAMES',   sub: 'Any mode counts',            reward: 100, total: 3, accent: 'gold',    progress: 0, awarded: false },
+    ],
+    weekly: [
+      { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/TheMBA', reward: 200, total: 1, accent: 'gold', featured: true, progress: 0, awarded: false },
+      { id: 'wwin5',   label: 'WIN 5 GAMES',     sub: 'Any mode',                reward: 300, total: 5, accent: 'cyan',    progress: 0, awarded: false },
+      { id: 'wdraft',  label: 'DRAFT 3 PLAYERS', sub: 'Free or credit drafts',   reward: 150, total: 3, accent: 'magenta', progress: 0, awarded: false },
+    ],
+  },
+  midway: {
+    label: 'In progress',
+    daily: [
+      { id: 'win1',   label: 'WIN A GAME',     sub: 'Complete any match',         reward: 50,  total: 1, accent: 'cyan',    progress: 0, awarded: false },
+      { id: 'draft1', label: 'DRAFT A PLAYER', sub: 'Use a free or credit draft', reward: 25,  total: 1, accent: 'magenta', progress: 1, awarded: true  },
+      { id: 'play3',  label: 'PLAY 3 GAMES',   sub: 'Any mode counts',            reward: 100, total: 3, accent: 'gold',    progress: 2, awarded: false },
+    ],
+    weekly: [
+      { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/TheMBA', reward: 200, total: 1, accent: 'gold', featured: true, progress: 0, awarded: false },
+      { id: 'wwin5',   label: 'WIN 5 GAMES',     sub: 'Any mode',                reward: 300, total: 5, accent: 'cyan',    progress: 3, awarded: false },
+      { id: 'wdraft',  label: 'DRAFT 3 PLAYERS', sub: 'Free or credit drafts',   reward: 150, total: 3, accent: 'magenta', progress: 1, awarded: false },
+    ],
+  },
+  allDone: {
+    label: 'All daily complete',
+    daily: [
+      { id: 'win1',   label: 'WIN A GAME',     sub: 'Complete any match',         reward: 50,  total: 1, accent: 'cyan',    progress: 1, awarded: true },
+      { id: 'draft1', label: 'DRAFT A PLAYER', sub: 'Use a free or credit draft', reward: 25,  total: 1, accent: 'magenta', progress: 1, awarded: true },
+      { id: 'play3',  label: 'PLAY 3 GAMES',   sub: 'Any mode counts',            reward: 100, total: 3, accent: 'gold',    progress: 3, awarded: true },
+    ],
+    weekly: [
+      { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/TheMBA', reward: 200, total: 1, accent: 'gold', featured: true, progress: 1, awarded: true },
+      { id: 'wwin5',   label: 'WIN 5 GAMES',     sub: 'Any mode',                reward: 300, total: 5, accent: 'cyan',    progress: 5, awarded: true  },
+      { id: 'wdraft',  label: 'DRAFT 3 PLAYERS', sub: 'Free or credit drafts',   reward: 150, total: 3, accent: 'magenta', progress: 2, awarded: false },
+    ],
+  },
+};
+
 const DESKTOP_PRESETS = [
   { label: '628×548 (Reddit)', w: 628, h: 548 },
   { label: '1920×1080', w: 1920, h: 1080 },
@@ -28,6 +70,10 @@ export default function LobbyStory() {
   const [log, setLog]           = useState([]);
   const [isFtue, setIsFtue]     = useState(false);
   const [hasRoster, setHasRoster] = useState(true);
+  // Whether the user has a live challenge post — drives the featured mission CTA
+  // (VIEW when active, POST NOW otherwise). The My Challenge modal itself is
+  // App-level (App.jsx), so here we just preview the CTA + log the click.
+  const [hasChallenge, setHasChallenge] = useState(false);
   const [credits, setCredits]   = useState(2450);
   const [mobile, setMobile]     = useState(false);
   const [deviceKey, setDeviceKey] = useState('iphone14');
@@ -35,6 +81,34 @@ export default function LobbyStory() {
   const [desktopH, setDesktopH] = useState(548);
   const [scanlines, setScanlines] = useState(0.5);
   const [vignette, setVignette]   = useState(0.75);
+  const [missionScenario, setMissionScenario] = useState('midway');
+  const [missions, setMissions] = useState(() => ({
+    daily:  MISSION_SCENARIOS.midway.daily,
+    weekly: MISSION_SCENARIOS.midway.weekly,
+  }));
+
+  // Swap to a scenario from the picker.
+  const applyScenario = (key) => {
+    setMissionScenario(key);
+    setMissions({
+      daily:  MISSION_SCENARIOS[key].daily.map(m => ({ ...m })),
+      weekly: MISSION_SCENARIOS[key].weekly.map(m => ({ ...m })),
+    });
+  };
+
+  // Flip the first not-yet-awarded mission to awarded so LobbyScreen's
+  // diff detection fires the celebratory modal.
+  const fireCelebration = () => {
+    setMissions(prev => {
+      const dup = { daily: prev.daily.map(m => ({ ...m })), weekly: prev.weekly.map(m => ({ ...m })) };
+      const target = dup.daily.find(m => !m.awarded) ?? dup.weekly.find(m => !m.awarded);
+      if (target) {
+        target.progress = target.total;
+        target.awarded = true;
+      }
+      return dup;
+    });
+  };
 
   const push = (msg) => setLog((l) => [`${new Date().toLocaleTimeString()} ${msg}`, ...l].slice(0, 12));
 
@@ -50,6 +124,10 @@ export default function LobbyStory() {
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input type="checkbox" checked={hasRoster} onChange={e => setHasRoster(e.target.checked)} />
           Has roster
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" checked={hasChallenge} onChange={e => setHasChallenge(e.target.checked)} />
+          Has active challenge (VIEW)
         </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           Credits
@@ -70,6 +148,27 @@ export default function LobbyStory() {
           <input type="range" min={0} max={1} step={0.05} value={vignette}
             onChange={e => setVignette(Number(e.target.value))} style={{ width: 55 }} />
         </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          Missions
+          <select
+            value={missionScenario}
+            onChange={e => applyScenario(e.target.value)}
+            style={{ background: '#1a1a1a', border: '1px solid #444', color: '#ccc', borderRadius: 3, padding: '2px 6px', fontSize: 12 }}
+          >
+            {Object.entries(MISSION_SCENARIOS).map(([key, s]) => (
+              <option key={key} value={key}>{s.label}</option>
+            ))}
+          </select>
+        </label>
+        <button
+          onClick={fireCelebration}
+          style={{
+            background: '#1a1a1a', border: '1px solid #5bf2d4', color: '#5bf2d4',
+            borderRadius: 3, padding: '3px 10px', fontSize: 12, cursor: 'pointer',
+          }}
+        >
+          🎉 Fire mission complete
+        </button>
         <button
           onClick={() => setMobile(m => !m)}
           style={{
@@ -128,12 +227,16 @@ export default function LobbyStory() {
             username="peetan"
             credits={credits}
             homeRoster={hasRoster ? MOCK_ROSTER : []}
+            missions={missions}
             isFtue={isFtue}
             onPlay={(mode) => push(`onPlay(${mode})`)}
             onCollection={() => push('onCollection')}
             onDraft={() => push('onDraft')}
             onAuction={() => push('onAuction')}
             onOptions={() => push('onOptions')}
+            onCreateChallenge={() => push('onCreateChallenge')}
+            challengeActive={hasChallenge}
+            onViewChallenge={() => push('onViewChallenge (opens My Challenge modal)')}
           />
           <CrtOverlay scanlines={scanlines} vignette={vignette} />
         </PhoneFrameExpanded>
@@ -151,12 +254,16 @@ export default function LobbyStory() {
             username="peetan"
             credits={credits}
             homeRoster={hasRoster ? MOCK_ROSTER : []}
+            missions={missions}
             isFtue={isFtue}
             onPlay={(mode) => push(`onPlay(${mode})`)}
             onCollection={() => push('onCollection')}
             onDraft={() => push('onDraft')}
             onAuction={() => push('onAuction')}
             onOptions={() => push('onOptions')}
+            onCreateChallenge={() => push('onCreateChallenge')}
+            challengeActive={hasChallenge}
+            onViewChallenge={() => push('onViewChallenge (opens My Challenge modal)')}
           />
           <CrtOverlay scanlines={scanlines} vignette={vignette} />
         </div>

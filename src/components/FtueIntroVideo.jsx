@@ -9,6 +9,7 @@ export function FtueIntroVideo({ onDone }) {
   const [needsTap, setNeedsTap] = React.useState(true);
   const [canSkip, setCanSkip] = React.useState(false);
   const [error, setError] = React.useState(null);
+  const [ready, setReady] = React.useState(false);
 
   const finish = () => { onDone?.(); };
 
@@ -45,10 +46,34 @@ export function FtueIntroVideo({ onDone }) {
         autoPlay
         playsInline
         muted={muted}
+        preload="auto"
+        controls={false}
+        disablePictureInPicture
+        controlsList="nodownload noplaybackrate nofullscreen"
+        onCanPlay={() => setReady(true)}
+        onPlaying={() => setReady(true)}
         onEnded={finish}
         onError={(e) => setError(e.currentTarget.error?.message || 'video failed to load')}
-        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+        style={{
+          width: '100%', height: '100%', objectFit: 'contain', display: 'block',
+          opacity: ready ? 1 : 0,
+          transition: 'opacity 120ms linear',
+          background: '#000',
+        }}
       />
+      {!ready && !error && (
+        <div style={{
+          position: 'absolute', inset: 0, background: '#000',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          <div style={{
+            width: 16, height: 16, border: '2px solid #fff', borderTopColor: 'transparent',
+            borderRadius: '50%', animation: 'ftueSpin 700ms linear infinite',
+          }} />
+          <style>{`@keyframes ftueSpin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
       {error && (
         <div style={{
           position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',

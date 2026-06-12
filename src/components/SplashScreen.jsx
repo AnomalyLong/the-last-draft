@@ -2,8 +2,7 @@ import React from 'react';
 import { ZOOM_W, TOTAL_H, JERSEY_HOME, JERSEY_AWAY } from '../constants.js';
 import { Player } from './Player.jsx';
 import { Ball } from './Ball.jsx';
-import { Shadow } from './Shadow.jsx';
-import { PixelTextC } from './PixelText.jsx';
+import { PixelText, PixelTextC } from './PixelText.jsx';
 
 // ── Letterbox the 16:9 reference inside our 408×348 viewport ─────────────
 // Reference image is 2752×1536 ≈ 1.79:1. To preserve composition we render
@@ -53,13 +52,17 @@ function BubbleCourt({ cx, cy, r, scene, playerScale, clipId, possessionPeriod =
     : 0;
 
   // Players hold their court positions and just run the leg animation. The
-  // ball-handler still gets the dribbling pose + bouncing ball.
+  // ball-handler still gets the dribbling pose + bouncing ball. Sprites lift a
+  // touch off the floor so they aren't kissing the bubble rim; shadows stay
+  // anchored to the ground.
+  const playerLift = playerScale * 5;
   const rendered = scene.players.map((p, i) => {
     const playerCx = artX + p.u * artW;
-    const playerCy = artY + p.v * artH;
+    const groundCy = artY + p.v * artH;
+    const playerCy = groundCy - playerLift;
     const flipH = p.facingRight ?? false;
     const hasBall = i === slot;
-    return { i, p, playerCx, playerCy, flipH, hasBall };
+    return { i, p, playerCx, playerCy, groundCy, flipH, hasBall };
   });
 
   // Ball offsets scaled off the player size. GameScene uses ±10/±6 at scale 1.5,
@@ -86,9 +89,19 @@ function BubbleCourt({ cx, cy, r, scene, playerScale, clipId, possessionPeriod =
           x={artX} y={artY} width={artW} height={artH}
           fill="#000" opacity={0.1}
         />
-        {/* shadows under all players first so they don't sit on top of sprites */}
-        {rendered.map(({ i, playerCx, playerCy, hasBall }) => (
-          <Shadow key={`s${i}`} cx={playerCx} cy={playerCy} hasBall={false /* skip ring overlay in splash */} />
+        {/* Custom shadow ellipse drawn at the player's actual foot position.
+            For run/idle, Player centers the 14×18 sprite on cy (cy - SH/2
+            translate), so feet sit at cy + 9*scale, not cy. */}
+        {rendered.map(({ i, playerCx, playerCy }) => (
+          <ellipse
+            key={`s${i}`}
+            cx={playerCx}
+            cy={playerCy + 9 * playerScale}
+            rx={4.5 * playerScale}
+            ry={1.5 * playerScale}
+            fill="#000"
+            opacity={0.35}
+          />
         ))}
         {/* sort by cy so deeper players render behind closer ones, like GameScene */}
         {[...rendered].sort((a, b) => a.playerCy - b.playerCy).map(({ i, p, playerCx, playerCy, flipH, hasBall }) => {
@@ -223,7 +236,9 @@ export function SplashScreen() {
     const HOVER_PERIOD = 3600;
     const phase = i * 0.72;
     const amp   = b.main ? 4 : 3;
-    const hoverY = Math.sin((hoverTick / HOVER_PERIOD) * 2 * Math.PI + phase) * amp;
+    // round to whole pixels — sub-pixel jitter on the courtillus PNG flickers
+    // on mobile (resampling re-runs at slightly different offsets each frame)
+    const hoverY = Math.round(Math.sin((hoverTick / HOVER_PERIOD) * 2 * Math.PI + phase) * amp);
     return {
       ...b,
       cx: rx(b.rxc),
@@ -261,10 +276,33 @@ export function SplashScreen() {
     />
   );
 
+  // Title placement in the top letterbox bar (0..CONTENT_TOP).
+  const titleY    = 12;
+  const taglineY  = 36;
+
   return (
     <g>
       {/* ── Letterbox base ── */}
       <rect x={0} y={0} width={ZOOM_W} height={TOTAL_H} fill="#000" />
+
+      {/* ── Title in the top letterbox bar ── */}
+      <PixelTextC
+        text="ENTER THE MBA"
+        cx={ZOOM_W / 2}
+        y={titleY}
+        scale={2}
+        fill="#e8c060"
+        outline="#2a1800"
+        thick
+      />
+      <PixelTextC
+        text="MULTIVERSE BASKETBALL ASSOCIATION"
+        cx={ZOOM_W / 2}
+        y={taglineY}
+        scale={1}
+        fill="#1eb8d8"
+        outline={null}
+      />
 
       {/* ── Galaxy background (clipped to content strip) ── */}
       <image
@@ -315,6 +353,53 @@ export function SplashScreen() {
 
       {/* ── Bubbles in front of the figure (main showpiece included) ── */}
       {bubblesFront.map(renderBubble)}
+
+      {/* ── Left-side mini-ad: framed avatar + "Challenge Other Redditors!" ── */}
+      {(() => {
+        const frameX = 3;
+        const frameY = 74;
+        const frameW = 92;
+        const frameH = 18;
+        const rx     = 3;
+        const avatarCx = frameX + 9;
+        const avatarCy = frameY + frameH / 2;
+        const avatarR  = 7;
+        const textX    = avatarCx + avatarR + 4;
+        // Slide in from off-screen left after a 3s delay. Start far enough out
+        // that even Reddit desktop's wider letterbox can't reveal it before
+        // the slide begins.
+        const SLIDE_DELAY    = 3000;
+        const SLIDE_DURATION = 800;
+        const SLIDE_START_X  = -250;                                // ~2.7× the frame width past the viewBox edge
+        const slideT = Math.max(0, Math.min(1, (hoverTick - SLIDE_DELAY) / SLIDE_DURATION));
+        const eased  = 1 - Math.pow(1 - slideT, 3);                 // easeOutCubic
+        const slideX = SLIDE_START_X * (1 - eased);
+        return (
+          <g transform={`translate(${slideX}, 0) scale(1.25)`}>
+            {/* BballTip-style frame */}
+            <rect x={frameX} y={frameY} width={frameW} height={frameH} rx={rx}
+              fill="#0c1018" shapeRendering="crispEdges" />
+            <rect x={frameX} y={frameY} width={frameW} height={frameH} rx={rx}
+              fill="none" stroke="#ffffff" strokeWidth={1.5} />
+
+            <defs>
+              <clipPath id="splash-ad-avatar-clip">
+                <circle cx={avatarCx} cy={avatarCy} r={avatarR - 1} />
+              </clipPath>
+            </defs>
+            <circle cx={avatarCx} cy={avatarCy} r={avatarR}
+              fill="#0a1828" stroke="#ffe060" strokeWidth={1} />
+            <image href="/jxts5wo9u41e1.png"
+              x={avatarCx - 9} y={avatarCy - 9}
+              width={18} height={23}
+              clipPath="url(#splash-ad-avatar-clip)"
+              preserveAspectRatio="xMidYMid meet"
+              style={{ imageRendering: 'pixelated' }} />
+            <text x={textX} y={avatarCy - 1} style={{ fontFamily: 'var(--f-mono)' }} fontSize={6} fontWeight="bold" fill="#fff">CHALLENGE</text>
+            <text x={textX} y={avatarCy + 6} style={{ fontFamily: 'var(--f-mono)' }} fontSize={6} fontWeight="bold" fill="#ffe060">OTHER REDDITORS!</text>
+          </g>
+        );
+      })()}
 
       {/* ── Tap to play prompt — sits in the bottom letterbox bar ── */}
       <g opacity={pulse}>

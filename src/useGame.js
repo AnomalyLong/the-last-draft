@@ -64,6 +64,7 @@ function pickLevelUpChoices(gamePlayer, rosterRef, abilityOverridesRef) {
     const roster = gamePlayer.team === 'home' ? rosterRef.current.home : rosterRef.current.away;
     const rp = roster?.find(r => (r.role ?? r.pos) === gamePlayer.role);
     if (rp?.ability?.name) owned.add(rp.ability.name);
+    if (Array.isArray(rp?.abilities)) rp.abilities.forEach(a => { if (a?.name) owned.add(a.name); });
     const extras = abilityOverridesRef.current.get(gamePlayer.id) ?? [];
     extras.forEach(a => owned.add(a.name));
   }
@@ -409,12 +410,21 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   // ─── Reusable Game Actions ─────────────────────────────────────────────────
   // These are called by both manual commands and the testGamePlay loop.
 
+  // Returns 2 or 3 based on the shooter's grid distance from the attacking basket.
+  // Threshold matches OFFENSE_RADIUS_FT (24ft) — the same arc used elsewhere.
+  const pointsForShotAt = (cx, cy, team) => {
+    const basketGx = team === 'home' ? BASKET_RIGHT_GX : BASKET_LEFT_GX;
+    const { x: gx, y: gy } = svgToGrid(cx, cy);
+    const dist = Math.sqrt((basketGx - gx) ** 2 + (BASKET_GY - gy) ** 2);
+    return dist > OFFENSE_RADIUS_FT ? 3 : 2;
+  };
+
   // Drifts all non-shooting players 2–4 grid-ft toward the attacking basket at
   // half speed so the court feels alive while the ball is in the air.
   const driftTowardBasket = (shooterTeam) => {
     const basketGx = shooterTeam === 'home' ? BASKET_RIGHT_GX : BASKET_LEFT_GX;
     playersRef.current
-      .filter(p => !p.isShooting && !p.isDunking && !p.isBlocking && !p.isFadingAway)
+      .filter(p => !p.isShooting && !p.isDunking && !p.isSpinDunking && !p.isBlocking && !p.isFadingAway)
       .forEach(p => {
         const { x: gx, y: gy } = svgToGrid(p.cx, p.cy);
         const dx = basketGx - gx;
@@ -485,7 +495,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   useEffect(() => {
     if (time !== 1 || !gameLoopActiveRef.current || gamePausedRef.current) return;
     const carrier = playersRef.current.find(
-      p => p.hasBall && !p.isShooting && !p.isDunking && !p.isFadingAway
+      p => p.hasBall && !p.isShooting && !p.isDunking && !p.isSpinDunking && !p.isFadingAway
     );
     if (!carrier) return;
 
@@ -1046,17 +1056,27 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
       playersRef.current = playersRef.current.map(p => p.id === pg.id ? { ...p, isSpinning: true } : p);
       setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isSpinning: true } : p));
       const { x: spGx, y: spGy } = svgToGrid(pg.cx, pg.cy);
-      smoothMoveTo(Math.max(1, Math.min(93, spGx + (pg.team === 'home' ? 16 : -16))), spGy, pg.id, pg.facingRight, 0.5);
-      setTimeout(() => {
-        if (!gameLoopActiveRef.current || gamePausedRef.current) return;
-        playersRef.current = playersRef.current.map(p => p.id === pg.id ? { ...p, isSpinning: false } : p);
-        setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isSpinning: false } : p));
-        triggerShoot(onComplete, onBlock, true);
-      }, 12 * 80);
+      // Tune speed so the slide ends close to the spin animation (12 * 80ms = 960ms).
+      // distFt / (PLAYER_SPEED_FT_S * speedMult) ≈ 0.96s  →  speedMult ≈ 1.2
+      const distFt = 16;
+      smoothMoveTo(
+        Math.max(1, Math.min(93, spGx + (pg.team === 'home' ? distFt : -distFt))),
+        spGy,
+        pg.id,
+        pg.facingRight,
+        1.2,
+        () => {
+          if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+          playersRef.current = playersRef.current.map(p => p.id === pg.id ? { ...p, isSpinning: false } : p);
+          setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isSpinning: false } : p));
+          triggerShoot(onComplete, onBlock, true);
+        }
+      );
       return;
     }
 
     const startCx = pg.cx, startCy = pg.cy;
+    const points = pointsForShotAt(startCx, startCy, pg.team);
     const { cx: targetCx, cy: targetCy } = pg.team === 'home' ? SHOOT_TARGET_RIGHT : SHOOT_TARGET_LEFT;
     const duration = 800;
 
@@ -1100,22 +1120,22 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
             if (onComplete) {
               // Game loop path: clear shoot pose, score, hand off to next action.
               setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isShooting: false } : p));
-              if (pg.team === 'home') { setHomeScore(s => s + 2); onPlayEventRef.current?.({ type: 'shoot', result: 'made', points: 2, team: 'home', t: Date.now() }); }
-              else setAwayScore(s => s + 2);
+              if (pg.team === 'home') { setHomeScore(s => s + points); onPlayEventRef.current?.({ type: 'shoot', result: 'made', points, team: 'home', t: Date.now() }); }
+              else setAwayScore(s => s + points);
               quarterStatsRef.current[pg.team].shots += 1;
-              quarterPointsRef.current[pg.team] += 2;
+              quarterPointsRef.current[pg.team] += points;
               awardXp(pg.id, 10, pg.cx, pg.cy);
-              addLog('swish! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+              addLog(`swish! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600);
               onComplete();
             } else {
               // Manual shoot: restore ball to shooter.
               setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: true, isShooting: false } : p));
-              if (pg.team === 'home') { setHomeScore(s => s + 2); onPlayEventRef.current?.({ type: 'shoot', result: 'made', points: 2, team: 'home', t: Date.now() }); }
-              else setAwayScore(s => s + 2);
+              if (pg.team === 'home') { setHomeScore(s => s + points); onPlayEventRef.current?.({ type: 'shoot', result: 'made', points, team: 'home', t: Date.now() }); }
+              else setAwayScore(s => s + points);
               quarterStatsRef.current[pg.team].shots += 1;
-              quarterPointsRef.current[pg.team] += 2;
+              quarterPointsRef.current[pg.team] += points;
               awardXp(pg.id, 10, pg.cx, pg.cy);
-              addLog('swish! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+              addLog(`swish! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600);
             }
           }, 400);
         }
@@ -1139,17 +1159,26 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
       playersRef.current = playersRef.current.map(p => p.id === pg.id ? { ...p, isSpinning: true } : p);
       setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isSpinning: true } : p));
       const { x: spGx, y: spGy } = svgToGrid(pg.cx, pg.cy);
-      smoothMoveTo(Math.max(1, Math.min(93, spGx + (pg.team === 'home' ? 16 : -16))), spGy, pg.id, pg.facingRight, 0.5);
-      setTimeout(() => {
-        if (!gameLoopActiveRef.current || gamePausedRef.current) return;
-        playersRef.current = playersRef.current.map(p => p.id === pg.id ? { ...p, isSpinning: false } : p);
-        setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isSpinning: false } : p));
-        triggerFadeaway(onComplete, onBlock, blockRate, true);
-      }, 12 * 80);
+      // Speed tuned so slide finishes ~when spin animation ends (12 * 80ms = 960ms).
+      const distFt = 16;
+      smoothMoveTo(
+        Math.max(1, Math.min(93, spGx + (pg.team === 'home' ? distFt : -distFt))),
+        spGy,
+        pg.id,
+        pg.facingRight,
+        1.2,
+        () => {
+          if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+          playersRef.current = playersRef.current.map(p => p.id === pg.id ? { ...p, isSpinning: false } : p);
+          setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isSpinning: false } : p));
+          triggerFadeaway(onComplete, onBlock, blockRate, true);
+        }
+      );
       return;
     }
 
     const startCx = pg.cx, startCy = pg.cy;
+    const points = pointsForShotAt(startCx, startCy, pg.team);
     const { cx: targetCx, cy: targetCy } = pg.team === 'home' ? SHOOT_TARGET_RIGHT : SHOOT_TARGET_LEFT;
     const duration = 800;
 
@@ -1200,21 +1229,21 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
           setTimeout(() => {
             if (onComplete) {
               setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isFadingAway: false } : p));
-              if (pg.team === 'home') { setHomeScore(s => s + 2); onPlayEventRef.current?.({ type: 'shoot', result: 'made', points: 2, team: 'home', t: Date.now() }); }
-              else setAwayScore(s => s + 2);
+              if (pg.team === 'home') { setHomeScore(s => s + points); onPlayEventRef.current?.({ type: 'shoot', result: 'made', points, team: 'home', t: Date.now() }); }
+              else setAwayScore(s => s + points);
               quarterStatsRef.current[pg.team].shots += 1;
-              quarterPointsRef.current[pg.team] += 2;
+              quarterPointsRef.current[pg.team] += points;
               awardXp(pg.id, 10, pg.cx, pg.cy);
-              addLog('fadeaway! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+              addLog(`fadeaway! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600);
               onComplete();
             } else {
               setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: true, isFadingAway: false } : p));
-              if (pg.team === 'home') { setHomeScore(s => s + 2); onPlayEventRef.current?.({ type: 'shoot', result: 'made', points: 2, team: 'home', t: Date.now() }); }
-              else setAwayScore(s => s + 2);
+              if (pg.team === 'home') { setHomeScore(s => s + points); onPlayEventRef.current?.({ type: 'shoot', result: 'made', points, team: 'home', t: Date.now() }); }
+              else setAwayScore(s => s + points);
               quarterStatsRef.current[pg.team].shots += 1;
-              quarterPointsRef.current[pg.team] += 2;
+              quarterPointsRef.current[pg.team] += points;
               awardXp(pg.id, 10, pg.cx, pg.cy);
-              addLog('fadeaway! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+              addLog(`fadeaway! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600);
             }
           }, 400);
         }
@@ -1320,6 +1349,12 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
       return;
     }
 
+    // DUNK MASTER → always do the showier spin-dunk variant.
+    if (hasAbility(dunker, 'DUNK MASTER')) {
+      triggerSpinDunk(onComplete, speed);
+      return;
+    }
+
     const isHome = dunker.team === 'home';
     const launchGx = isHome ? 83 : 11;
     const { cx: basketCx, cy: basketCy } = isHome ? SHOOT_TARGET_RIGHT : SHOOT_TARGET_LEFT;
@@ -1369,6 +1404,93 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
       }, 7 * DF);
     });
     addLog('driving to the basket...');
+  };
+
+  // Spin-dunk variant. Same scoring/timing rhythm as triggerDunk but uses the
+  // 19-frame DUNKSPIN_FRAMES animation (frames 8–11 doubled so the dunker
+  // hangs on the rim) and a phased rise→hang→drop trajectory. Used by
+  // testSpinDunk and by triggerDunk when the dunker has DUNK MASTER.
+  const triggerSpinDunk = (onComplete = null, speed = 1.5) => {
+    wanderActiveRef.current = false;
+    guardActiveRef.current = false;
+    const dunker = playersRef.current.find(p => p.hasBall);
+    if (!dunker) return;
+
+    const isHome = dunker.team === 'home';
+    const launchGx = isHome ? 83 : 11;
+    const { cx: basketCx, cy: basketCy } = isHome ? SHOOT_TARGET_RIGHT : SHOOT_TARGET_LEFT;
+    reactDunk(dunker.id, isHome);
+
+    // Card timing matches SpecialMoveCard's internal duration:
+    // ENTER (150) + 19 frames × 130ms (2470) + EXIT (100) ≈ 2720ms.
+    const CARD_TOTAL_MS = 2720;
+    const DF2 = Math.round(80 / speed);
+    smoothMoveTo(launchGx, 25, dunker.id, isHome ? true : false, speed * (2 / 1.5), () => {
+      const { cx: startCx, cy: startCy } = gridToSvg(launchGx, 25);
+      playersRef.current = playersRef.current.map(p => p.id === dunker.id ? { ...p, isSpinDunking: true } : p);
+      setPlayers(prev => prev.map(p => p.id === dunker.id ? { ...p, isSpinDunking: true, hasBall: true } : p));
+      driftTowardBasket(dunker.team);
+      setTimeout(() => {
+        // Phased trajectory synced to dunkspin frame timing (19 playback frames × 80ms = 1520ms):
+        //   idx 0–6   (0–560ms):    rise toward the rim
+        //   idx 7–14  (560–1200ms): hang at the rim (frames 8–11 doubled)
+        //   idx 15–18 (1200–1520ms): drop back to the floor
+        const FRAME_MS = 80;
+        const riseEnd = 7 * FRAME_MS;
+        const hangEnd = 15 * FRAME_MS;
+        const jumpDur = 19 * FRAME_MS;
+        const rimCx = basketCx - 21;
+        const rimCy = startCy - 17;
+        const jumpStart = performance.now();
+        const jumpAnim = (now) => {
+          const elapsed = Math.min(now - jumpStart, jumpDur);
+          let cx, cy;
+          if (elapsed < riseEnd) {
+            const r = elapsed / riseEnd;
+            cx = startCx + (rimCx - startCx) * r;
+            cy = startCy + (rimCy - startCy) * r;
+          } else if (elapsed < hangEnd) {
+            cx = rimCx;
+            cy = rimCy;
+          } else {
+            const r = (elapsed - hangEnd) / (jumpDur - hangEnd);
+            cx = rimCx;
+            cy = rimCy + (startCy - rimCy) * r;
+          }
+          setPlayers(prev => prev.map(p => p.id === dunker.id ? { ...p, cx, cy } : p));
+          if (elapsed < jumpDur) requestAnimationFrame(jumpAnim);
+          else setPlayers(prev => prev.map(p => p.id === dunker.id ? { ...p, cx: rimCx, cy: startCy } : p));
+        };
+        requestAnimationFrame(jumpAnim);
+      }, DF2);
+      setTimeout(() => {
+        if (isHome) { setHomeScore(s => s + 2); onPlayEventRef.current?.({ type: 'dunk', team: 'home', t: Date.now() }); }
+        else setAwayScore(s => s + 2);
+        quarterStatsRef.current[isHome ? 'home' : 'away'].dunks += 1;
+        quarterPointsRef.current[isHome ? 'home' : 'away'] += 2;
+        awardXp(dunker.id, 15, startCx, startCy);
+        playDunk(); addLog('SPIN DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+      }, 7 * DF2);
+      setTimeout(() => {
+        setShot({ cx: basketCx, cy: basketCy });
+        const dropStart = performance.now();
+        const dropDur2 = Math.round(400 / 1.5);
+        const dropAnim = (now) => {
+          const t = Math.min((now - dropStart) / dropDur2, 1);
+          setShot({ cx: basketCx, cy: basketCy + 18 * t });
+          if (t < 1) requestAnimationFrame(dropAnim);
+          else setShot(null);
+        };
+        requestAnimationFrame(dropAnim);
+      }, 12 * DF2);
+      // Keep isSpinDunking on until the card finishes, then clear it and
+      // hand off to onComplete so the game loop continues after the visual.
+      setTimeout(() => {
+        setPlayers(prev => prev.map(p => p.id === dunker.id ? { ...p, isSpinDunking: false, hasBall: false } : p));
+        if (onComplete) onComplete();
+      }, CARD_TOTAL_MS);
+    });
+    addLog('spinning to the basket...');
   };
 
   // Away C inbounds from right sideline. onComplete fires when away PG
@@ -1470,11 +1592,15 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     return base + bonus;
   };
 
-  // Returns true if the player has the named ability (draft or any level-up earned slot).
+  // Returns true if the player has the named ability — checks all three sources:
+  //   1. rp.ability       — single draft ability (rolled at mint)
+  //   2. rp.abilities     — persisted array of level-ups earned in prior sessions
+  //   3. abilityOverrides — level-ups earned during the current game session
   const hasAbility = (gamePlayer, abilityName) => {
     const roster = gamePlayer.team === 'home' ? rosterRef.current.home : rosterRef.current.away;
     const rp = roster.find(r => (r.role ?? r.pos) === gamePlayer.role);
     if (rp?.ability?.name === abilityName) return true;
+    if (Array.isArray(rp?.abilities) && rp.abilities.some(a => a?.name === abilityName)) return true;
     const extras = abilityOverridesRef.current.get(gamePlayer.id) ?? [];
     return extras.some(a => a.name === abilityName);
   };
@@ -2001,6 +2127,30 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         if (!playersRef.current.find(p => p.hasBall)) { addLog('nobody has the ball', 'err'); return; }
         triggerFadeaway();
 
+      } else if (op === 'testThreePointer') {
+        const carrier = playersRef.current.find(p => p.hasBall);
+        if (!carrier) { addLog('nobody has the ball', 'err'); return; }
+        const isHome = carrier.team === 'home';
+        const basketGx = isHome ? BASKET_RIGHT_GX : BASKET_LEFT_GX;
+        const { x: cGx, y: cGy } = svgToGrid(carrier.cx, carrier.cy);
+        // Keep the carrier's current gy. Find the gx that puts them exactly
+        // (OFFENSE_RADIUS_FT + 3) ft from the basket, using dx² + dy² = r².
+        const targetDist = OFFENSE_RADIUS_FT + 2;
+        const dy = BASKET_GY - cGy;
+        let targetGx;
+        if (Math.abs(dy) >= targetDist) {
+          // Already past the arc vertically — just shoot from here.
+          targetGx = cGx;
+        } else {
+          const dx = Math.sqrt(targetDist * targetDist - dy * dy);
+          targetGx = isHome ? basketGx - dx : basketGx + dx;
+        }
+        targetGx = Math.max(1, Math.min(93, Math.round(targetGx)));
+        addLog(`${carrier.role} running to the 3-point line...`);
+        smoothMoveTo(targetGx, cGy, carrier.id, isHome ? true : false, 1.5, () => {
+          triggerShoot();
+        });
+
       } else if (op === 'testPass') {
         const role = parts[1]?.toUpperCase();
         if (!role) { addLog('usage: testPass <role>  e.g. testPass SG', 'err'); return; }
@@ -2094,6 +2244,10 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
           }, 7 * DF2);
         });
         addLog('driving to the basket...');
+
+      } else if (op === 'testSpinDunk') {
+        if (!playersRef.current.find(p => p.hasBall)) { addLog('nobody has the ball', 'err'); return; }
+        triggerSpinDunk();
 
       } else if (op === 'testGamePlay') {
         if (gameLoopActiveRef.current) { addLog('already running — type stopGamePlay', 'err'); return; }

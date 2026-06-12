@@ -5,9 +5,23 @@ import { context, reddit, redis } from '@devvit/web/server';
 import { z } from 'zod';
 
 import { getOrCreateUser, getUser, grantFreeDrafts, setTeamName, userKey, ledgerKey, gamesKey, MAX_ENERGY, USERS_INDEX_KEY } from './core/user';
-import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, setLineup, updatePlayerProgress, ROLES, type Role, rosterKey, lineupKey } from './core/player';
-import { freeDraft, creditDraft } from './core/draft';
+import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, setLineup, updatePlayerProgress, buildRosterForUser, ROLES, type Role, rosterKey, lineupKey } from './core/player';
+import { createChallengePost, canCreateChallengePost, getChallengePost, listChallengeResults, getMyChallenge, challengePostKey } from './core/post';
+import { freeDraft, creditDraft, buyDraftPick, getNextDraftCost } from './core/draft';
 import { startGame, recordPlay, endGame, getGame, type PlayEvent } from './core/game';
+import {
+  listMissions,
+  resetUserMissions,
+  adminSetMissionProgress,
+  adminCompleteMission,
+  getMissionCatalog,
+  setMissionCatalog,
+  resetMissionCatalog,
+  updateMissionDef,
+  moveMissionType,
+  DEFAULT_MISSION_CATALOG,
+  type MissionDef,
+} from './core/missions';
 import {
   isAdmin,
   addAdmin,
@@ -169,6 +183,22 @@ export const appRouter = t.router({
         await setTeamName(username, input.teamName);
         return { success: true };
       }),
+
+    // Idempotent fallback: ensures user:games:{username} has >= 1 entry so the
+    // client computes isFtue=false on next user.init. Used when a GameOverScreen
+    // is dismissed without an active session (e.g. trpc.game.start failed at
+    // game-start time). Does nothing if the user already has any completed game.
+    markFtuePlayed: publicProcedure
+      .mutation(async () => {
+        const username = await requireUsername();
+        const existing = await redis.zCard(gamesKey(username));
+        if (existing > 0) return { marked: false };
+        await redis.zAdd(gamesKey(username), {
+          score: Date.now(),
+          member: 'ftue-fallback',
+        });
+        return { marked: true };
+      }),
   }),
 
   // ── Player ──────────────────────────────────────────────────────────────
@@ -210,6 +240,24 @@ export const appRouter = t.router({
 
   // ── Draft ───────────────────────────────────────────────────────────────
   draft: t.router({
+    // Cost + count for the user's NEXT paid draft this month (doubling
+    // schedule, server-authoritative). Drives the Draft Hub display.
+    cost: publicProcedure.query(async () => {
+      const username = await requireUsername();
+      return await getNextDraftCost(username);
+    }),
+
+    // Buy a draft pick: charges the monthly doubling cost NOW and banks a
+    // reusable pick on the user (persists until consumed via draft.credit).
+    buy: publicProcedure.mutation(async () => {
+      const username = await requireUsername();
+      try {
+        return await buyDraftPick(username);
+      } catch (e: any) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: e?.message ?? 'Purchase failed' });
+      }
+    }),
+
     free: publicProcedure
       .input(z.object({
         name: z.string().min(1).max(32),
@@ -233,7 +281,6 @@ export const appRouter = t.router({
       .input(z.object({
         name: z.string().min(1).max(32),
         rarity: z.enum(['common', 'rare', 'super_rare', 'ultra_rare']),
-        cost: z.number().int().positive(),
         spd: z.number().int().min(0).max(99).optional(),
         dex: z.number().int().min(0).max(99).optional(),
         jmp: z.number().int().min(0).max(99).optional(),
@@ -241,8 +288,14 @@ export const appRouter = t.router({
         ability: z.object({ name: z.string(), rarity: z.number().int() }).catchall(z.unknown()).nullable().optional(),
       }))
       .mutation(async ({ input }) => {
+        // Consumes one banked paid pick (bought earlier via draft.buy) — no
+        // charge here. Throws if the user has no pick to spend.
         const username = await requireUsername();
-        return await creditDraft(username, input.cost, { name: input.name, rarity: input.rarity, spd: input.spd, dex: input.dex, jmp: input.jmp, acc: input.acc, ability: input.ability as any });
+        try {
+          return await creditDraft(username, { name: input.name, rarity: input.rarity, spd: input.spd, dex: input.dex, jmp: input.jmp, acc: input.acc, ability: input.ability as any });
+        } catch (e: any) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: e?.message ?? 'Draft failed' });
+        }
       }),
   }),
 
@@ -304,6 +357,75 @@ export const appRouter = t.router({
         if (!game) throw new TRPCError({ code: 'NOT_FOUND' });
         return game;
       }),
+  }),
+
+  // ── Challenge Me posts ────────────────────────────────────────────────────
+  post: t.router({
+    // Whether the current user may create a challenge post this week.
+    canCreateChallenge: publicProcedure.query(async () => {
+      const username = await requireUsername();
+      return await canCreateChallengePost(username);
+    }),
+
+    // Create a Challenge Me post advertising the user's roster. Throws CONFLICT
+    // if they already posted this week. Returns a navigate target for the client
+    // to redirect to the new Reddit post.
+    createChallenge: publicProcedure.mutation(async () => {
+      const username = await requireUsername();
+      try {
+        return await createChallengePost(username);
+      } catch (e) {
+        throw new TRPCError({ code: 'CONFLICT', message: (e as Error).message });
+      }
+    }),
+
+    // The current user's own active challenge post (this week), for the lobby
+    // "My Challenge" view. Null when there's no live post (none this week, or it
+    // was deleted on Reddit — verify-on-check self-heals the gate).
+    getMyChallenge: publicProcedure.query(async () => {
+      const username = await requireUsername();
+      return await getMyChallenge(username);
+    }),
+
+    // Hydrate the challenge for the CURRENT post context (context.postId).
+    // Returns null when this post isn't a challenge post (e.g. the default
+    // post), so the client falls back to the splash screen. Roster is a LIVE
+    // read of the owner's lineup with serverId stripped — see the asymmetric
+    // progression note in TODO.md.
+    getChallenge: publicProcedure.query(async () => {
+      const postId = context.postId ?? '';
+      const challenge = await getChallengePost(postId);
+      if (!challenge) return null;
+
+      const [roster, owner, results] = await Promise.all([
+        buildRosterForUser(challenge.owner, { includeServerId: false }),
+        getUser(challenge.owner),
+        listChallengeResults(postId, 3),
+      ]);
+
+      return {
+        username: challenge.owner,
+        owner: `u/${challenge.owner}`,
+        team: owner?.teamName || challenge.owner.toUpperCase(),
+        // This team's challenge-defense record (W = roster held, L = beaten),
+        // NOT the owner's overall game record.
+        record: { wins: challenge.wins, losses: challenge.losses },
+        roster,
+        challenges: results.map(r => ({
+          opponent: `u/${r.opponent}`,
+          result: r.result,
+          score: r.score,
+        })),
+      };
+    }),
+  }),
+
+  // ── Missions ────────────────────────────────────────────────────────────
+  missions: t.router({
+    list: publicProcedure.query(async () => {
+      const username = await requireUsername();
+      return await listMissions(username);
+    }),
   }),
 
   // ── Auction ─────────────────────────────────────────────────────────────
@@ -386,12 +508,18 @@ export const appRouter = t.router({
           redis.del(ledgerKey(input)),
           redis.del(rosterKey(input)),
           redis.del(lineupKey(input)),
+          // Clear the weekly Challenge Me gate so the reset user can post again.
+          redis.del(challengePostKey(input)),
+          // Wipe current-period mission progress + awards so the reset
+          // user starts truly fresh. Past-period hashes (if any) TTL out
+          // on their own within 10–21 days.
+          resetUserMissions(input),
         ]);
         return { success: true };
       }),
 
     listUsers: adminProcedure
-      .input(z.object({ offset: z.number().int().min(0).default(0), limit: z.number().int().positive().max(100).default(30) }))
+      .input(z.object({ offset: z.number().int().min(0).default(0), limit: z.number().int().positive().max(500).default(100) }))
       .query(async ({ input }) => {
         const total = await redis.zCard(USERS_INDEX_KEY);
         if (total === 0) return { users: [] as string[], total: 0 };
@@ -468,6 +596,91 @@ export const appRouter = t.router({
     settleAuction: adminProcedure
       .input(z.number().int().positive())
       .mutation(async ({ input }) => { await settleAuction(input); return { success: true }; }),
+
+    // Missions — catalog (global)
+    getMissionCatalog: adminProcedure.query(async () => ({
+      catalog: await getMissionCatalog(),
+      defaults: DEFAULT_MISSION_CATALOG,
+    })),
+
+    setMissionCatalog: adminProcedure
+      .input(z.object({
+        daily: z.array(z.any()),
+        weekly: z.array(z.any()),
+      }))
+      .mutation(async ({ input }) => {
+        await setMissionCatalog(input as { daily: MissionDef[]; weekly: MissionDef[] });
+        return { success: true };
+      }),
+
+    updateMissionDef: adminProcedure
+      .input(z.object({
+        id: z.string(),
+        label: z.string().optional(),
+        sub: z.string().optional(),
+        reward: z.number().int().min(0).optional(),
+        total: z.number().int().min(1).optional(),
+        accent: z.enum(['cyan', 'magenta', 'gold', 'ink']).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...updates } = input;
+        await updateMissionDef(id, updates);
+        return { success: true };
+      }),
+
+    moveMissionType: adminProcedure
+      .input(z.object({ id: z.string(), toType: z.enum(['daily', 'weekly']) }))
+      .mutation(async ({ input }) => {
+        await moveMissionType(input.id, input.toType);
+        return { success: true };
+      }),
+
+    resetMissionCatalog: adminProcedure
+      .mutation(async () => { await resetMissionCatalog(); return { success: true }; }),
+
+    // Missions — per-user
+    getUserMissions: adminProcedure
+      .input(z.string())
+      .query(async ({ input }) => {
+        const user = await getUser(input);
+        if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input}" not found` });
+        return listMissions(input);
+      }),
+
+    resetUserMissions: adminProcedure
+      .input(z.string())
+      .mutation(async ({ input }) => {
+        const user = await getUser(input);
+        if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input}" not found` });
+        await resetUserMissions(input);
+        return { success: true };
+      }),
+
+    setMissionProgress: adminProcedure
+      .input(z.object({
+        username: z.string(),
+        type: z.enum(['daily', 'weekly']),
+        missionId: z.string(),
+        progress: z.number().int().min(0),
+      }))
+      .mutation(async ({ input }) => {
+        const user = await getUser(input.username);
+        if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input.username}" not found` });
+        await adminSetMissionProgress(input.username, input.type, input.missionId, input.progress);
+        return { success: true };
+      }),
+
+    completeMission: adminProcedure
+      .input(z.object({
+        username: z.string(),
+        type: z.enum(['daily', 'weekly']),
+        missionId: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const user = await getUser(input.username);
+        if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input.username}" not found` });
+        return await adminCompleteMission(input.username, input.type, input.missionId);
+      }),
   }),
 
   // ── Legacy counter ───────────────────────────────────────────────────────

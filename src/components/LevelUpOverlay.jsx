@@ -5,7 +5,6 @@ import { BballTip } from './BballTip.jsx';
 import { CELEBRATION_FRAMES, HEAD_PORTRAIT } from '../sprites/index.js';
 
 const RARITY_COLORS = { 1: '#20c8a0', 2: '#c060e0', 3: '#e8c060' };
-const RARITY_LABELS = { 1: 'UNCOMMON', 2: 'RARE', 3: 'LEGENDARY' };
 const RARITY_TINTS  = {
   1: 'rgba(32,200,160,0.13)',
   2: 'rgba(192,96,224,0.16)',
@@ -263,13 +262,11 @@ function AbilityCard({ ability, x, y, onClick }) {
           fill="white" opacity={0.06} shapeRendering="crispEdges" />
       )}
 
-      {/* Rarity pill */}
+      {/* Rarity bar — color only, no label */}
       <rect x={x + 6} y={y + 6} width={CARD_W - 12} height={13} rx={2}
         fill={rt} shapeRendering="crispEdges" />
       <rect x={x + 6} y={y + 6} width={CARD_W - 12} height={13} rx={2}
         fill="none" stroke={rc} strokeWidth={1} />
-      <PixelTextC text={RARITY_LABELS[ability.rarity]} cx={x + CARD_W / 2} y={y + 9}
-        scale={1} fill={rc} outline={null} />
 
       {/* Ability name */}
       <PixelTextC text={ability.name} cx={x + CARD_W / 2} y={y + 28}
@@ -478,9 +475,10 @@ const FTUE_DLG_W   = ZOOM_W - FTUE_DLG_X - 4;    // extends to near right edge
 
 // Messages must fit within ~56 chars (FTUE_DLG_W minus left/right padding)
 const FTUE_MESSAGES = [
-  "First time? Giving your characters a level up ability!",
-  "These are usually really rare - I'll make it special!",
-  "You can have up to 3 abilities per hero. Good luck!",
+  "Since its your first day. I'll do this just one time.",
+  "I'll give each character an ability upgrade.",
+  "These are usually really rare.",
+  "How many players can you level? Good luck!",
 ];
 
 function FtueIntroDialog({ cameraX, onDone }) {

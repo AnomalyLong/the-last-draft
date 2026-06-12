@@ -995,7 +995,7 @@ export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time
         preserveAspectRatio="xMidYMid meet"
       />
       <PixelTextC text={(() => { const t = username ? `u/${username}` : 'u/...'; return t.length > 11 ? t.slice(0, 9) + '..' : t; })()} cx={215} y={9} scale={1} fill="#aac8e0" outline={null} />
-      <text x={182} y={23} textAnchor="start" fontSize={6} fontFamily="monospace" fill="#ffe060">{totalCredits} CREDITS</text>
+      <text x={215} y={23} textAnchor="middle" fontSize={6} fontFamily="monospace" fill="#ffe060">{totalCredits} CREDITS</text>
 
       {/* Debug coords — overlay only when console is open */}
       {showDebug && (

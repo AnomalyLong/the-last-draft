@@ -1047,6 +1047,63 @@
   50%      { transform: translateY(2px); opacity: 1; }
 }
 
+/* ── Paid (credit) draft result ── */
+.paid-result {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+  text-align: center;
+}
+.paid-result-title {
+  font-family: var(--f-head);
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  color: #5bf2d4;
+  text-shadow: 0 0 14px rgba(91,242,212,0.7);
+  line-height: 1.1;
+}
+.paid-result-title.err { color: #ff7a3c; text-shadow: 0 0 14px rgba(255,122,60,0.6); }
+.paid-result-card { width: 168px; max-width: 46vw; }
+.paid-result-sub {
+  font-family: var(--f-mono);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: #cbd5e1;
+  line-height: 1.5;
+  max-width: 320px;
+}
+.paid-result-hint {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: rgba(91,242,212,0.6);
+  line-height: 1.4;
+}
+.paid-result-btn {
+  margin-top: 6px;
+  padding: 12px 32px;
+  background: rgba(2,8,14,0.88);
+  border: 2px solid rgba(91,242,212,0.8);
+  color: #5bf2d4;
+  font-family: var(--f-head);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+  box-shadow: 0 0 16px rgba(25,230,196,0.4), inset 0 0 12px rgba(91,242,212,0.1);
+  transition: all 0.2s ease;
+}
+.paid-result-btn:hover {
+  background: rgba(25,230,196,0.12);
+  border-color: #5bf2d4;
+  box-shadow: 0 0 26px rgba(25,230,196,0.7), inset 0 0 18px rgba(91,242,212,0.22);
+}
+
 /* ── FTUE coach dialogue (BballTip overlay) ── */
 .draft-coach {
   position: absolute;

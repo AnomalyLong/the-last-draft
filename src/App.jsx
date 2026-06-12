@@ -1,6 +1,6 @@
 import React from 'react';
 import { ZOOM_W, TOTAL_H } from './constants.js';
-import { requestExpandedMode, getWebViewMode, context as devvitContext } from '@devvit/web/client';
+import { requestExpandedMode, getWebViewMode, navigateTo as devvitNavigateTo, context as devvitContext } from '@devvit/web/client';
 
 // Safe wrappers — devvit globals aren't present outside the Reddit app
 function getMode() {
@@ -10,7 +10,24 @@ function tryExpand(nativeEvent) {
   try { requestExpandedMode(nativeEvent, 'game'); } catch {}
 }
 
-import { TitleScreen, SplashScreen, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FtueIntroVideo } from './components/index.js';
+// Map a challenge post's roster (game-shape from buildRosterForUser, serverId
+// already stripped server-side) into the away-team shape useGame consumes —
+// same fields as an opponents.json entry, plus the team's abilities so the
+// challenge roster plays with its real kit.
+function toAwayPlayers(roster = []) {
+  return roster.map((p) => ({
+    pos: p.pos,
+    name: p.name,
+    spd: p.spd, dex: p.dex, jmp: p.jmp, acc: p.acc,
+    ovr: p.overall,
+    rarity: p.rarity,
+    ability: p.ability ?? null,
+    abilities: p.abilities ?? [],
+  }));
+}
+
+import { TitleScreen, SplashScreen, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FeaturedEventsScreen, FtueIntroVideo } from './components/index.js';
+import ChallengeCardHost from './components/ChallengeCardHost.jsx';
 import TeamSetupView from '../lobby/team-setup.jsx';
 import '../lobby/team-setup.css';
 import '../lobby/mobile-team-setup.css';
@@ -32,7 +49,7 @@ export default function App() {
   const [showInGameOptions, setShowInGameOptions] = React.useState(false);
 
   React.useEffect(() => {
-    if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'draftHub' || scene === 'collection' || scene === 'matchmaking') {
+    if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'draftHub' || scene === 'collection' || scene === 'matchmaking' || scene === 'featuredEvents') {
       bgMusic.stop();
       bounceBall.stop();
       titleMusic.start();
@@ -57,26 +74,28 @@ export default function App() {
     try { return devvitContext?.username ?? ''; } catch { return ''; }
   });
   const [serverCredits, setServerCredits] = React.useState(0);
+  // Paid (credit) draft: which mode the DraftScreen runs in, and the
+  // server-priced cost of the user's next paid draft this month.
+  const [draftMode, setDraftMode] = React.useState('free'); // 'free' | 'credit'
+  const [draftCost, setDraftCost] = React.useState(null);   // null = loading
+  const refreshDraftCost = React.useCallback(() => {
+    return trpc.draft.cost.query().then(r => setDraftCost(r.cost)).catch(() => {});
+  }, []);
   const [freeDrafts,    setFreeDrafts]    = React.useState(0);
+  const [paidPicks,     setPaidPicks]     = React.useState(0); // banked credit-draft picks
+  const [serverMissions, setServerMissions] = React.useState({ daily: [], weekly: [] });
 
-  const refreshUser = React.useCallback(() => {
-    return trpc.user.init.query().then((user) => {
-      setServerCredits(user.credits);
-      setFreeDrafts(user.freeDrafts ?? 0);
-      if (user.teamName) setHomeTeamName(user.teamName);
-    }).catch(() => {});
+  const refreshMissions = React.useCallback(() => {
+    return trpc.missions.list.query()
+      .then(setServerMissions)
+      .catch(() => {});
   }, []);
 
-  React.useEffect(() => {
-    trpc.user.init.query().then((user) => {
-      setServerCredits(user.credits);
-      setFreeDrafts(user.freeDrafts ?? 0);
-      setIsFtue(user.gamesPlayed === 0);
-      if (user.teamName) setHomeTeamName(user.teamName);
-    }).catch(() => {});
-
-    // Load saved roster + lineup so returning players can skip the draft
-    Promise.all([trpc.user.roster.query(), trpc.user.lineup.query()])
+  // Reload the owned roster + lineup from the server. Updates rawRoster/rawLineup
+  // (what the Collection screen reads) and rebuilds the 5-man lineup. Call this
+  // after any mint (e.g. a paid credit draft) so the Collection isn't stale.
+  const refreshRoster = React.useCallback(() => {
+    return Promise.all([trpc.user.roster.query(), trpc.user.lineup.query()])
       .then(([roster, lineup]) => {
         if (!roster?.length) return;
         setRawRoster(roster);
@@ -106,6 +125,31 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  const refreshUser = React.useCallback(() => {
+    return Promise.all([
+      trpc.user.init.query().then((user) => {
+        setServerCredits(user.credits);
+        setFreeDrafts(user.freeDrafts ?? 0);
+        setPaidPicks(user.paidPicks ?? 0);
+        if (user.teamName) setHomeTeamName(user.teamName);
+      }).catch(() => {}),
+      refreshMissions(),
+    ]);
+  }, [refreshMissions]);
+
+  React.useEffect(() => {
+    trpc.user.init.query().then((user) => {
+      setServerCredits(user.credits);
+      setFreeDrafts(user.freeDrafts ?? 0);
+      setPaidPicks(user.paidPicks ?? 0);
+      setIsFtue(user.gamesPlayed === 0);
+      if (user.teamName) setHomeTeamName(user.teamName);
+    }).catch(() => {});
+
+    // Load saved roster + lineup so returning players can skip the draft
+    refreshRoster().finally(() => setRosterLoaded(true));
+  }, [refreshRoster]);
+
   const [titleLogs, setTitleLogs] = React.useState([]);
   const [showTitleDebug, setShowTitleDebug] = React.useState(false);
   const [showAdminOverlay, setShowAdminOverlay] = React.useState(false);
@@ -115,9 +159,11 @@ export default function App() {
       .then(result => {
         if (result?.gameId) {
           gameSessionRef.current = { gameId: result.gameId, token: result.token, seq: 0 };
+        } else {
+          console.error('game.start returned no gameId', result);
         }
       })
-      .catch(() => {});
+      .catch(err => console.error('game.start failed', err));
     gameState.handleCommand('testGamePlay');
     setScene('game');
   };
@@ -135,14 +181,87 @@ export default function App() {
   const [isFtue, setIsFtue] = React.useState(true); // true until persisted completion flag is received
   const [ftueIntroSeen, setFtueIntroSeen] = React.useState(false);
 
+  // ── Challenge Me ──────────────────────────────────────────
+  // getChallenge resolves context.postId server-side → null when the current
+  // post isn't a challenge post (default post / no context). The postId
+  // persists across the inline→expanded reload, so this works in both modes.
+  const [challengePost, setChallengePost] = React.useState(undefined); // undefined=loading | null=none | obj
+  const [rosterLoaded, setRosterLoaded] = React.useState(false);
+  const [challengeModal, setChallengeModal] = React.useState(null);    // null|'confirm'|'posting'|'posted'|'error'
+  const [challengeUrl, setChallengeUrl] = React.useState('');
+  const challengeRoutedRef = React.useRef(false);
+  // The current user's own active challenge post (lobby "My Challenge" view).
+  const [myChallenge, setMyChallenge] = React.useState(undefined); // undefined=loading | null=none | obj
+  const [myChallengeOpen, setMyChallengeOpen] = React.useState(false);
+  // Deep-link block messaging (expanded boot): own post / no roster.
+  const [challengeBlock, setChallengeBlock] = React.useState(null); // null|'self'|'noRoster'
+
+  React.useEffect(() => {
+    trpc.post.getChallenge.query().then(setChallengePost).catch(() => setChallengePost(null));
+  }, []);
+
+  // Lobby: the user's own active challenge post (drives the mission CTA + the
+  // My Challenge modal). Only meaningful outside inline (the lobby lives in the
+  // expanded webview). getMyChallenge self-heals a deleted-post gate, so a null
+  // result flips the CTA back to POST NOW.
+  const refreshMyChallenge = React.useCallback(() => {
+    trpc.post.getMyChallenge.query().then(setMyChallenge).catch(() => setMyChallenge(null));
+  }, []);
+  React.useEffect(() => {
+    if (!isInline) refreshMyChallenge();
+  }, [isInline, refreshMyChallenge]);
+
+  const handleCreateChallenge = () => {
+    setChallengeModal('posting');
+    trpc.post.createChallenge.mutate()
+      .then((res) => {
+        // Stay in-app: show a success state with the post URL rather than
+        // navigating away (which would drop the user out of the lobby). The
+        // user can optionally tap "View Post" to go to it.
+        setChallengeUrl(res.navigateTo || '');
+        setChallengeModal('posted');
+        refreshMissions();      // flip the lobby mission state
+        refreshMyChallenge();   // CTA now reflects the live post → VIEW
+      })
+      .catch(() => setChallengeModal('error'));
+  };
+
   // Refresh user data (credits, picks, team name) whenever we land on the
   // draft hub or the lobby — values may have changed since page load.
   React.useEffect(() => {
     if (scene === 'draftHub' || scene === 'title') refreshUser();
-  }, [scene, refreshUser]);
-  const [awayTeam] = React.useState(
+    if (scene === 'draftHub') refreshDraftCost();
+    // Collection reads rawRoster — refresh on open so newly minted players
+    // (e.g. from a paid draft) always show without a full app reload.
+    if (scene === 'collection') refreshRoster();
+  }, [scene, refreshUser, refreshDraftCost, refreshRoster]);
+  const [awayTeam, setAwayTeam] = React.useState(
     () => OPPONENTS[Math.floor(Math.random() * OPPONENTS.length)]
   );
+
+  // Challenge deep-link routing (expanded mode only). Declared AFTER the state
+  // it depends on (homeRoster/homeTeamName/challengePost/awayTeam) so its deps
+  // array doesn't hit the temporal dead zone during render. Once the lobby is
+  // up and both the challenge fetch + roster load have settled, decide ONCE: if
+  // this is someone else's challenge post, set the away team to their roster
+  // and route into matchmaking (or onboarding if the viewer has no team yet).
+  React.useEffect(() => {
+    if (isInline || challengeRoutedRef.current) return;
+    if (challengePost === undefined || !rosterLoaded) return; // wait for both
+    if (scene !== 'title') return;                            // let loading → lobby settle first
+    challengeRoutedRef.current = true;
+    if (!challengePost) return;                            // not a challenge post
+    if (challengePost.username === username) {             // opened your own post
+      setChallengeBlock('self');                           // stay on lobby, explain why
+      return;
+    }
+    if (homeRoster.length !== 5) {                         // can't play without a full squad
+      setChallengeBlock('noRoster');                       // explain + offer to draft
+      return;
+    }
+    setAwayTeam({ name: challengePost.team, username: challengePost.owner, players: toAwayPlayers(challengePost.roster), isChallenge: true });
+    setScene('matchmaking');
+  }, [isInline, challengePost, rosterLoaded, scene, homeRoster.length, username, homeTeamName]);
 
   const gameSessionRef = React.useRef(null); // { gameId, token, seq }
   const clientScoreRef = React.useRef(0);    // tracks only post-session-ready makes
@@ -185,8 +304,12 @@ export default function App() {
 
   return (
     <div data-testid="game-root"
-      style={{ background: '#111', lineHeight: 0, height: '100vh', position: 'relative', cursor: isInline ? 'pointer' : undefined }}
-      onClick={isInline ? (e) => tryExpand(e.nativeEvent) : undefined}
+      style={{ background: '#111', lineHeight: 0, height: '100vh', position: 'relative', cursor: (isInline && !challengePost) ? 'pointer' : undefined }}
+      /* Inline splash: any tap launches. Inline challenge card: the window is
+         inert — only the CHALLENGE ME button (via onChallenge) launches, and the
+         carousel arrows browse. So the root tap-to-expand is disabled whenever a
+         challenge card is showing. */
+      onClick={(isInline && !challengePost) ? (e) => tryExpand(e.nativeEvent) : undefined}
     >
       {/* ── LOBBY SCREEN (HTML layer — replaces SVG title scene) ── */}
       {!isInline && scene === 'title' && (
@@ -194,6 +317,7 @@ export default function App() {
           username={username}
           credits={serverCredits}
           homeRoster={homeRoster}
+          missions={serverMissions}
           isFtue={isFtue}
           onPlay={(mode) => {
             // Kick audio context inside the user-gesture so subsequent
@@ -203,6 +327,10 @@ export default function App() {
             const hasTeam = homeTeamName && homeTeamName !== 'HOME';
             if (isFtue && !ftueIntroSeen) {
               setScene('ftueIntro');
+            } else if (isFtue && homeRoster.length === 5) {
+              // FTUE user already drafted but quit before completing their
+              // first game — skip the draft hub and drop them into the game.
+              setScene('matchmaking');
             } else if (!isFtue && homeRoster.length === 5) {
               setScene('matchmaking');
             } else if (isFtue && homeRoster.length === 0) {
@@ -216,6 +344,23 @@ export default function App() {
             if (isFtue && !ftueIntroSeen) setScene('ftueIntro');
             else setScene('draftHub');
           }}
+          onAuction={() => {}}
+          onOptions={() => setScene('options')}
+          onEvents={() => setScene('featuredEvents')}
+          onCreateChallenge={() => setChallengeModal('confirm')}
+          challengeActive={!!myChallenge}
+          onViewChallenge={() => setMyChallengeOpen(true)}
+        />
+      )}
+
+      {!isInline && scene === 'featuredEvents' && (
+        <FeaturedEventsScreen
+          username={username}
+          credits={serverCredits}
+          onBack={() => setScene('title')}
+          onPlay={() => setScene('title')}
+          onCollection={() => setScene('collection')}
+          onDraft={() => setScene('draftHub')}
           onAuction={() => {}}
           onOptions={() => setScene('options')}
         />
@@ -236,6 +381,16 @@ export default function App() {
         <DraftScreen
           homeTeamName={homeTeamName}
           isFtue={isFtue}
+          mode={draftMode}
+          onPaidComplete={() => {
+            // Paid single draft finished — credits + monthly cost changed, and a
+            // new player was minted into the collection.
+            setDraftMode('free');
+            refreshUser();
+            refreshDraftCost();
+            refreshRoster();   // so the Collection shows the new player without a reload
+            setScene('draftHub');
+          }}
           onStart={(r) => {
             setHomeRoster(r);
             // Always refresh — the 5 mints just decremented the server-side
@@ -244,13 +399,13 @@ export default function App() {
             // FTUE: jump straight into the first game with a tip.
             // Post-FTUE: return to the hub so the user sees their updated pick count.
             if (isFtue) {
-              setGameTip("Welcome to your first game!");
+              setGameTip("Coach the players, sit back, watch, and make decisions!");
               setScene('game');
             } else {
               setScene('draftHub');
             }
           }}
-          onBack={() => setScene('teamSelect')}
+          onBack={() => setScene(draftMode === 'credit' ? 'draftHub' : 'teamSelect')}
           onMenu={(r) => { setHomeRoster(r); refreshUser(); setScene('title'); }}
         />
       )}
@@ -262,6 +417,10 @@ export default function App() {
             const hasTeam = homeTeamName && homeTeamName !== 'HOME';
             if (homeRoster.length === 0) {
               setScene(hasTeam ? 'draft' : 'teamSelect');
+            } else if (isFtue && homeRoster.length === 5) {
+              // FTUE user with a full roster from a prior abandoned session —
+              // straight into the first game.
+              setScene('matchmaking');
             } else {
               setScene('draftHub');
             }
@@ -284,12 +443,37 @@ export default function App() {
       {!isInline && scene === 'draftHub' && (
         <DraftHubScreen
           freeDrafts={freeDrafts}
+          paidPicks={paidPicks}
           credits={serverCredits}
           rosterCount={homeRoster.length}
+          nextDraftCost={draftCost}
           onUsePick={() => {
-            // Skip team-name setup if the user has already named their team
+            // Free FTUE draft — skip team-name setup if already named.
+            setDraftMode('free');
             const hasTeam = homeTeamName && homeTeamName !== 'HOME';
             setScene(hasTeam ? 'draft' : 'teamSelect');
+          }}
+          onBuyDraft={() => {
+            // Buy a draft pick — charge now, bank it (persists). Stay on the hub
+            // so the banked pick is visible; the button flips to USE DRAFT PICK.
+            // Use the mutation's authoritative return value to update the count +
+            // next cost IMMEDIATELY (don't wait on a separate refresh, which can
+            // race/lag and leave the button showing the stale, cheaper price).
+            trpc.draft.buy.mutate()
+              .then((res) => {
+                if (res) {
+                  setPaidPicks(res.paidPicks);
+                  setDraftCost(res.nextCost);
+                }
+                refreshUser();   // sync credits (authoritative)
+              })
+              .catch(() => { refreshUser(); refreshDraftCost(); });
+          }}
+          onCreditDraft={() => {
+            // Use a banked pick — enter the single-player reveal (mint consumes
+            // the pick server-side; no further charge).
+            setDraftMode('credit');
+            setScene('draft');
           }}
           onBack={() => setScene('title')}
         />
@@ -304,7 +488,7 @@ export default function App() {
           viewBox={`0 0 ${ZOOM_W} ${TOTAL_H}`}
           style={{ imageRendering: 'pixelated', display: 'block' }}
         >
-          {isInline && (
+          {isInline && !challengePost && (
             <SplashScreen />
           )}
           {!isInline && scene === 'loading' && (
@@ -322,11 +506,18 @@ export default function App() {
         </svg>
       )}
 
+      {/* ── INLINE CHALLENGE CARD (HTML overlay — replaces splash for
+             challenge posts; a tap anywhere bubbles to the root tryExpand) ── */}
+      {isInline && challengePost && (
+        <ChallengeCardHost data={challengePost} onChallenge={(_user, e) => tryExpand(e?.nativeEvent)} />
+      )}
+
       {/* ── MATCHMAKING (HTML overlay — full-bleed div, not SVG) ── */}
       {!isInline && scene === 'matchmaking' && (
         <MatchmakingScreen
           homeRoster={homeRoster}
-          homeTeamName={(homeTeamName && homeTeamName !== 'HOME') ? homeTeamName : (username ? `u/${username}` : 'YOU')}
+          homeTeamName={(homeTeamName && homeTeamName !== 'HOME') ? homeTeamName : ''}
+          homeUsername={username ? `u/${username}` : 'YOU'}
           awayTeam={awayTeam}
           onReady={handleMatchmakingReady}
         />
@@ -381,8 +572,10 @@ export default function App() {
             trpc.game.start.mutate().then((result) => {
               if (result && 'gameId' in result) {
                 gameSessionRef.current = { gameId: result.gameId, token: result.token, seq: 0 };
+              } else {
+                console.error('game.start returned no gameId', result);
               }
-            }).catch(() => {});
+            }).catch(err => console.error('game.start failed', err));
             gameState.handleCommand('testGamePlay');
             setGameTip(null);
           }}
@@ -391,12 +584,22 @@ export default function App() {
             if (session) {
               const score = clientScoreRef.current;
               trpc.game.end.mutate({ gameId: session.gameId, token: session.token, score })
-                .then(summary => { setServerCredits(c => c + summary.creditsEarned); })
-                .catch(() => {});
-              setIsFtue(false);
+                .then(summary => {
+                  setServerCredits(c => c + summary.creditsEarned);
+                  // Mission progress (+ any mission-credit awards) happened
+                  // server-side during endGame — refresh so the lobby shows
+                  // it and the celebratory modal fires.
+                  refreshMissions();
+                })
+                .catch(err => console.error('game.end failed', err));
               gameSessionRef.current = null;
               clientScoreRef.current = 0;
+            } else {
+              console.warn('GameOver dismissed with no session — game.end skipped, credits will not be awarded. Marking FTUE done as fallback.');
+              trpc.user.markFtuePlayed.mutate()
+                .catch(err => console.error('markFtuePlayed failed', err));
             }
+            setIsFtue(false);
             // Save each home player's progress earned this game
             homeRoster.forEach((r, i) => {
               if (!r.serverId) return;
@@ -426,6 +629,169 @@ export default function App() {
 
       {/* ── ADMIN OVERLAY ────────────────────────────────────── */}
       {showAdminOverlay && <AdminOverlay onClose={() => setShowAdminOverlay(false)} />}
+
+      {/* ── CREATE CHALLENGE ME — confirm modal ──────────────── */}
+      {!isInline && challengeModal && (
+        <div
+          data-testid="challenge-modal"
+          onClick={() => challengeModal !== 'posting' && setChallengeModal(null)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#0d1117', border: '1px solid #ffd97a',
+              padding: '24px 22px', maxWidth: 300, textAlign: 'center', fontFamily: 'monospace',
+              lineHeight: 1.4, // explicit — Reddit forces line-height:0, collapsing/overlapping text
+            }}
+          >
+            {challengeModal === 'posting' ? (
+              <div style={{ color: '#ffd97a', fontSize: 12, letterSpacing: '0.1em' }}>CREATING POST…</div>
+            ) : challengeModal === 'posted' ? (<>
+              <div style={{ color: '#5bf2d4', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>✓ CHALLENGE POSTED</div>
+              <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 12 }}>
+                Your team is live on r/TheMBA. Other Redditors can now challenge your roster.
+              </div>
+              {challengeUrl && (
+                <div style={{ color: '#cbd5e1', fontSize: 9, lineHeight: 1.5, marginBottom: 16, padding: '8px 10px', background: 'rgba(0,0,0,0.35)', border: '1px solid #2a3340', wordBreak: 'break-all', userSelect: 'all' }}>
+                  {challengeUrl}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <button onClick={() => setChallengeModal(null)} style={{ background: 'transparent', color: '#8899aa', border: '1px solid #2a3340', padding: '6px 16px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer' }}>DONE</button>
+                {challengeUrl && (
+                  <button onClick={() => { try { devvitNavigateTo(challengeUrl); } catch { try { window.location.href = challengeUrl; } catch {} } }} style={{ background: 'linear-gradient(180deg,#5bf2d4,#19b89e)', color: '#02201a', border: 'none', padding: '6px 16px', fontFamily: 'monospace', fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', cursor: 'pointer' }}>VIEW POST ▸</button>
+                )}
+              </div>
+            </>) : challengeModal === 'error' ? (<>
+              <div style={{ color: '#ff7a3c', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>COULDN'T POST</div>
+              <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 20 }}>
+                You may have already created a Challenge Me post this week. Try again next week.
+              </div>
+              <button onClick={() => setChallengeModal(null)} style={{ background: '#ffd97a', color: '#000', border: 'none', padding: '6px 20px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer' }}>GOT IT</button>
+            </>) : homeRoster.length < 5 ? (<>
+              <div style={{ color: '#ffd97a', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>CHALLENGE ME</div>
+              <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 20 }}>
+                You need a full 5-player lineup before posting a Challenge Me card. Draft and set your squad first.
+              </div>
+              <button onClick={() => setChallengeModal(null)} style={{ background: '#ffd97a', color: '#000', border: 'none', padding: '6px 20px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer' }}>GOT IT</button>
+            </>) : (<>
+              <div style={{ color: '#ffd97a', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>POST CHALLENGE ME?</div>
+              <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 20 }}>
+                Post <b style={{ color: '#eaf6f3' }}>{(homeTeamName && homeTeamName !== 'HOME') ? homeTeamName : 'your team'}</b> to r/TheMBA. Other Redditors can challenge your roster — once per week.
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <button onClick={() => setChallengeModal(null)} style={{ background: 'transparent', color: '#8899aa', border: '1px solid #2a3340', padding: '6px 16px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer' }}>CANCEL</button>
+                <button data-testid="challenge-confirm" onClick={handleCreateChallenge} style={{ background: 'linear-gradient(180deg,#ffe9bb,#ffd97a 55%,#d6a155)', color: '#2a1a04', border: 'none', padding: '6px 18px', fontFamily: 'monospace', fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', cursor: 'pointer' }}>POST ▸</button>
+              </div>
+            </>)}
+          </div>
+        </div>
+      )}
+
+      {/* ── MY CHALLENGE — results + view post ────────────────── */}
+      {!isInline && myChallengeOpen && (
+        <div
+          data-testid="my-challenge-modal"
+          onClick={() => setMyChallengeOpen(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#0d1117', border: '1px solid #ffd97a',
+              padding: '20px 22px', width: 300, maxWidth: '88%', textAlign: 'center', fontFamily: 'monospace',
+              lineHeight: 1.4, // explicit — Reddit forces line-height:0, collapsing/overlapping text
+            }}
+          >
+            {myChallenge === undefined ? (
+              <div style={{ color: '#ffd97a', fontSize: 12, letterSpacing: '0.1em' }}>LOADING…</div>
+            ) : myChallenge === null ? (<>
+              <div style={{ color: '#ff7a3c', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>NO ACTIVE CHALLENGE</div>
+              <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 18 }}>
+                Your challenge post is no longer active. Post a new one to keep getting challenged.
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <button onClick={() => setMyChallengeOpen(false)} style={{ background: 'transparent', color: '#8899aa', border: '1px solid #2a3340', padding: '6px 16px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer' }}>CLOSE</button>
+                <button onClick={() => { setMyChallengeOpen(false); setChallengeModal('confirm'); }} style={{ background: 'linear-gradient(180deg,#ffe9bb,#ffd97a 55%,#d6a155)', color: '#2a1a04', border: 'none', padding: '6px 18px', fontFamily: 'monospace', fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', cursor: 'pointer' }}>CREATE NEW ▸</button>
+              </div>
+            </>) : (<>
+              <div style={{ color: '#ffd97a', fontSize: 11, letterSpacing: '0.1em', marginBottom: 6 }}>YOUR CHALLENGE</div>
+              <div style={{ marginTop: 4, marginBottom: 14, fontSize: 15, fontWeight: 900, letterSpacing: '0.06em', lineHeight: 1.2 }}>
+                <span style={{ color: '#5bf2d4' }}>{myChallenge.record.wins}W</span>
+                <span style={{ color: '#5a6b7a', margin: '0 6px' }}>—</span>
+                <span style={{ color: '#ff6b6b' }}>{myChallenge.record.losses}L</span>
+              </div>
+              <div style={{ textAlign: 'left', marginBottom: 16 }}>
+                <div style={{ color: '#8899aa', fontSize: 9, letterSpacing: '0.12em', marginBottom: 6 }}>PREVIOUS CHALLENGES</div>
+                {myChallenge.challenges.length === 0 ? (
+                  <div style={{ color: '#5a6b7a', fontSize: 10, fontStyle: 'italic', padding: '6px 0' }}>No challenges yet</div>
+                ) : (
+                  myChallenge.challenges.map((c, i) => (
+                    <div key={`${c.opponent}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid #1a222c' }}>
+                      <span style={{
+                        fontSize: 10, fontWeight: 900, width: 16, textAlign: 'center', borderRadius: 3,
+                        color: c.result === 'W' ? '#02201a' : '#2a0606',
+                        background: c.result === 'W' ? '#5bf2d4' : '#ff6b6b',
+                      }}>{c.result}</span>
+                      <span style={{ color: '#cbd5e1', fontSize: 10, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>u/{c.opponent}</span>
+                      <span style={{ color: '#8899aa', fontSize: 10 }}>{c.score}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <button onClick={() => setMyChallengeOpen(false)} style={{ background: 'transparent', color: '#8899aa', border: '1px solid #2a3340', padding: '6px 16px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer' }}>CLOSE</button>
+                <button onClick={() => { const u = myChallenge.navigateTo; try { devvitNavigateTo(u); } catch { try { window.location.href = u; } catch {} } }} style={{ background: 'linear-gradient(180deg,#5bf2d4,#19b89e)', color: '#02201a', border: 'none', padding: '6px 16px', fontFamily: 'monospace', fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', cursor: 'pointer' }}>VIEW POST ▸</button>
+              </div>
+            </>)}
+          </div>
+        </div>
+      )}
+
+      {/* ── CHALLENGE DEEP-LINK BLOCK — own post / no roster ──── */}
+      {!isInline && challengeBlock && (
+        <div
+          data-testid="challenge-block-modal"
+          onClick={() => setChallengeBlock(null)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#0d1117', border: '1px solid #ffd97a',
+              padding: '24px 22px', maxWidth: 300, textAlign: 'center', fontFamily: 'monospace',
+              lineHeight: 1.4, // explicit — Reddit forces line-height:0, collapsing/overlapping text
+            }}
+          >
+            {challengeBlock === 'self' ? (<>
+              <div style={{ color: '#ffd97a', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>YOUR OWN CHALLENGE</div>
+              <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 20 }}>
+                This is your own Challenge Me post — you can't challenge yourself. Head back to the lobby.
+              </div>
+              <button onClick={() => setChallengeBlock(null)} style={{ background: '#ffd97a', color: '#000', border: 'none', padding: '6px 20px', fontFamily: 'monospace', fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', cursor: 'pointer' }}>BACK TO LOBBY</button>
+            </>) : (<>
+              <div style={{ color: '#ffd97a', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>NEED A TEAM</div>
+              <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 20 }}>
+                You need a full 5-player roster to accept a challenge. Draft your squad first!
+              </div>
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <button onClick={() => setChallengeBlock(null)} style={{ background: 'transparent', color: '#8899aa', border: '1px solid #2a3340', padding: '6px 16px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer' }}>BACK TO LOBBY</button>
+                <button onClick={() => { const hasTeam = homeTeamName && homeTeamName !== 'HOME'; setChallengeBlock(null); setScene(hasTeam ? 'draft' : 'teamSelect'); }} style={{ background: 'linear-gradient(180deg,#ffe9bb,#ffd97a 55%,#d6a155)', color: '#2a1a04', border: 'none', padding: '6px 16px', fontFamily: 'monospace', fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', cursor: 'pointer' }}>DRAFT MY TEAM ▸</button>
+              </div>
+            </>)}
+          </div>
+        </div>
+      )}
 
       {/* Debug: FTUE indicator */}
       {isFtue && (
