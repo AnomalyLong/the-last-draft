@@ -3,6 +3,18 @@ import { PhoneFrameExpanded, DEVICES } from '../PhoneFrame.jsx';
 import { CrtOverlay } from '../StoryFrame.jsx';
 import { DraftScreen } from '@src/components/DraftScreen.jsx';
 import { DraftHubScreen } from '@src/components/DraftHubScreen.jsx';
+import { TitleStrip } from '@src/components/TitleStrip.jsx';
+
+// Mirrors App.jsx's ScreenWithStrip — the global lobby header pinned above a
+// full-screen scene — so the stories preview what users actually see.
+function WithStrip({ credits, children }) {
+  return (
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
+      <TitleStrip credits={credits} onEvents={() => {}} />
+      <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>{children}</div>
+    </div>
+  );
+}
 
 const TEAM_NAMES = ['BULLS', 'WOLVES', 'HAWKS', 'NETS', 'KINGS'];
 
@@ -204,6 +216,7 @@ export default function DraftStory() {
           background: '#02060a',
           flexShrink: 0,
         }}>
+          <WithStrip credits={credits}>
           {screen === 'hub' ? (
             <DraftHubScreen
               freeDrafts={freeDrafts}
@@ -228,6 +241,7 @@ export default function DraftStory() {
               onMenu={(roster) => push(`onMenu (${roster?.length ?? 0} players)`)}
             />
           )}
+          </WithStrip>
           <CrtOverlay scanlines={scanlines} vignette={vignette} />
         </div>
       )}

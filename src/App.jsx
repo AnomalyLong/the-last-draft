@@ -27,6 +27,19 @@ function toAwayPlayers(roster = []) {
 }
 
 import { TitleScreen, SplashScreen, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FeaturedEventsScreen, FtueIntroVideo } from './components/index.js';
+import { TitleStrip } from './components/TitleStrip.jsx';
+
+// Column wrapper that pins the global TitleStrip (lobby header) above a
+// full-screen scene. The wrapped screens use `position: absolute; inset: 0`
+// roots, so the inner relative container confines them below the strip.
+function ScreenWithStrip({ credits, onEvents, children }) {
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 55, display: 'flex', flexDirection: 'column' }}>
+      <TitleStrip credits={credits} onEvents={onEvents} />
+      <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>{children}</div>
+    </div>
+  );
+}
 import ChallengeCardHost from './components/ChallengeCardHost.jsx';
 import TeamSetupView from '../lobby/team-setup.jsx';
 import '../lobby/team-setup.css';
@@ -354,30 +367,35 @@ export default function App() {
       )}
 
       {!isInline && scene === 'featuredEvents' && (
-        <FeaturedEventsScreen
-          username={username}
-          credits={serverCredits}
-          onBack={() => setScene('title')}
-          onPlay={() => setScene('title')}
-          onCollection={() => setScene('collection')}
-          onDraft={() => setScene('draftHub')}
-          onAuction={() => {}}
-          onOptions={() => setScene('options')}
-        />
+        <ScreenWithStrip credits={serverCredits}>
+          <FeaturedEventsScreen
+            username={username}
+            credits={serverCredits}
+            onBack={() => setScene('title')}
+            onPlay={() => setScene('title')}
+            onCollection={() => setScene('collection')}
+            onDraft={() => setScene('draftHub')}
+            onAuction={() => {}}
+            onOptions={() => setScene('options')}
+          />
+        </ScreenWithStrip>
       )}
 
       {!isInline && scene === 'collection' && (
-        <CollectionScreen
-          roster={rawRoster}
-          lineup={rawLineup}
-          username={username}
-          credits={serverCredits}
-          onLineupChange={(next) => setRawLineup({ ...next })}
-          onBack={() => setScene('title')}
-        />
+        <ScreenWithStrip credits={serverCredits} onEvents={() => setScene('featuredEvents')}>
+          <CollectionScreen
+            roster={rawRoster}
+            lineup={rawLineup}
+            username={username}
+            credits={serverCredits}
+            onLineupChange={(next) => setRawLineup({ ...next })}
+            onBack={() => setScene('title')}
+          />
+        </ScreenWithStrip>
       )}
 
       {!isInline && scene === 'draft' && (
+        <ScreenWithStrip credits={serverCredits} onEvents={() => setScene('featuredEvents')}>
         <DraftScreen
           homeTeamName={homeTeamName}
           isFtue={isFtue}
@@ -408,6 +426,7 @@ export default function App() {
           onBack={() => setScene(draftMode === 'credit' ? 'draftHub' : 'teamSelect')}
           onMenu={(r) => { setHomeRoster(r); refreshUser(); setScene('title'); }}
         />
+        </ScreenWithStrip>
       )}
 
       {!isInline && scene === 'ftueIntro' && (
@@ -441,6 +460,7 @@ export default function App() {
       )}
 
       {!isInline && scene === 'draftHub' && (
+        <ScreenWithStrip credits={serverCredits} onEvents={() => setScene('featuredEvents')}>
         <DraftHubScreen
           freeDrafts={freeDrafts}
           paidPicks={paidPicks}
@@ -477,6 +497,7 @@ export default function App() {
           }}
           onBack={() => setScene('title')}
         />
+        </ScreenWithStrip>
       )}
 
       {/* ── NON-GAME SCENES (SVG — excludes title + collection + draft + teamSelect + draftHub) ── */}

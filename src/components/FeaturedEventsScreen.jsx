@@ -23,9 +23,9 @@ export default function FeaturedEventsScreen({ username, credits, onBack, onPlay
           <span className="lb2-tt-big">FEATURED EVENTS</span>
           <span className="lb2-tt-sub">LIMITED-TIME DROPS</span>
         </div>
-        <div className="lb2-topnav-right">
-          <span className="lb2-ts-time">{(credits ?? 0).toLocaleString()} CR</span>
-        </div>
+        {/* Credits now live in the global TitleStrip above — keep the spacer so
+            the centered title stays balanced against the back button. */}
+        <div className="lb2-topnav-right" />
       </div>
 
       {/* Scrollable body — featured component only */}

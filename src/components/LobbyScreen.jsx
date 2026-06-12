@@ -3,6 +3,7 @@ import '../styles/lobby.css';
 import { RUN_FRAMES } from '../sprites/run.js';
 import { JERSEY_BASE } from '../constants.js';
 import { BballTip } from './BballTip.jsx';
+import { TitleStrip } from './TitleStrip.jsx';
 
 const POS_COLORS = { PG: '#3ea6ff', SG: '#a855f7', SF: '#19e6c4', PF: '#ff7a3c', C: '#ffc94a' };
 const RARITY_COLORS = { common: '#b0b8c8', rare: '#b0b8c8', super_rare: '#30c0e0', ultra_rare: '#ffc94a' };
@@ -261,30 +262,6 @@ export function FeaturedSection({ onUnavailable }) {
   );
 }
 
-// ── Notifications dropdown ────────────────────────────────
-const NOTIF_ITEMS = [
-  { tag: 'PATCH', accent: 'cyan',    title: 'v1.2.0 · SHOT ARC TUNING',        sub: 'ACC rebalance · 3pt window adjusted · netcode pass', time: '2h' },
-  { tag: 'DROP',  accent: 'magenta', title: 'LIMITED · CHROME SLAM PACK',       sub: '5★ guaranteed · ends in 18h',                        time: 'NEW' },
-  { tag: 'AUCTION',accent: 'gold',   title: 'ZEEKBECK · LOT 0451 CLOSING',      sub: 'Current bid ◉ 18,450 · 142 bidders',                 time: '2h 14m' },
-];
-
-function NotifDropdown() {
-  return (
-    <div className="lb2-notif-dropdown" data-testid="notif-dropdown">
-      {NOTIF_ITEMS.map(n => (
-        <div key={n.tag} className={`lb2-ft-news-row accent-${n.accent}`}>
-          <div className="lb2-ft-news-tag">{n.tag}</div>
-          <div className="lb2-ft-news-body">
-            <div className="lb2-ft-news-title">{n.title}</div>
-            <div className="lb2-ft-news-sub">{n.sub}</div>
-          </div>
-          <div className="lb2-ft-news-time">{n.time}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── Warp lines ────────────────────────────────────────────
 // Hyperspace-style streaks shooting radially outward from the modal center.
 // Lines are positioned at the center, rotated to a per-streak --angle, then
@@ -538,7 +515,6 @@ export function BottomNav({ onPlay, onCollection, onDraft, onAuction, onOptions,
 export default function LobbyScreen({ username, credits, homeRoster, missions, isFtue, onPlay, onCollection, onDraft, onAuction, onOptions, onEvents, onCreateChallenge, challengeActive, onViewChallenge }) {
   const [selectedMode, setSelectedMode] = React.useState('training');
   const [modal, setModal] = React.useState(() => !username ? 'guest' : null);
-  const [showNotifs, setShowNotifs] = React.useState(false);
   const [coachDismissed, setCoachDismissed] = React.useState(false);
   const [coachIdx, setCoachIdx] = React.useState(0);
   const COACH_LINES = [
@@ -644,31 +620,8 @@ export default function LobbyScreen({ username, credits, homeRoster, missions, i
   return (
     <div className={`lobby2${isFtue && !coachDismissed && !modal ? ' lobby2-ftue' : ''}`} data-testid="lobby-screen">
 
-      {/* Title strip */}
-      <div className="lb2-title-strip">
-        <span className="lb2-ts-dot" />
-        <span className="lb2-ts-text">THE LAST DRAFT</span>
-        <button
-          className="lb2-ts-events"
-          onClick={onEvents}
-          data-testid="title-events"
-        >
-          EVENTS
-        </button>
-        <div className="lb2-ts-right">
-          <span className="lb2-ts-time">{(credits ?? 0).toLocaleString()} CR</span>
-          <button
-            className={`lb2-ts-bell${showNotifs ? ' active' : ''}`}
-            onClick={() => setShowNotifs(v => !v)}
-            aria-label="Notifications"
-            data-testid="notif-bell"
-          >
-            🔔
-            <span className="lb2-ts-bell-dot" />
-          </button>
-        </div>
-        {showNotifs && <NotifDropdown />}
-      </div>
+      {/* Title strip (shared with draft/collection/events screens) */}
+      <TitleStrip credits={credits} onEvents={onEvents} />
 
       {/* Scrollable body */}
       <div className="lb2-body">

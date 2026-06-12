@@ -9,8 +9,10 @@
   container-name: drafthub;
   display: flex;
   flex-direction: column;
-  padding: 24px 0;
-  gap: 18px;
+  /* Slimmer vertical padding — the global TitleStrip now sits above this
+     screen, and short embeds (Reddit 528 portrait) need every pixel. */
+  padding: 12px 0 14px;
+  gap: 14px;
   pointer-events: auto;
   line-height: normal;
   background:

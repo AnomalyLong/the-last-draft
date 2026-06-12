@@ -70,6 +70,10 @@
   text-transform: uppercase;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(2, 6, 10, 0.55);
+  /* Above the scrollable body (.lobby2 > * defaults every section to z 1, and
+     the body comes later in the DOM) so the notifications dropdown isn't
+     painted under the banner/roster content. */
+  z-index: 100;
 }
 .lb2-ts-dot {
   width: 7px; height: 7px; border-radius: 50%;
@@ -208,7 +212,7 @@
   top: 100%;
   right: 0;
   width: min(320px, 100vw);
-  background: rgba(2, 6, 10, 0.97);
+  background: #04090e; /* fully solid — content behind must not show through */
   border: 1px solid rgba(255,255,255,0.1);
   border-top: none;
   z-index: 150;
