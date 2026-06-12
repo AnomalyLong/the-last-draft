@@ -22,7 +22,8 @@ export function ScorePopup({ text, cameraX }) {
     const total = holdMs + fadeMs;
     const tick = (now) => {
       const elapsed = now - start;
-      setYOff(Math.min(elapsed / total, 1) * 14);
+      // Quantize drift to whole pixels so unchanged frames bail out of re-render
+      setYOff(Math.round(Math.min(elapsed / total, 1) * 14));
       if (elapsed < holdMs) {
         setOpacity(1);
       } else {
@@ -34,24 +35,33 @@ export function ScorePopup({ text, cameraX }) {
     return () => cancelAnimationFrame(rafRef.current);
   }, [text]);
 
-  const textW = text.length * MONOGRAM_CELL_W * SCALE;
-  const startX = Math.round(cameraX + (ZOOM_W - textW) / 2);
-  const startY = Math.round(TOTAL_H / 2 - (MONOGRAM_GLYPH_H * SCALE) / 2) - yOff;
-
-  const pixels = pixelTextPixels(text, startX, startY, SCALE);
-
-  return (
-    <g opacity={opacity} shapeRendering="crispEdges">
-      {OUTLINE_DIRS.map(([dx, dy], oi) =>
+  // Pixel rects built once per text at the origin — drift/fade animate via the
+  // parent group's transform/opacity, not by rebuilding thousands of rects.
+  const layers = React.useMemo(() => {
+    const pixels = pixelTextPixels(text, 0, 0, SCALE);
+    return {
+      outline: OUTLINE_DIRS.map(([dx, dy], oi) =>
         pixels.map(([px, py], pi) => (
           <rect key={`o${oi}-${pi}`}
             x={px + dx * SCALE} y={py + dy * SCALE}
             width={SCALE} height={SCALE} fill="black" />
         ))
-      )}
-      {pixels.map(([px, py], pi) => (
+      ),
+      fill: pixels.map(([px, py], pi) => (
         <rect key={`f${pi}`} x={px} y={py} width={SCALE} height={SCALE} fill="white" />
-      ))}
+      )),
+    };
+  }, [text]);
+
+  const textW  = text.length * MONOGRAM_CELL_W * SCALE;
+  const startX = Math.round(cameraX + (ZOOM_W - textW) / 2);
+  const startY = Math.round(TOTAL_H / 2 - (MONOGRAM_GLYPH_H * SCALE) / 2);
+
+  return (
+    <g opacity={opacity} shapeRendering="crispEdges"
+      transform={`translate(${startX} ${startY - yOff})`}>
+      {layers.outline}
+      {layers.fill}
     </g>
   );
 }

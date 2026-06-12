@@ -46,7 +46,13 @@
       "Bash(agent-browser scroll *)",
       "PowerShell(git -C \"c:/Users/dolon/Documents/basketball/the-last-draft\" add src/styles/lobby.css)",
       "PowerShell(git -C \"c:/Users/dolon/Documents/basketball/the-last-draft\" push origin main)",
-      "PowerShell(git -C \"c:/Users/dolon/Documents/basketball/the-last-draft\" status --short)"
+      "PowerShell(git -C \"c:/Users/dolon/Documents/basketball/the-last-draft\" status --short)",
+      "Bash(npx vercel *)",
+      "Bash(sed -n '19,36p' src/components/DraftScreen.css)",
+      "Bash(sed -n '20,50p' lobby/collection.css)",
+      "Bash(grep -n \"setScorePopup\\('2 POINTS'\\)\\\\|setScorePopup\\(\\\\`\\\\${points}\\\\|swish!\\\\|DUNK! +2\" \"c:/Users/dolon/Documents/basketball/the-last-draft/src/useGame.js\")",
+      "Bash(agent-browser press *)",
+      "Bash(agent-browser key *)"
     ]
   }
 }

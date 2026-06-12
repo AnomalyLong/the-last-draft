@@ -1,7 +1,7 @@
 import React from 'react';
 import { BALL_FRAMES } from '../sprites/index.js';
 
-export function Ball({ cx, cy, scale = 1, lift = 0, syncToRun = false, phaseOffset = 0 }) {
+export const Ball = React.memo(function Ball({ cx, cy, scale = 1, lift = 0, syncToRun = false, phaseOffset = 0 }) {
   const [frame, setFrame] = React.useState('up');
   const [yOff, setYOff] = React.useState(0);
   const rafRef = React.useRef(null);
@@ -28,7 +28,9 @@ export function Ball({ cx, cy, scale = 1, lift = 0, syncToRun = false, phaseOffs
       } else {
         const t = (((now - start) % PERIOD) + PERIOD) % PERIOD / PERIOD;
         const bounce = Math.sin(t * Math.PI);
-        setYOff(HIGH + bounce * (LOW - HIGH));
+        // Quantize to whole pixels so React can bail out of re-renders between
+        // visible position changes (a raw float changes every frame).
+        setYOff(Math.round(HIGH + bounce * (LOW - HIGH)));
         setFrame(bounce < 0.25 ? 'up' : bounce < 0.65 ? 'mid' : 'flat');
       }
       rafRef.current = requestAnimationFrame(tick);
@@ -45,4 +47,4 @@ export function Ball({ cx, cy, scale = 1, lift = 0, syncToRun = false, phaseOffs
       ))}
     </g>
   );
-}
+});

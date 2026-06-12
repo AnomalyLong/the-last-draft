@@ -12,7 +12,9 @@ function darken(hex, k) {
   return `#${p(r)}${p(g)}${p(b)}`;
 }
 
-export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isSpinDunking = false, isBlocking = false, isIronBlocking = false, isJumpBall = false, isStealing = false, isPickPocketing = false, isSpinning = false, isDashing = false, isFadingAway = false, isStaggering = false, facingRight = false }) {
+// Memoized: during movement frames only players whose props actually changed
+// re-render — the other standing players are skipped entirely.
+export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isSpinDunking = false, isBlocking = false, isIronBlocking = false, isJumpBall = false, isStealing = false, isPickPocketing = false, isSpinning = false, isDashing = false, isFadingAway = false, isStaggering = false, facingRight = false }) {
   const [frameIdx, setFrameIdx] = React.useState(0);
   const rafRef = React.useRef(null);
 
@@ -318,4 +320,4 @@ export function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor
       {applyColors(pixels)}
     </g>
   );
-}
+});

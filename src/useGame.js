@@ -100,6 +100,23 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const [homeScore, setHomeScore] = useState(0);
   const [awayScore, setAwayScore] = useState(0);
   const [scorePopup, setScorePopup] = useState(null);
+  const [hypePopup, setHypePopup] = useState(null);
+  const hypeIdRef = useRef(0);
+  const showHype = (textOrPool, color = '#ff3344') => {
+    const text = Array.isArray(textOrPool)
+      ? textOrPool[Math.floor(Math.random() * textOrPool.length)]
+      : textOrPool;
+    const id = ++hypeIdRef.current;
+    setHypePopup({ id, text, color });
+    setTimeout(() => setHypePopup(prev => prev?.id === id ? null : prev), 1700);
+  };
+
+  // Hype text pools
+  const HYPE_SWISH    = ['SWISH', 'NOTHING BUT NET', 'BUCKETS', 'CASH', 'DRAINED', 'WET'];
+  const HYPE_FADEAWAY = ['FADEAWAY', 'COLD-BLOODED', 'ICE IN HIS VEINS', 'TOUGH SHOT', 'STEPBACK'];
+  const HYPE_DUNK     = ['BOOMSHAKALAKA', 'POSTERIZED', 'JAMS IT HOME', 'OH MY', 'WITH AUTHORITY', 'THROW IT DOWN'];
+  const HYPE_MISS     = ['CLANK', 'BRICK', 'AIRBALL', 'OFF THE RIM', 'NO GOOD', 'ROLLS OFF', 'IRON'];
+  const HYPE_BLOCK    = ['REJECTED', 'DENIED', 'GET THAT OUTTA HERE', 'NOT IN MY HOUSE', 'SWATTED', 'BLOCK PARTY'];
   const [quarter, setQuarter] = useState(1);   // 1–4
   const [time, setTime] = useState(60);          // seconds (1-minute quarters)
   const [levelUpState, setLevelUpState] = useState(null); // { player, abilities } | null
@@ -998,6 +1015,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     playBlock();
     setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isShooting: false } : p));
     addLog(`BLOCKED by ${blocker.role} (${blocker.team})!`);
+    showHype(HYPE_BLOCK, '#cc2233');
     quarterStatsRef.current[blocker.team].blocks += 1;
     onPlayEventRef.current?.({ type: 'block', team: blocker.team, t: Date.now() });
 
@@ -1125,7 +1143,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
               quarterStatsRef.current[pg.team].shots += 1;
               quarterPointsRef.current[pg.team] += points;
               awardXp(pg.id, 10, pg.cx, pg.cy);
-              addLog(`swish! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600);
+              addLog(`swish! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_SWISH, '#ff3344');
               onComplete();
             } else {
               // Manual shoot: restore ball to shooter.
@@ -1135,7 +1153,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
               quarterStatsRef.current[pg.team].shots += 1;
               quarterPointsRef.current[pg.team] += points;
               awardXp(pg.id, 10, pg.cx, pg.cy);
-              addLog(`swish! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600);
+              addLog(`swish! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_SWISH, '#ff3344');
             }
           }, 400);
         }
@@ -1234,7 +1252,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
               quarterStatsRef.current[pg.team].shots += 1;
               quarterPointsRef.current[pg.team] += points;
               awardXp(pg.id, 10, pg.cx, pg.cy);
-              addLog(`fadeaway! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600);
+              addLog(`fadeaway! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_FADEAWAY, '#ff8800');
               onComplete();
             } else {
               setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, hasBall: true, isFadingAway: false } : p));
@@ -1243,7 +1261,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
               quarterStatsRef.current[pg.team].shots += 1;
               quarterPointsRef.current[pg.team] += points;
               awardXp(pg.id, 10, pg.cx, pg.cy);
-              addLog(`fadeaway! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600);
+              addLog(`fadeaway! +${points}`); setScorePopup(`${points} POINTS`); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_FADEAWAY, '#ff8800');
             }
           }, 400);
         }
@@ -1292,6 +1310,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
           requestAnimationFrame(animateShot);
         } else {
           playMiss();
+          showHype(HYPE_MISS, '#5599cc');
           setPlayers(prev => prev.map(p => p.id === pg.id ? { ...p, isShooting: false } : p));
           bounceToRebound(targetCx, targetCy, basketGx, pg.id, MISS_REBOUND_MIN_FT, MISS_REBOUND_MAX_FT, onComplete);
         }
@@ -1385,7 +1404,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         quarterStatsRef.current[isHome ? 'home' : 'away'].dunks += 1;
         quarterPointsRef.current[isHome ? 'home' : 'away'] += 2;
         awardXp(dunker.id, 15, startCx, startCy);
-        playDunk(); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+        playDunk(); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_DUNK, '#ff3344');
       }, 4 * DF);
       setTimeout(() => {
         setShot({ cx: basketCx, cy: basketCy });
@@ -1469,7 +1488,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         quarterStatsRef.current[isHome ? 'home' : 'away'].dunks += 1;
         quarterPointsRef.current[isHome ? 'home' : 'away'] += 2;
         awardXp(dunker.id, 15, startCx, startCy);
-        playDunk(); addLog('SPIN DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+        playDunk(); addLog('SPIN DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_DUNK, '#ff3344');
       }, 7 * DF2);
       setTimeout(() => {
         setShot({ cx: basketCx, cy: basketCy });
@@ -2228,7 +2247,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
             quarterStatsRef.current[isHome ? 'home' : 'away'].dunks += 1;
             quarterPointsRef.current[isHome ? 'home' : 'away'] += 2;
             awardXp(dunker.id, 15, startCx, startCy);
-            playDunk(); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600);
+            playDunk(); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_DUNK, '#ff3344');
           }, 4 * DF2);
           setTimeout(() => {
             setShot({ cx: basketCx, cy: basketCy });
@@ -2529,5 +2548,5 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     });
   };
 
-  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, lastPickedPlayIdRef, defensePickState, onPickDefense, defenseFtueState, onDismissDefenseFtue, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
+  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, hypePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, lastPickedPlayIdRef, defensePickState, onPickDefense, defenseFtueState, onDismissDefenseFtue, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
 }

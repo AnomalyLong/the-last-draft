@@ -9,15 +9,20 @@ const RING_PIXELS = [
   [0,-3],[3,-3],[5,-2],[7,-2],[9,-1],
 ];
 
-export function Shadow({ cx, cy, hasBall = false }) {
+export const Shadow = React.memo(function Shadow({ cx, cy, hasBall = false }) {
   const [angle, setAngle] = React.useState(0);
   const rafRef = React.useRef(null);
 
   React.useEffect(() => {
     if (!hasBall) return;
     const start = performance.now();
+    // Quantize the orbit to 40 steps so setState bails between visible moves
+    // instead of re-rendering every display frame.
+    const STEP = Math.PI / 20;
     const tick = (now) => {
-      setAngle(((now - start) / 900) * Math.PI * 2);
+      const a = ((now - start) / 900) * Math.PI * 2;
+      const q = Math.round(a / STEP) * STEP;
+      setAngle(prev => prev === q ? prev : q);
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -40,4 +45,4 @@ export function Shadow({ cx, cy, hasBall = false }) {
       </>}
     </g>
   );
-}
+});

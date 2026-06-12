@@ -12,6 +12,7 @@ import { HUD, DebugConsole, PlayerPortrait, LP_X, LP_W, RP_X, RP_W, TeamViewer }
 import { Shadow } from './Shadow.jsx';
 import { PowerBar } from './PowerBar.jsx';
 import { ScorePopup } from './ScorePopup.jsx';
+import { HypePopup } from './HypePopup.jsx';
 import { XpFlyup } from './XpFlyup.jsx';
 import { StealFlyup } from './StealFlyup.jsx';
 import { BlockFlyup } from './BlockFlyup.jsx';
@@ -61,7 +62,7 @@ export function GameScene({
   // from useGame
   players, shot, logs, handleCommand, cameraX,
   possession, homeScore, awayScore, quarter, time,
-  scorePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade,
+  scorePopup, hypePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade,
   playPickState, onPickPlay, lastPickedPlayIdRef,
   defensePickState, onPickDefense,
   defenseFtueState, onDismissDefenseFtue,
@@ -242,6 +243,7 @@ export function GameScene({
         </g>
 
         {scorePopup && <ScorePopup text={scorePopup} cameraX={cameraX} />}
+        {hypePopup && <HypePopup key={hypePopup.id} text={hypePopup.text} color={hypePopup.color} cameraX={cameraX} />}
         {xpFlyup    && <XpFlyup    key={xpFlyup.id}    fromCx={xpFlyup.fromCx}    fromCy={xpFlyup.fromCy}    toCx={xpFlyup.toCx}    toCy={xpFlyup.toCy}    amount={xpFlyup.amount} />}
         {stealFlyup && <StealFlyup key={stealFlyup.id}  fromCx={stealFlyup.fromCx} fromCy={stealFlyup.fromCy} toCx={stealFlyup.toCx} toCy={stealFlyup.toCy} color={stealFlyup.color} />}
         {blockFlyup && <BlockFlyup key={blockFlyup.id}  fromCx={blockFlyup.fromCx} fromCy={blockFlyup.fromCy} toCx={blockFlyup.toCx} toCy={blockFlyup.toCy} color={blockFlyup.color} />}
@@ -285,13 +287,17 @@ export function GameScene({
             preserveAspectRatio="xMidYMid meet"
           >
             {gameTip && (
-              <BballTip
-                text={gameTip}
-                charX={TIP_CHAR_X} charY={TIP_CHAR_Y} scale={TIP_SCALE}
-                dlgX={TIP_DLG_X} dlgY={TIP_DLG_Y} dlgW={TIP_DLG_W} dlgH={TIP_DLG_H}
-                textX={TIP_TEXT_X} textY={TIP_TEXT_Y}
-                onClick={onDismissGameTip}
-              />
+              <>
+                {/* Inner full-viewport dim — matches the level-up overlay for consistent coverage */}
+                <rect x={0} y={0} width={ZOOM_W} height={TOTAL_H} fill="#000" opacity={0.65} />
+                <BballTip
+                  text={gameTip}
+                  charX={TIP_CHAR_X} charY={TIP_CHAR_Y} scale={TIP_SCALE}
+                  dlgX={TIP_DLG_X} dlgY={TIP_DLG_Y} dlgW={TIP_DLG_W} dlgH={TIP_DLG_H}
+                  textX={TIP_TEXT_X} textY={TIP_TEXT_Y}
+                  onClick={onDismissGameTip}
+                />
+              </>
             )}
             {showTeams && (
               <TeamViewer

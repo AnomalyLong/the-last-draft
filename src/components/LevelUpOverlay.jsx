@@ -5,11 +5,6 @@ import { BballTip } from './BballTip.jsx';
 import { CELEBRATION_FRAMES, HEAD_PORTRAIT } from '../sprites/index.js';
 
 const RARITY_COLORS = { 1: '#20c8a0', 2: '#c060e0', 3: '#e8c060' };
-const RARITY_TINTS  = {
-  1: 'rgba(32,200,160,0.13)',
-  2: 'rgba(192,96,224,0.16)',
-  3: 'rgba(232,192,96,0.20)',
-};
 
 const STAT_COLORS = { spd: '#20c8e0', dex: '#9860e0', jmp: '#30d060', acc: '#e09030' };
 const STAT_LABELS = { spd: 'SPD', dex: 'DEX', jmp: 'JMP', acc: 'ACC' };
@@ -223,7 +218,6 @@ function AbilityCard({ ability, x, y, onClick }) {
   const [pulse, setPulse] = React.useState(0);
 
   const rc = RARITY_COLORS[ability.rarity];
-  const rt = RARITY_TINTS[ability.rarity];
   const bg = hover ? '#263c60' : '#192840';
 
   React.useEffect(() => {
@@ -262,23 +256,17 @@ function AbilityCard({ ability, x, y, onClick }) {
           fill="white" opacity={0.06} shapeRendering="crispEdges" />
       )}
 
-      {/* Rarity bar — color only, no label */}
-      <rect x={x + 6} y={y + 6} width={CARD_W - 12} height={13} rx={2}
-        fill={rt} shapeRendering="crispEdges" />
-      <rect x={x + 6} y={y + 6} width={CARD_W - 12} height={13} rx={2}
-        fill="none" stroke={rc} strokeWidth={1} />
-
       {/* Ability name */}
-      <PixelTextC text={ability.name} cx={x + CARD_W / 2} y={y + 28}
+      <PixelTextC text={ability.name} cx={x + CARD_W / 2} y={y + 14}
         scale={1} fill="#e8f0ff" outline={null} />
 
       {/* Divider */}
-      <rect x={x + 8} y={y + 40} width={CARD_W - 16} height={1}
+      <rect x={x + 8} y={y + 26} width={CARD_W - 16} height={1}
         fill="#2a4070" shapeRendering="crispEdges" />
 
       {/* Description — up to 2 lines */}
       {wrapDesc(ability.desc).map((line, i) => (
-        <PixelTextC key={i} text={line} cx={x + CARD_W / 2} y={y + 46 + i * 11}
+        <PixelTextC key={i} text={line} cx={x + CARD_W / 2} y={y + 32 + i * 11}
           scale={1} fill="#6090b8" outline={null} />
       ))}
 
