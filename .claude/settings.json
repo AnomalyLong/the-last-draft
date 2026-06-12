@@ -43,7 +43,10 @@
       "Bash(xargs grep -ln \"BaseContext\")",
       "Bash(node -e \"const m=require\\('./src/sprites/run.js'\\); console.log\\('RUN_FRAMES length:', m.RUN_FRAMES.length\\);\")",
       "Bash(devvit install *)",
-      "Bash(agent-browser scroll *)"
+      "Bash(agent-browser scroll *)",
+      "PowerShell(git -C \"c:/Users/dolon/Documents/basketball/the-last-draft\" add src/styles/lobby.css)",
+      "PowerShell(git -C \"c:/Users/dolon/Documents/basketball/the-last-draft\" push origin main)",
+      "PowerShell(git -C \"c:/Users/dolon/Documents/basketball/the-last-draft\" status --short)"
     ]
   }
 }
