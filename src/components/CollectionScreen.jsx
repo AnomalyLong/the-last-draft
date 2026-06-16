@@ -3,14 +3,14 @@ import '../../lobby/collection.css';
 import '../../lobby/collection-grid.css';
 import '../../lobby/mobile-collection.css';
 import { IDLE_FRAMES } from '../sprites/idle.js';
-import { JERSEY_BASE } from '../constants.js';
+import { JERSEY_BASE, SKIN_PIXEL, HAIR_PIXEL, BEARD_PIXEL, resolvePalette } from '../constants.js';
 import { trpc } from '../trpc';
 
 // ─── Pixel sprite renderer ──────────────────────────────────────
 // When `className` is passed (e.g. "px-sprite px-band"), the SVG has no
 // explicit width/height so CSS rules control its display size; aspect-ratio
 // keeps proportions. Without className, `scale` sets the rendered pixel size.
-function PixelSprite({ frames = IDLE_FRAMES, frameInterval = 120, scale = 4, jerseyColor = '#19e6c4', className, style }) {
+function PixelSprite({ frames = IDLE_FRAMES, frameInterval = 120, scale = 4, jerseyColor = '#19e6c4', palette, className, style }) {
   const [frameIdx, setFrameIdx] = useState(0);
   const rafRef = useRef(null);
 
@@ -54,14 +54,24 @@ function PixelSprite({ frames = IDLE_FRAMES, frameInterval = 120, scale = 4, jer
         ...style,
       }}
     >
-      {pixels.map(([x, y, fill], i) => (
-        <rect
-          key={i}
-          x={x * ps} y={y * ps}
-          width={ps} height={ps}
-          fill={fill === JERSEY_BASE ? jerseyColor : fill}
-        />
-      ))}
+      {(() => {
+        const pal = resolvePalette(palette);
+        const remap = (fill) => {
+          if (fill === JERSEY_BASE) return jerseyColor;
+          if (fill === SKIN_PIXEL)  return pal.skin;
+          if (fill === HAIR_PIXEL)  return pal.hair;
+          if (fill === BEARD_PIXEL) return pal.beard;
+          return fill;
+        };
+        return pixels.map(([x, y, fill], i) => (
+          <rect
+            key={i}
+            x={x * ps} y={y * ps}
+            width={ps} height={ps}
+            fill={remap(fill)}
+          />
+        ));
+      })()}
     </svg>
   );
 }
@@ -152,7 +162,7 @@ function SquadSlot({ pos, player, isFirst, selected, onClick }) {
         background: `radial-gradient(ellipse at 50% 30%, ${rc.color}66, transparent 70%),
                      linear-gradient(180deg, ${rc.color}22, ${rc.color}05)`,
       }}>
-        <PixelSprite className="px-sprite" jerseyColor={rc.color} style={{ filter: `drop-shadow(0 0 6px ${rc.color}80)` }} />
+        <PixelSprite className="px-sprite" jerseyColor={rc.color} palette={player.palette} style={{ filter: `drop-shadow(0 0 6px ${rc.color}80)` }} />
       </div>
       <div className="squad-overlay" />
       <div className="squad-pos" style={{ background: posColor }}>{pos}</div>
@@ -179,7 +189,7 @@ function PlayerBand({ player, lineupPos, selected, onClick }) {
         <div className="band-tint" />
       </div>
       <div className="band-portrait">
-        <PixelSprite className="px-sprite px-band" jerseyColor={rc.color} style={{ filter: `drop-shadow(0 4px 12px rgba(0,0,0,0.6))` }} />
+        <PixelSprite className="px-sprite px-band" jerseyColor={rc.color} palette={player.palette} style={{ filter: `drop-shadow(0 4px 12px rgba(0,0,0,0.6))` }} />
       </div>
       {lineupPos && (
         <div className="band-badge" style={{ background: POS_COLORS[lineupPos] }}>
@@ -199,7 +209,7 @@ function PlayerBand({ player, lineupPos, selected, onClick }) {
 }
 
 // ─── Detail panel ───────────────────────────────────────────────
-function DetailPanel({ player, lineupPos, lineup, rosterCount, onAssign, onRemove, onAction }) {
+function DetailPanel({ player, lineupPos, lineup, rosterCount, onAssign, onRemove, onAction, canSend }) {
   const [pickingPos, setPickingPos] = useState(false);
   if (!player) return null;
   const rc           = RARITY[player.rarity] ?? RARITY.common;
@@ -229,7 +239,7 @@ function DetailPanel({ player, lineupPos, lineup, rosterCount, onAssign, onRemov
         <span className="dp-corner bl" /><span className="dp-corner br" />
         <span className="dp-tag">{rc.label}</span>
         <span className="dp-id">ID·{String(player.id).padStart(4, '0')}</span>
-        <PixelSprite className="dp-sprite" jerseyColor={rc.color} style={{
+        <PixelSprite className="dp-sprite" jerseyColor={rc.color} palette={player.palette} style={{
           filter: `drop-shadow(0 6px 14px rgba(0,0,0,0.7)) drop-shadow(0 0 8px ${rc.color}80)`,
           animation: 'dpHover 2.4s ease-in-out infinite',
         }} />
@@ -329,6 +339,12 @@ function DetailPanel({ player, lineupPos, lineup, rosterCount, onAssign, onRemov
               </span>
               <span className="ab-lbl">{lineupPos ? 'CHANGE POS' : 'ASSIGN POS'}</span>
             </button>
+            {canSend && (
+              <button className="act-btn" onClick={() => onAction('send')}>
+                <span className="ab-glyph">➤</span>
+                <span className="ab-lbl">SEND</span>
+              </button>
+            )}
             <button className="act-btn" onClick={() => onAction('auction')}>
               <span className="ab-glyph">¤</span>
               <span className="ab-lbl">AUCTION</span>
@@ -378,8 +394,125 @@ function SquadBar({ roster, lineup, selectedId, onSlotClick }) {
   );
 }
 
+// ─── Send Player modal ─────────────────────────────────────────
+// Three-stage UX: enter a username → lookup → confirm → send.
+function SendPlayerModal({ player, onClose, onSent }) {
+  const [phase, setPhase] = useState('input'); // 'input' | 'found' | 'sending' | 'done'
+  const [input, setInput] = useState('');
+  const [resolved, setResolved] = useState(null); // server-normalized username
+  const [error, setError] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const handleSearch = () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    setSearching(true);
+    setError(null);
+    trpc.user.exists.query({ username: trimmed })
+      .then(r => {
+        if (r.exists) {
+          setResolved(r.username);
+          setPhase('found');
+        } else {
+          setError(`u/${r.username || trimmed} not found — they need to have played the game at least once.`);
+        }
+      })
+      .catch(e => setError(e.message || 'Lookup failed'))
+      .finally(() => setSearching(false));
+  };
+
+  const handleConfirm = () => {
+    setPhase('sending');
+    setError(null);
+    trpc.player.send.mutate({ playerId: player.id, toUsername: resolved })
+      .then(() => {
+        setPhase('done');
+        onSent?.(resolved);
+        // Auto-close after a moment so user sees confirmation
+        setTimeout(() => onClose?.(), 1100);
+      })
+      .catch(e => {
+        setPhase('found');
+        setError(e.message || 'Send failed');
+      });
+  };
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter' && phase === 'input' && !searching) { e.preventDefault(); handleSearch(); }
+    if (e.key === 'Escape') { e.stopPropagation(); onClose?.(); }
+  };
+
+  return (
+    <div className="send-modal-scrim" onClick={onClose}>
+      <div className="send-modal" onClick={e => e.stopPropagation()}>
+        <button className="send-modal-close" onClick={onClose} aria-label="Close">✕</button>
+        <div className="send-modal-h">
+          <div className="send-modal-title">SEND PLAYER</div>
+          <div className="send-modal-sub">{player.name} · LV {player.level}</div>
+        </div>
+
+        {phase === 'input' && (
+          <>
+            <label className="send-modal-lbl">RECIPIENT USERNAME</label>
+            <div className="send-modal-row">
+              <span className="send-modal-prefix">u/</span>
+              <input
+                ref={inputRef}
+                className="send-modal-input"
+                type="text"
+                value={input}
+                placeholder="username"
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKey}
+                autoComplete="off"
+                spellCheck="false"
+                maxLength={40}
+              />
+            </div>
+            {error && <div className="send-modal-err">{error}</div>}
+            <div className="send-modal-actions">
+              <button className="send-modal-btn ghost" onClick={onClose}>CANCEL</button>
+              <button
+                className="send-modal-btn primary"
+                onClick={handleSearch}
+                disabled={searching || !input.trim()}>
+                {searching ? 'SEARCHING…' : 'SEARCH'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {phase === 'found' && (
+          <>
+            <div className="send-modal-confirm">
+              Send <b>{player.name}</b> to <b>u/{resolved}</b>?
+            </div>
+            <div className="send-modal-warn">This cannot be undone. The player will be removed from your roster.</div>
+            {error && <div className="send-modal-err">{error}</div>}
+            <div className="send-modal-actions">
+              <button className="send-modal-btn ghost" onClick={() => { setPhase('input'); setResolved(null); }}>BACK</button>
+              <button className="send-modal-btn primary" onClick={handleConfirm}>CONFIRM SEND</button>
+            </div>
+          </>
+        )}
+
+        {phase === 'sending' && (
+          <div className="send-modal-spinner">SENDING…</div>
+        )}
+
+        {phase === 'done' && (
+          <div className="send-modal-success">✓ SENT TO u/{resolved}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Root component ─────────────────────────────────────────────
-export function CollectionScreen({ roster = [], lineup: lineupProp = {}, username = '', credits = 0, onBack, onAuction, onLineupChange, isMobile: isMobileProp }) {
+export function CollectionScreen({ roster = [], lineup: lineupProp = {}, username = '', credits = 0, onBack, onAuction, onLineupChange, onRosterChange, isMobile: isMobileProp }) {
   const activeRoster = roster.length ? roster : ROSTER;
   const [selectedId, setSelectedId]       = useState(null);
   const [lineup, setLineup]               = useState(() =>
@@ -481,9 +614,19 @@ export function CollectionScreen({ roster = [], lineup: lineupProp = {}, usernam
     persistLineup(next);
   };
 
+  const [sendOpen, setSendOpen] = useState(false);
+
   const handleAction = action => {
     if (action === 'auction' && onAuction) onAuction(selectedId);
+    if (action === 'send') setSendOpen(true);
   };
+
+  // SEND eligibility: more than 5 players + all 5 lineup positions assigned
+  // + the currently selected player is on the bench (not in the lineup).
+  const lineupFull = POS_ORDER.every(pos => lineup[pos] != null);
+  const benchEligible = activeRoster.length > 5 && lineupFull;
+  const selectedInLineup = !!lineupPos;
+  const canSend = benchEligible && !selectedInLineup;
 
   const rc = selected ? (RARITY[selected.rarity] ?? RARITY.common) : null;
 
@@ -522,6 +665,7 @@ export function CollectionScreen({ roster = [], lineup: lineupProp = {}, usernam
               onAssign={handleAssign}
               onRemove={handleRemove}
               onAction={handleAction}
+              canSend={canSend}
             />
           </div>
         )}
@@ -544,6 +688,19 @@ export function CollectionScreen({ roster = [], lineup: lineupProp = {}, usernam
           </div>
         </div>
       </div>
+
+      {sendOpen && selected && (
+        <SendPlayerModal
+          player={selected}
+          onClose={() => setSendOpen(false)}
+          onSent={() => {
+            // Locally remove the player from the active roster so the UI
+            // updates immediately. Parent should refetch via onRosterChange.
+            setSelectedId(null);
+            onRosterChange?.();
+          }}
+        />
+      )}
 
     </div>
   );

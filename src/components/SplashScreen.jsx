@@ -1,5 +1,5 @@
 import React from 'react';
-import { ZOOM_W, TOTAL_H, JERSEY_HOME, JERSEY_AWAY } from '../constants.js';
+import { ZOOM_W, TOTAL_H, JERSEY_HOME, JERSEY_AWAY, resolvePalette } from '../constants.js';
 import { Player } from './Player.jsx';
 import { Ball } from './Ball.jsx';
 import { PixelText, PixelTextC } from './PixelText.jsx';
@@ -105,12 +105,15 @@ function BubbleCourt({ cx, cy, r, scene, playerScale, clipId, possessionPeriod =
         ))}
         {/* sort by cy so deeper players render behind closer ones, like GameScene */}
         {[...rendered].sort((a, b) => a.playerCy - b.playerCy).map(({ i, p, playerCx, playerCy, flipH, hasBall }) => {
+          const pal = resolvePalette(p.palette);
           const playerEl = (
             <Player
               cx={playerCx} cy={playerCy}
               scale={playerScale}
               jerseyColor={p.jerseyColor}
-              skinColor={p.skinColor ?? '#db8a5d'}
+              skinColor={pal.skin}
+              hairColor={pal.hair}
+              beardColor={pal.beard}
               isMoving={true}
               hasBall={hasBall}
             />
@@ -145,47 +148,46 @@ function BubbleCourt({ cx, cy, r, scene, playerScale, clipId, possessionPeriod =
 // `ballRotation` lists the player indices that take possession in turn (every
 // `possessionPeriod` ms — defaults to 5s). Phase offsets stagger the loops so
 // the bubbles don't all move in sync.
-// Two skin tones cycled across the rosters for visual variety.
-const SKIN_LIGHT = '#db8a5d';
-const SKIN_DARK  = '#906e57';
+// `palette` indexes SKIN_PALETTES (constants.js) — APPEND-ONLY, so the visual
+// is stable across releases as long as we only add palettes to the end.
 
 const SCENES = [
   { // Center bubble — 2v2, ball circulates between players
     ballRotation: [0, 2, 3, 0],
     players: [
-      { u: 0.42, v: 0.42, jerseyColor: JERSEY_HOME, skinColor: SKIN_LIGHT, facingRight: true  },
-      { u: 0.55, v: 0.46, jerseyColor: JERSEY_AWAY, skinColor: SKIN_DARK,  facingRight: false },
-      { u: 0.38, v: 0.62, jerseyColor: JERSEY_HOME, skinColor: SKIN_DARK,  facingRight: true  },
-      { u: 0.60, v: 0.66, jerseyColor: JERSEY_AWAY, skinColor: SKIN_LIGHT, facingRight: false },
+      { u: 0.42, v: 0.42, jerseyColor: JERSEY_HOME, palette: 1, facingRight: true  },
+      { u: 0.55, v: 0.46, jerseyColor: JERSEY_AWAY, palette: 2, facingRight: false },
+      { u: 0.38, v: 0.62, jerseyColor: JERSEY_HOME, palette: 3, facingRight: true  },
+      { u: 0.60, v: 0.66, jerseyColor: JERSEY_AWAY, palette: 4, facingRight: false },
     ],
   },
   { // 1-on-1
     ballRotation: [0, 1],
     players: [
-      { u: 0.45, v: 0.50, jerseyColor: JERSEY_HOME, skinColor: SKIN_LIGHT, facingRight: true  },
-      { u: 0.58, v: 0.55, jerseyColor: JERSEY_AWAY, skinColor: SKIN_DARK,  facingRight: false },
+      { u: 0.45, v: 0.50, jerseyColor: JERSEY_HOME, palette: 0, facingRight: true  },
+      { u: 0.58, v: 0.55, jerseyColor: JERSEY_AWAY, palette: 2, facingRight: false },
     ],
   },
   { // 1-on-1 mirrored
     ballRotation: [1, 0],
     players: [
-      { u: 0.42, v: 0.55, jerseyColor: JERSEY_HOME, skinColor: SKIN_DARK,  facingRight: false },
-      { u: 0.55, v: 0.50, jerseyColor: JERSEY_AWAY, skinColor: SKIN_LIGHT, facingRight: true  },
+      { u: 0.42, v: 0.55, jerseyColor: JERSEY_HOME, palette: 3, facingRight: false },
+      { u: 0.55, v: 0.50, jerseyColor: JERSEY_AWAY, palette: 1, facingRight: true  },
     ],
   },
   { // Two-on-two — ball cycles through both teams
     ballRotation: [0, 2, 0, 1],
     players: [
-      { u: 0.40, v: 0.45, jerseyColor: JERSEY_HOME, skinColor: SKIN_LIGHT, facingRight: true  },
-      { u: 0.52, v: 0.50, jerseyColor: JERSEY_AWAY, skinColor: SKIN_DARK,  facingRight: false },
-      { u: 0.60, v: 0.65, jerseyColor: JERSEY_HOME, skinColor: SKIN_DARK,  facingRight: false },
+      { u: 0.40, v: 0.45, jerseyColor: JERSEY_HOME, palette: 4, facingRight: true  },
+      { u: 0.52, v: 0.50, jerseyColor: JERSEY_AWAY, palette: 2, facingRight: false },
+      { u: 0.60, v: 0.65, jerseyColor: JERSEY_HOME, palette: 0, facingRight: false },
     ],
   },
   { // Fast break — both running same way
     ballRotation: [0, 0, 1, 0],
     players: [
-      { u: 0.45, v: 0.50, jerseyColor: JERSEY_HOME, skinColor: SKIN_DARK,  facingRight: true },
-      { u: 0.58, v: 0.60, jerseyColor: JERSEY_HOME, skinColor: SKIN_LIGHT, facingRight: true },
+      { u: 0.45, v: 0.50, jerseyColor: JERSEY_HOME, palette: 3, facingRight: true },
+      { u: 0.58, v: 0.60, jerseyColor: JERSEY_HOME, palette: 1, facingRight: true },
     ],
   },
 ];

@@ -369,6 +369,7 @@ Each player is stored as a Redis hash at `player:{id}` with these fields:
 | `ability` | JSON string or `''` | Single ability rolled at draft: `{ name, rarity, desc, id }` — see `src/abilities.js` |
 | `abilities` | JSON string (array) | Abilities earned from level-ups; appended by `updatePlayerProgress` |
 | `statBonuses` | JSON string | `{ spd, dex, jmp, acc }` — cumulative deltas from level-ups |
+| `palette` | number (0..N) | Index into `SKIN_PALETTES` in `constants.js` — determines skin/hair/beard combo. **APPEND-ONLY** list: never reorder entries; existing players reference by index. Defaults to `0` (person1) if missing. |
 
 **Position is NOT stored on the player.** It comes from the lineup hash:
 
@@ -415,6 +416,40 @@ After the first `game.end` completes, `user:games:{username}` has 1 entry → ne
 | `src/server/core/player.ts` | Player minting, roster/lineup management |
 | `src/server/core/draft.ts` | Free and credit draft flows |
 | `src/server/core/admin.ts` | Admin checks, game approval/rejection, credit adjustments |
+
+### Schema changes (Redis "migrations")
+
+Redis has no schema, so there's no Prisma/SQL migration system. Instead,
+schema changes that affect **existing rows** are recorded as numbered files
+in `src/server/migrations/`. These files are *not* auto-executed by the
+deploy pipeline — they exist as a history log so:
+
+- A reviewer can scan one chronological list to see how data shapes evolved.
+- When a backfill is needed, the script lives next to its record and can
+  be invoked manually (temporary dev-admin route, then removed).
+
+**Decision rule for whether a PR needs a migration file:**
+
+| Change | Add a file? |
+|---|---|
+| Add an optional field with a default in `getX()` | No — reader handles missing values |
+| Add a **required** field to existing rows | **Yes** |
+| Rename a field | **Yes** |
+| Change value encoding (JSON ↔ flat, comma-list ↔ set) | **Yes** |
+| Add a brand-new key namespace | No (the helpers in `core/*.ts` are the record) |
+| Drop a field | Optional — only if you want cleanup |
+
+When in doubt: would old rows written before this PR behave wrong under
+the new code? If yes, add a migration. If they'd default cleanly, don't.
+
+See `src/server/migrations/README.md` for the file format and how to
+run backfills manually.
+
+**Reader defensiveness is the safety net.** Every `getX` parser in
+`core/*.ts` defaults missing fields (`Number(raw.field ?? 0)`,
+`try { JSON.parse } catch`). Keep doing this even when adding migrations —
+it's what makes a forgotten migration a paper-trail problem instead of a
+data-integrity problem.
 
 ### Dev admin panel
 Available at `http://localhost:5174` → **🔧 Admin** nav item when running `npm run dev:tools` alongside `devvit playtest`.

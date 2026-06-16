@@ -46,6 +46,17 @@ app.route('/internal', internal);
 if (process.env.NODE_ENV !== 'production') {
   const devAdmin = new Hono();
 
+  // TEMPORARY: one-shot migration trigger. Remove from this file once the
+  // backfill has been run in dev — the migration file at
+  // src/server/migrations/0001-add-player-skin-colors.ts remains as the
+  // permanent record. See migrations/README.md for the convention.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  devAdmin.post('/migrate/0001', async (c) => {
+    const { up } = await import('./migrations/0001-add-player-skin-colors');
+    const result = await up();
+    return c.json(result);
+  });
+
   // Returns up to 500 most-recently-seen usernames (newest first). Powers
   // the dev-tools admin autocomplete + browse list.
   devAdmin.get('/users', async (c) => {

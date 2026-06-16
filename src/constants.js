@@ -49,6 +49,18 @@ export const JERSEY_AWAY = "#c02020"; // red
 export const JERSEY_BASE = "#AC3232"; // placeholder color in sprite data
 export const JERSEY_DARK_BASE = "#8a1a1a";
 
+// ─── Skin / Hair / Beard Palettes ────────────────────────────────────────────
+// The actual table + helpers live in src/shared/palettes.ts so the server can
+// import the same source of truth without crossing rootDir boundaries.
+// See migrations/README.md for the APPEND-ONLY invariant.
+export {
+  SKIN_PALETTES,
+  resolvePalette,
+  SKIN_PIXEL,
+  HAIR_PIXEL,
+  BEARD_PIXEL,
+} from './shared/palettes';
+
 // ─── Grid <-> SVG Conversion ─────────────────────────────────────────────────
 // Court grid is 94ft wide x 50ft tall
 // SVG court occupies x=30..650, y=96..336

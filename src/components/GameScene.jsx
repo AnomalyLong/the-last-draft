@@ -2,6 +2,7 @@ import React from 'react';
 import {
   W, TOTAL_H, TOP_BAR, BOT_BAR, ZOOM_W,
   JERSEY_HOME, JERSEY_AWAY,
+  resolvePalette,
 } from '../constants.js';
 import { Court } from './Court.jsx';
 import { Ball } from './Ball.jsx';
@@ -86,6 +87,9 @@ export function GameScene({
   showOptions, onShowOptions,
   musicVol, sfxVol, onMusicVol, onSfxVol,
   scanlines, vignette, onScanlines, onVignette,
+
+  // Admin gating — when false, hide the in-game debug console icon
+  isAdmin = false,
 }) {
   const [showDebug, setShowDebug] = React.useState(false);
   const [showTeams, setShowTeams] = React.useState(false);
@@ -193,6 +197,12 @@ export function GameScene({
             const flipH       = p.facingRight;
             const labelColor  = p.team === 'home' ? '#1a4fa0' : '#c02020';
             const jerseyColor = p.team === 'home' ? JERSEY_HOME : JERSEY_AWAY;
+            // Look up the palette from the source roster by position. Falls back
+            // to person1 (palette 0) if the roster doesn't carry one yet — e.g.
+            // pre-migration data, or the dev-tools harness.
+            const sourceRoster = p.team === 'home' ? homeRoster : awayRoster;
+            const rosterEntry  = sourceRoster?.find(r => r.pos === p.role);
+            const pal          = resolvePalette(rosterEntry?.palette);
             return (
               <React.Fragment key={p.id}>
                 <Shadow cx={p.cx} cy={p.cy} hasBall={p.hasBall} />
@@ -208,12 +218,14 @@ export function GameScene({
                   {flipH
                     ? <g transform={`scale(-1,1) translate(${-p.cx * 2}, 0)`}>
                         <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
+                          skinColor={pal.skin} hairColor={pal.hair} beardColor={pal.beard}
                           hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting}
                           isDunking={p.isDunking} isSpinDunking={p.isSpinDunking} isBlocking={p.isBlocking} isIronBlocking={p.isIronBlocking} isJumpBall={p.isJumpBall}
                           isStealing={p.isStealing} isPickPocketing={p.isPickPocketing} isSpinning={p.isSpinning} isDashing={p.isDashing}
                           isFadingAway={p.isFadingAway} isStaggering={p.isStaggering} facingRight={p.facingRight} />
                       </g>
                     : <Player cx={p.cx} cy={p.cy} scale={1.5} jerseyColor={jerseyColor}
+                        skinColor={pal.skin} hairColor={pal.hair} beardColor={pal.beard}
                         hasBall={p.hasBall} isMoving={p.isMoving} isShooting={p.isShooting}
                         isDunking={p.isDunking} isSpinDunking={p.isSpinDunking} isBlocking={p.isBlocking} isIronBlocking={p.isIronBlocking} isJumpBall={p.isJumpBall}
                         isStealing={p.isStealing} isPickPocketing={p.isPickPocketing} isSpinning={p.isSpinning} isDashing={p.isDashing}
@@ -359,8 +371,10 @@ export function GameScene({
         </>
       )}
 
-      {/* Debug console — always on top */}
-      <DebugConsole logs={logs} onCommand={handleCommand} showDebug={showDebug} onToggleDebug={() => setShowDebug(d => !d)} />
+      {/* Debug console — always on top (admins only) */}
+      {isAdmin && (
+        <DebugConsole logs={logs} onCommand={handleCommand} showDebug={showDebug} onToggleDebug={() => setShowDebug(d => !d)} />
+      )}
 
       {/* Portrait panels — hidden when any overlay is active */}
       {!anyOverlay && (<>

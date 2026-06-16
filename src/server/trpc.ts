@@ -5,9 +5,11 @@ import { context, reddit, redis } from '@devvit/web/server';
 import { z } from 'zod';
 
 import { getOrCreateUser, getUser, grantFreeDrafts, setTeamName, userKey, ledgerKey, gamesKey, MAX_ENERGY, USERS_INDEX_KEY } from './core/user';
-import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, setLineup, updatePlayerProgress, buildRosterForUser, ROLES, type Role, rosterKey, lineupKey } from './core/player';
+import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, setLineup, updatePlayerProgress, buildRosterForUser, transferPlayer, ROLES, type Role, rosterKey, lineupKey } from './core/player';
+import { SKIN_PALETTES } from '../shared/palettes';
 import { createChallengePost, canCreateChallengePost, getChallengePost, listChallengeResults, getMyChallenge, challengePostKey } from './core/post';
 import { freeDraft, creditDraft, buyDraftPick, getNextDraftCost } from './core/draft';
+import { createAnnouncement, listAnnouncements, deleteAnnouncement, hasUnreadAnnouncements, markAnnouncementsSeen } from './core/announcements';
 import { startGame, recordPlay, endGame, getGame, type PlayEvent } from './core/game';
 import {
   listMissions,
@@ -184,6 +186,18 @@ export const appRouter = t.router({
         return { success: true };
       }),
 
+    // Look up whether a username is registered (has played the app before).
+    // Used by the Send Player modal to confirm the recipient exists before
+    // showing the confirmation prompt. Strips a leading "u/" if the user typed it.
+    exists: publicProcedure
+      .input(z.object({ username: z.string().min(1).max(40) }))
+      .query(async ({ input }) => {
+        const cleaned = input.username.trim().replace(/^u\//i, '');
+        if (!cleaned) return { exists: false, username: '' };
+        const user = await getUser(cleaned);
+        return { exists: !!user, username: cleaned };
+      }),
+
     // Idempotent fallback: ensures user:games:{username} has >= 1 entry so the
     // client computes isFtue=false on next user.init. Used when a GameOverScreen
     // is dismissed without an active session (e.g. trpc.game.start failed at
@@ -209,6 +223,32 @@ export const appRouter = t.router({
         const player = await getPlayer(input);
         if (!player) throw new TRPCError({ code: 'NOT_FOUND' });
         return player;
+      }),
+
+    // Send (gift) a player from the caller's roster to another user. Server
+     // re-validates: caller owns the player, has > 5 players, has a full
+     // 5-slot lineup, and the player is on the bench (not in a slot).
+    send: publicProcedure
+      .input(z.object({
+        playerId: z.number().int().positive(),
+        toUsername: z.string().min(1).max(40),
+      }))
+      .mutation(async ({ input }) => {
+        const fromUsername = await requireUsername();
+        const cleanedTo = input.toUsername.trim().replace(/^u\//i, '');
+        if (!cleanedTo) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Recipient username is required' });
+        }
+        // Recipient must be a registered user.
+        const recipient = await getUser(cleanedTo);
+        if (!recipient) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: `User u/${cleanedTo} not found` });
+        }
+        const result = await transferPlayer(fromUsername, cleanedTo, input.playerId);
+        if (!result.success) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: result.reason ?? 'Send failed' });
+        }
+        return { success: true, recipient: cleanedTo };
       }),
 
     progress: publicProcedure
@@ -267,6 +307,7 @@ export const appRouter = t.router({
         jmp: z.number().int().min(0).max(99).optional(),
         acc: z.number().int().min(0).max(99).optional(),
         ability: z.object({ name: z.string(), rarity: z.number().int() }).catchall(z.unknown()).nullable().optional(),
+        palette: z.number().int().min(0).max(SKIN_PALETTES.length - 1).optional(),
       }))
       .mutation(async ({ input }) => {
         const username = await requireUsername();
@@ -286,13 +327,14 @@ export const appRouter = t.router({
         jmp: z.number().int().min(0).max(99).optional(),
         acc: z.number().int().min(0).max(99).optional(),
         ability: z.object({ name: z.string(), rarity: z.number().int() }).catchall(z.unknown()).nullable().optional(),
+        palette: z.number().int().min(0).max(SKIN_PALETTES.length - 1).optional(),
       }))
       .mutation(async ({ input }) => {
         // Consumes one banked paid pick (bought earlier via draft.buy) — no
         // charge here. Throws if the user has no pick to spend.
         const username = await requireUsername();
         try {
-          return await creditDraft(username, { name: input.name, rarity: input.rarity, spd: input.spd, dex: input.dex, jmp: input.jmp, acc: input.acc, ability: input.ability as any });
+          return await creditDraft(username, { name: input.name, rarity: input.rarity, spd: input.spd, dex: input.dex, jmp: input.jmp, acc: input.acc, ability: input.ability as any, palette: input.palette });
         } catch (e: any) {
           throw new TRPCError({ code: 'FORBIDDEN', message: e?.message ?? 'Draft failed' });
         }
@@ -466,6 +508,29 @@ export const appRouter = t.router({
       }),
   }),
 
+  // ── Announcements ────────────────────────────────────────────────────────
+  // Public read — surfaces in the notification bell and the events page.
+  announcements: t.router({
+    list: publicProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(20).optional() }).optional())
+      .query(async ({ input }) => {
+        return await listAnnouncements(input?.limit ?? 10);
+      }),
+
+    // Whether the newest announcement postdates the user's last bell-open.
+    unread: publicProcedure.query(async () => {
+      const username = await requireUsername();
+      return { hasUnread: await hasUnreadAnnouncements(username) };
+    }),
+
+    // Called when the user opens the bell dropdown — clears the dot.
+    markSeen: publicProcedure.mutation(async () => {
+      const username = await requireUsername();
+      await markAnnouncementsSeen(username);
+      return { ok: true };
+    }),
+  }),
+
   // ── Admin ────────────────────────────────────────────────────────────────
   admin: t.router({
     isAdmin: publicProcedure.query(async () => {
@@ -473,6 +538,32 @@ export const appRouter = t.router({
       const admin = await isAdmin(username);
       return { isAdmin: admin };
     }),
+
+    createAnnouncement: adminProcedure
+      .input(z.object({
+        tag: z.string().min(1).max(12),
+        accent: z.enum(['cyan', 'magenta', 'gold']),
+        title: z.string().min(1).max(64),
+        sub: z.string().min(1).max(120),
+        body: z.string().max(600).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        return await createAnnouncement({
+          tag: input.tag.toUpperCase(),
+          accent: input.accent,
+          title: input.title,
+          sub: input.sub,
+          body: input.body || undefined,
+        });
+      }),
+
+    deleteAnnouncement: adminProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ input }) => {
+        const removed = await deleteAnnouncement(input.id);
+        if (!removed) throw new TRPCError({ code: 'NOT_FOUND', message: 'Announcement not found' });
+        return { ok: true };
+      }),
 
     getUser: adminProcedure
       .input(z.string())

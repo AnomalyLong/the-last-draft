@@ -46,6 +46,7 @@ type DraftPlayerParams = {
   jmp?: number;
   acc?: number;
   ability?: PlayerAbility | null;
+  palette?: number;
 };
 
 // Mints a player using one free draft pick. Each call atomically decrements

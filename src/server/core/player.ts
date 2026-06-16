@@ -1,4 +1,5 @@
 import { redis } from '@devvit/web/server';
+import { SKIN_PALETTES } from '../../shared/palettes';
 
 export type PlayerSource = 'draft' | 'credit' | 'purchase';
 export type PlayerRarity = 'common' | 'rare' | 'super_rare' | 'ultra_rare';
@@ -26,6 +27,21 @@ export type PlayerData = {
   // Level-up rewards accumulated in-game
   abilities: PlayerAbility[];
   statBonuses: PlayerStatBonuses;
+  // Index into SKIN_PALETTES (constants.js) — APPEND-ONLY list, so this
+  // index is stable for the lifetime of the player record. 0 = person1
+  // (sprite atlas default), used for any player record minted before this
+  // field existed.
+  palette: number;
+};
+
+// Server-side guard: clamp client-supplied palette to a valid index, falling
+// back to a uniformly random pick when missing/invalid. Used by mintPlayer
+// so a buggy client can't mint colorless players.
+const validPaletteIndex = (idx: number | undefined): number => {
+  if (typeof idx === 'number' && Number.isInteger(idx) && idx >= 0 && idx < SKIN_PALETTES.length) {
+    return idx;
+  }
+  return Math.floor(Math.random() * SKIN_PALETTES.length);
 };
 
 const PLAYER_COUNTER_KEY = 'player:id:counter';
@@ -51,9 +67,11 @@ export const mintPlayer = async (params: {
   jmp?: number;
   acc?: number;
   ability?: PlayerAbility | null;
+  palette?: number;
 }): Promise<PlayerData> => {
   const id = params.id ?? (await redis.incrBy(PLAYER_COUNTER_KEY, 1));
   const now = Date.now();
+  const palette = validPaletteIndex(params.palette);
 
   await Promise.all([
     redis.hSet(playerKey(id), {
@@ -68,6 +86,7 @@ export const mintPlayer = async (params: {
       jmp: String(params.jmp ?? 0),
       acc: String(params.acc ?? 0),
       ability: params.ability ? JSON.stringify(params.ability) : '',
+      palette: String(palette),
     }),
     redis.zAdd(rosterKey(params.owner), { score: now, member: String(id) }),
   ]);
@@ -87,6 +106,7 @@ export const mintPlayer = async (params: {
     ability: params.ability ?? null,
     abilities: [],
     statBonuses: { spd: 0, dex: 0, jmp: 0, acc: 0 },
+    palette,
   };
 };
 
@@ -103,6 +123,14 @@ export const getPlayer = async (id: number): Promise<PlayerData | null> => {
   let statBonuses: PlayerStatBonuses = { spd: 0, dex: 0, jmp: 0, acc: 0 };
   try { statBonuses = raw.statBonuses ? JSON.parse(raw.statBonuses) : statBonuses; } catch {}
 
+  // Defensive default: any pre-migration row (or one with a corrupted value)
+  // resolves to palette 0 (person1) so the renderer never blows up. The
+  // renderer also clamps via resolvePalette(), so 999 etc. would still work.
+  const paletteRaw = Number(raw.palette);
+  const palette = Number.isInteger(paletteRaw) && paletteRaw >= 0 && paletteRaw < SKIN_PALETTES.length
+    ? paletteRaw
+    : 0;
+
   return {
     id,
     owner: raw.owner,
@@ -118,6 +146,7 @@ export const getPlayer = async (id: number): Promise<PlayerData | null> => {
     ability,
     abilities,
     statBonuses,
+    palette,
   };
 };
 
@@ -262,6 +291,57 @@ export const setLineup = async (
     for (const [role, pid] of entries) hash[role] = String(pid);
     await redis.hSet(key, hash);
   }
+  return { success: true };
+};
+
+// Transfer a player from one user to another. Caller must own the player,
+// must have a full 5-slot lineup, and must have at least one bench player
+// (roster > 5). The transferred player must NOT be in the sender's lineup.
+// On success: removes from sender's roster + lineup (defensive), adds to
+// recipient's roster, and updates the player hash's owner field.
+export const transferPlayer = async (
+  fromUsername: string,
+  toUsername: string,
+  playerId: number,
+): Promise<{ success: boolean; reason?: string }> => {
+  if (fromUsername.toLowerCase() === toUsername.toLowerCase()) {
+    return { success: false, reason: 'Cannot send to yourself' };
+  }
+
+  // Player must belong to sender.
+  const player = await getPlayer(playerId);
+  if (!player) return { success: false, reason: 'Player not found' };
+  if (player.owner !== fromUsername) return { success: false, reason: 'You do not own this player' };
+
+  // Sender must have a full 5-slot lineup AND a bench (roster.length > 5).
+  const [senderRoster, senderLineup] = await Promise.all([
+    getUserRoster(fromUsername),
+    getUserLineup(fromUsername),
+  ]);
+  if (senderRoster.length <= 5) {
+    return { success: false, reason: 'You need more than 5 players to send one away' };
+  }
+  const lineupFilled = ROLES.every(r => senderLineup[r] != null);
+  if (!lineupFilled) {
+    return { success: false, reason: 'Assign all 5 lineup positions first' };
+  }
+
+  // The player being sent must be a bench player (not assigned to a slot).
+  const isInLineup = ROLES.some(r => Number(senderLineup[r]) === playerId);
+  if (isInLineup) {
+    return { success: false, reason: 'Cannot send a player who is in your starting lineup' };
+  }
+
+  // Atomic-ish transfer: update player owner, swap roster sets.
+  const now = Date.now();
+  await Promise.all([
+    redis.hSet(playerKey(playerId), { owner: toUsername }),
+    redis.zRem(rosterKey(fromUsername), [String(playerId)]),
+    redis.zAdd(rosterKey(toUsername), { score: now, member: String(playerId) }),
+    // Defensive: if somehow the player was in the lineup, clear it.
+    clearPlayerFromLineup(fromUsername, playerId),
+  ]);
+
   return { success: true };
 };
 

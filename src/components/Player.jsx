@@ -1,5 +1,5 @@
 import React from 'react';
-import { JERSEY_HOME, JERSEY_BASE, JERSEY_DARK_BASE, SHOOT_JUMP_OFFSETS, BLOCK_JUMP_OFFSETS, JUMP_BALL_JUMP_OFFSETS } from '../constants.js';
+import { JERSEY_HOME, JERSEY_BASE, JERSEY_DARK_BASE, SKIN_PIXEL, HAIR_PIXEL, BEARD_PIXEL, SHOOT_JUMP_OFFSETS, BLOCK_JUMP_OFFSETS, JUMP_BALL_JUMP_OFFSETS } from '../constants.js';
 import { SPRITE_PIXELS, IDLE_FRAMES, RUN_FRAMES, RUN_BALL_FRAMES, SHOOT_CHAR_FRAMES, DUNK_FRAMES, DUNK_BALL_OFFSETS, DUNKSPIN_FRAMES, DUNKSPIN_BALL_OFFSETS, BALL_FRAMES, BLOCK_JUMP_FRAMES, IRON_BLOCK_FRAMES, JUMP_BALL_FRAMES, STEAL_FRAMES, PICKPOCKET_FRAMES, SPIN_MOVE_FRAMES, DASH_FRAMES, FADEAWAY_FRAMES, STAGGER_FRAMES } from '../sprites/index.js';
 
 // multiply an "#rrggbb" colour by a 0..1 factor to derive shadow tones
@@ -14,7 +14,7 @@ function darken(hex, k) {
 
 // Memoized: during movement frames only players whose props actually changed
 // re-render — the other standing players are skipped entirely.
-export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isSpinDunking = false, isBlocking = false, isIronBlocking = false, isJumpBall = false, isStealing = false, isPickPocketing = false, isSpinning = false, isDashing = false, isFadingAway = false, isStaggering = false, facingRight = false }) {
+export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor, hairColor, beardColor, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isSpinDunking = false, isBlocking = false, isIronBlocking = false, isJumpBall = false, isStealing = false, isPickPocketing = false, isSpinning = false, isDashing = false, isFadingAway = false, isStaggering = false, facingRight = false }) {
   const [frameIdx, setFrameIdx] = React.useState(0);
   const rafRef = React.useRef(null);
 
@@ -144,16 +144,22 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
   }, [hasBall, isMoving, isShooting, isDunking, isSpinDunking, isBlocking, isIronBlocking, isJumpBall, isStealing, isPickPocketing, isSpinning, isDashing, isFadingAway, isStaggering]);
 
   const jerseyDark = jerseyColor + '99';
-  // Optional skin override — remap the two skin tones from the sprite atlas.
-  // Default (skinColor unset) preserves the original sprite palette.
-  const skinDark = skinColor ? darken(skinColor, 0.78) : null;
+  // Optional skin/hair/beard overrides. Each defaults to the sprite atlas's
+  // existing pixel value (i.e. person1) when undefined, so legacy callers
+  // that pass only `skinColor` (or nothing) still render correctly.
+  // Pixel comparisons are case-insensitive — sprite atlases use uppercase
+  // (#D9A066, etc.) but new palette data is lowercase.
+  const remapSkin  = skinColor  || null;
+  const remapHair  = hairColor  || null;
+  const remapBeard = beardColor || (skinColor ? darken(skinColor, 0.78) : null);
 
   const applyColors = (pixels) => pixels.map(([x, y, fill], i) => {
     let c = fill;
     if      (fill === JERSEY_BASE)      c = jerseyColor;
     else if (fill === JERSEY_DARK_BASE) c = jerseyDark;
-    else if (skinColor && fill === '#D9A066') c = skinColor;
-    else if (skinColor && fill === '#B17F4C') c = skinDark;
+    else if (remapSkin  && fill === SKIN_PIXEL)  c = remapSkin;
+    else if (remapHair  && fill === HAIR_PIXEL)  c = remapHair;
+    else if (remapBeard && fill === BEARD_PIXEL) c = remapBeard;
     return <rect key={i} x={x * scale} y={y * scale} width={scale} height={scale} fill={c} />;
   });
 

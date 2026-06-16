@@ -1,6 +1,6 @@
 import React from 'react';
 import './DraftScreen.css';
-import { JERSEY_BASE } from '../constants.js';
+import { JERSEY_BASE, SKIN_PALETTES, SKIN_PIXEL, HAIR_PIXEL, BEARD_PIXEL, resolvePalette } from '../constants.js';
 import { IDLE_FRAMES, RUN_FRAMES } from '../sprites/index.js';
 import { ABILITIES } from '../abilities.js';
 import { playSelect, playCancel, playFlip } from '../sound/ui.js';
@@ -71,7 +71,9 @@ function generateDraftPool() {
       const stats = generateStats(pos);
       const ovr   = calcOvr(pos, stats);
       const lastName = lasts[i++];
-      return { id:id++, pos, name:`${firsts[i-1]} ${lastName}`, lastName, ...stats, ovr };
+      // Random palette index — APPEND-ONLY list, see constants.js.
+      const palette = Math.floor(Math.random() * SKIN_PALETTES.length);
+      return { id:id++, pos, name:`${firsts[i-1]} ${lastName}`, lastName, ...stats, ovr, palette };
     })
   );
 }
@@ -121,13 +123,21 @@ function clamp01(t) { return Math.max(0, Math.min(1, t)); }
 // ─── Mini idle sprite (replaces idle.gif) ─────────────────────────────────
 const SPRITE_SCALE = 5;
 
-function MiniPlayerSVG({ jerseyColor, phase = 0 }) {
+function MiniPlayerSVG({ jerseyColor, phase = 0, palette }) {
   const [tick, setTick] = React.useState(0);
   React.useEffect(() => {
     const id = setInterval(() => setTick(t => t+1), 120);
     return () => clearInterval(id);
   }, []);
   const frame = IDLE_FRAMES[(tick + phase) % IDLE_FRAMES.length];
+  const pal = resolvePalette(palette);
+  const remap = (col) => {
+    if (col === JERSEY_BASE) return jerseyColor;
+    if (col === SKIN_PIXEL)  return pal.skin;
+    if (col === HAIR_PIXEL)  return pal.hair;
+    if (col === BEARD_PIXEL) return pal.beard;
+    return col;
+  };
   return (
     <svg
       width={11 * SPRITE_SCALE}
@@ -138,7 +148,7 @@ function MiniPlayerSVG({ jerseyColor, phase = 0 }) {
         <rect key={i}
           x={px * SPRITE_SCALE} y={py * SPRITE_SCALE}
           width={SPRITE_SCALE} height={SPRITE_SCALE}
-          fill={col === JERSEY_BASE ? jerseyColor : col} />
+          fill={remap(col)} />
       ))}
     </svg>
   );
@@ -701,7 +711,7 @@ export function CardFront({ card, tier, pulseBorderW, pulse, shimmerX, revealed,
         </div>
         <div className="dc-portrait">
           <div className="dc-sprite-wrap">
-            <MiniPlayerSVG jerseyColor={posColor} phase={card.id % 5} />
+            <MiniPlayerSVG jerseyColor={posColor} phase={card.id % 5} palette={card.palette} />
           </div>
           <div className="dc-shine" />
         </div>
@@ -810,6 +820,14 @@ function RunningGhost({ player, x, y }) {
   const SCALE = 4;
   const frame = RUN_FRAMES[tick % RUN_FRAMES.length];
   const jerseyColor = POS_COLORS[player.pos] || '#888';
+  const pal = resolvePalette(player.palette);
+  const remap = (col) => {
+    if (col === JERSEY_BASE) return jerseyColor;
+    if (col === SKIN_PIXEL)  return pal.skin;
+    if (col === HAIR_PIXEL)  return pal.hair;
+    if (col === BEARD_PIXEL) return pal.beard;
+    return col;
+  };
   const W = 14 * SCALE, H = 18 * SCALE;
   // Chest sits ~y=8 in sprite; center cursor on chest
   return (
@@ -825,7 +843,7 @@ function RunningGhost({ player, x, y }) {
         style={{ imageRendering:'pixelated', display:'block' }}>
         {frame.map(([px, py, col], i) => (
           <rect key={i} x={px*SCALE} y={py*SCALE} width={SCALE} height={SCALE}
-            fill={col === JERSEY_BASE ? jerseyColor : col} />
+            fill={remap(col)} />
         ))}
       </svg>
       <div style={{
@@ -1090,6 +1108,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
         rarity: tierToRarity(player.ovr, player.ability),
         spd: player.spd, dex: player.dex, jmp: player.jmp, acc: player.acc,
         ability: player.ability ?? null,
+        palette: player.palette,
       });
       setPaidResult({ ...player, serverId: res?.player?.id ?? null, costPaid: res?.cost ?? null });
     } catch (e) {
@@ -1107,6 +1126,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
         rarity: tierToRarity(player.ovr, player.ability),
         spd: player.spd, dex: player.dex, jmp: player.jmp, acc: player.acc,
         ability: player.ability ?? null,
+        palette: player.palette,
       }))
     );
     const withServerIds = lineup.map((player,i) => ({
@@ -1524,7 +1544,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
                   <div className="acm-universe-header">U·{player.universeId ?? '???'}</div>
                   <div className="acm-body">
                     <div className="acm-sprite">
-                      <MiniPlayerSVG jerseyColor={posColor} phase={i*2} />
+                      <MiniPlayerSVG jerseyColor={posColor} phase={i*2} palette={player.palette} />
                     </div>
                     <div className="acm-name">{player.lastName ?? player.name}</div>
                     <div className="acm-stats">

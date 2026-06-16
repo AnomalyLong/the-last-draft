@@ -23,6 +23,7 @@ function toAwayPlayers(roster = []) {
     rarity: p.rarity,
     ability: p.ability ?? null,
     abilities: p.abilities ?? [],
+    palette: p.palette ?? 0,
   }));
 }
 
@@ -50,6 +51,20 @@ import { useGame } from './useGame.js';
 import OPPONENTS from './opponents.json';
 import { trpc } from './trpc';
 import { runCommand } from './debugCommands.js';
+import { SKIN_PALETTES } from './constants.js';
+
+// Deterministic palette index for non-persisted opponents — same name always
+// renders the same look. Hash uses the same FNV-ish loop as elsewhere.
+function paletteFromName(name = '') {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return Math.abs(h) % SKIN_PALETTES.length;
+}
+// Assigns a deterministic palette to each player in an opponents-style roster
+// (opponents.json bots or challenge teams). Skips entries that already have one.
+function withDerivedPalette(players = []) {
+  return players.map(p => p.palette != null ? p : { ...p, palette: paletteFromName(p.name) });
+}
 
 export default function App() {
   const isInline = React.useMemo(() => getMode() === 'inline', []);
@@ -130,6 +145,7 @@ export default function App() {
             rarity: p.rarity, ability: p.ability,
             abilities: p.abilities ?? [],
             level: p.level ?? 1, xp: p.xp ?? 0,
+            palette: p.palette ?? 0,
             serverId: p.id,
           };
         }).filter(Boolean);
@@ -166,6 +182,14 @@ export default function App() {
   const [titleLogs, setTitleLogs] = React.useState([]);
   const [showTitleDebug, setShowTitleDebug] = React.useState(false);
   const [showAdminOverlay, setShowAdminOverlay] = React.useState(false);
+  const [isAdmin, setIsAdmin] = React.useState(false);
+
+  // Determine admin status once on mount — gates the debug console icon.
+  React.useEffect(() => {
+    trpc.admin.isAdmin.query()
+      .then(r => setIsAdmin(!!r?.isAdmin))
+      .catch(() => setIsAdmin(false));
+  }, []);
 
   const handleMatchmakingReady = () => {
     trpc.game.start.mutate()
@@ -249,7 +273,10 @@ export default function App() {
     if (scene === 'collection') refreshRoster();
   }, [scene, refreshUser, refreshDraftCost, refreshRoster]);
   const [awayTeam, setAwayTeam] = React.useState(
-    () => OPPONENTS[Math.floor(Math.random() * OPPONENTS.length)]
+    () => {
+      const team = OPPONENTS[Math.floor(Math.random() * OPPONENTS.length)];
+      return { ...team, players: withDerivedPalette(team.players) };
+    }
   );
 
   // Challenge deep-link routing (expanded mode only). Declared AFTER the state
@@ -389,6 +416,7 @@ export default function App() {
             username={username}
             credits={serverCredits}
             onLineupChange={(next) => setRawLineup({ ...next })}
+            onRosterChange={refreshRoster}
             onBack={() => setScene('title')}
           />
         </ScreenWithStrip>
@@ -544,8 +572,8 @@ export default function App() {
         />
       )}
 
-      {/* ── TITLE/MENU DEBUG CONSOLE ─────────────────────────── */}
-      {!isInline && scene !== 'game' && (
+      {/* ── TITLE/MENU DEBUG CONSOLE (admins only) ───────────── */}
+      {!isInline && scene !== 'game' && isAdmin && (
         <DebugConsole
           logs={titleLogs}
           onCommand={handleTitleCommand}
@@ -561,6 +589,7 @@ export default function App() {
           svgProps={{ 'data-testid': 'game-court' }}
           setViewportW={gameState.setViewportW}
           {...gameState}
+          isAdmin={isAdmin}
           onPickLevelUp={(ability) => {
             const p = gameState.levelUpState?.player;
             if (p?.team === 'home' && ability) {
