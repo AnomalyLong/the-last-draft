@@ -89,14 +89,15 @@ export function DraftHubScreen({
           </div>
         </div>
 
-        <button
-          className="dh-btn primary"
-          onClick={handleUse}
-          disabled={!hasAnyPick}
-        >
-          <span>⚡</span>
-          <span>{hasAnyPick ? 'USE A PICK · START DRAFT' : 'NO PICKS REMAINING'}</span>
-        </button>
+        {hasAnyPick && (
+          <button
+            className="dh-btn primary"
+            onClick={handleUse}
+          >
+            <span>⚡</span>
+            <span>USE A PICK · START DRAFT</span>
+          </button>
+        )}
 
         {!hasAnyPick && (
           <div className="dh-hint">

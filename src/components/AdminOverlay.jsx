@@ -644,7 +644,98 @@ function MissionsPanel() {
   );
 }
 
-const TABS = ['User', 'Games', 'Missions', 'Admins'];
+// ── Announcements ─────────────────────────────────────────
+// Create/delete announcements. They surface in the notification bell
+// (tag/title/sub) and on the Featured Events page (with the body details).
+const ANN_ACCENTS = ['cyan', 'magenta', 'gold'];
+const ANN_ACCENT_COLORS = { cyan: '#19e6c4', magenta: '#ff3da0', gold: '#ffc94a' };
+
+function AnnouncementsPanel() {
+  const [list, setList] = useState([]);
+  const [tag, setTag] = useState('NEWS');
+  const [accent, setAccent] = useState('cyan');
+  const [title, setTitle] = useState('');
+  const [sub, setSub] = useState('');
+  const [body, setBody] = useState('');
+  const { busy, msg, wrap, setMsg } = useWrap();
+
+  const load = () => trpc.announcements.list.query({ limit: 20 }).then(setList).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const create = () => wrap(async () => {
+    if (!title.trim() || !sub.trim()) throw new Error('Title and subtitle are required');
+    await trpc.admin.createAnnouncement.mutate({
+      tag: tag.trim() || 'NEWS',
+      accent,
+      title: title.trim(),
+      sub: sub.trim(),
+      body: body.trim() || undefined,
+    });
+    setTitle(''); setSub(''); setBody('');
+    setMsg({ text: 'Announcement published', ok: true });
+    await load();
+  });
+
+  const remove = (id) => wrap(async () => {
+    await trpc.admin.deleteAnnouncement.mutate({ id });
+    await load();
+  });
+
+  return (
+    <div>
+      <div style={S.heading}>New announcement</div>
+      <div style={S.row}>
+        <input style={{ ...S.input, width: 90 }} placeholder="Tag" maxLength={12} value={tag}
+          onChange={e => setTag(e.target.value.toUpperCase())} />
+        {ANN_ACCENTS.map(a => (
+          <button key={a} onClick={() => setAccent(a)} disabled={busy}
+            style={{
+              background: accent === a ? '#10203a' : '#0a1220',
+              border: `1px solid ${accent === a ? ANN_ACCENT_COLORS[a] : '#2a3a58'}`,
+              color: ANN_ACCENT_COLORS[a], padding: '5px 12px', borderRadius: 4,
+              cursor: 'pointer', fontFamily: 'monospace', fontSize: 11,
+            }}>
+            {a}
+          </button>
+        ))}
+      </div>
+      <div style={S.row}>
+        <input style={{ ...S.input, width: '100%', boxSizing: 'border-box' }} placeholder="Title (shown in bell + events page)"
+          maxLength={64} value={title} onChange={e => setTitle(e.target.value)} />
+      </div>
+      <div style={S.row}>
+        <input style={{ ...S.input, width: '100%', boxSizing: 'border-box' }} placeholder="Subtitle (one-liner)"
+          maxLength={120} value={sub} onChange={e => setSub(e.target.value)} />
+      </div>
+      <div style={S.row}>
+        <textarea style={{ ...S.input, width: '100%', boxSizing: 'border-box', minHeight: 64, resize: 'vertical' }}
+          placeholder="Details (optional — shown on the Events page only)"
+          maxLength={600} value={body} onChange={e => setBody(e.target.value)} />
+      </div>
+      <button style={S.btn('#1a4a2a')} onClick={create} disabled={busy || !title.trim() || !sub.trim()}>
+        Publish announcement
+      </button>
+      {msg && <div style={msg.ok ? S.success : S.error}>{msg.text}</div>}
+
+      <hr style={S.divider} />
+      <div style={S.heading}>Live announcements ({list.length})</div>
+      {list.length === 0 && <div style={{ color: '#556', fontSize: 12 }}>None yet.</div>}
+      {list.map(a => (
+        <div key={a.id} style={S.gameRow}>
+          <span style={S.tag(ANN_ACCENT_COLORS[a.accent] ?? '#3a8fd4')}>{a.tag}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: '#dde', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
+            <div style={{ color: '#667', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.sub}</div>
+          </div>
+          <span style={{ color: '#445', fontSize: 10, flex: 'none' }}>{new Date(a.createdAt).toLocaleDateString()}</span>
+          <button style={S.danger} onClick={() => remove(a.id)} disabled={busy}>✕</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const TABS = ['User', 'Games', 'Missions', 'Announce', 'Admins'];
 
 export function AdminOverlay({ onClose }) {
   const [tab, setTab] = useState(0);
@@ -671,7 +762,8 @@ export function AdminOverlay({ onClose }) {
           {tab === 0 && <UserPanel />}
           {tab === 1 && <GamesPanel />}
           {tab === 2 && <MissionsPanel />}
-          {tab === 3 && <AdminsPanel />}
+          {tab === 3 && <AnnouncementsPanel />}
+          {tab === 4 && <AdminsPanel />}
         </div>
       </div>
     </div>

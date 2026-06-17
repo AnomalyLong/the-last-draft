@@ -1,10 +1,39 @@
 import React from 'react';
 import '../styles/lobby.css';
 import { FeaturedSection, BottomNav } from './LobbyScreen.jsx';
+import { useAnnouncements, timeAgo } from './TitleStrip.jsx';
 
-export default function FeaturedEventsScreen({ username, credits, onBack, onPlay, onCollection, onDraft, onAuction, onOptions }) {
+// Admin announcements — fuller cards than the bell dropdown (includes the
+// optional details body). Rendered under the NEON CUP hero.
+function AnnouncementsSection({ announcements }) {
+  if (!announcements.length) return null;
+  return (
+    <div className="lb2-announcements" data-testid="announcements-section">
+      <div className="lb2-ft-h">
+        <span className="lbl">ANNOUNCEMENTS</span>
+        <span className="meta">FROM THE FRONT OFFICE</span>
+      </div>
+      {announcements.map(a => (
+        <div key={a.id} className={`lb2-ft-news-row accent-${a.accent} lb2-ann-row`}>
+          <div className="lb2-ft-news-tag">{a.tag}</div>
+          <div className="lb2-ft-news-body">
+            <div className="lb2-ft-news-title">{a.title}</div>
+            <div className="lb2-ft-news-sub">{a.sub}</div>
+            {a.body && <div className="lb2-ann-details">{a.body}</div>}
+          </div>
+          <div className="lb2-ft-news-time">{timeAgo(a.createdAt)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function FeaturedEventsScreen({ username, credits, onBack, onPlay, onCollection, onDraft, onAuction, onOptions, announcements: announcementsProp }) {
   const [modal, setModal] = React.useState(null);
   const closeModal = () => setModal(null);
+  // Fetched from the server normally; the dev story passes mocks via prop.
+  const fetched = useAnnouncements();
+  const announcements = announcementsProp ?? fetched;
 
   return (
     <div className="lobby2" data-testid="featured-events-screen">
@@ -28,9 +57,10 @@ export default function FeaturedEventsScreen({ username, credits, onBack, onPlay
         <div className="lb2-topnav-right" />
       </div>
 
-      {/* Scrollable body — featured component only */}
+      {/* Scrollable body — featured hero + admin announcements */}
       <div className="lb2-body">
         <FeaturedSection onUnavailable={() => setModal('unavailable')} />
+        <AnnouncementsSection announcements={announcements} />
       </div>
 
       {/* Modal */}

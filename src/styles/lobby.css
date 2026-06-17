@@ -890,6 +890,33 @@
 .lb2-ft-news-row.accent-gold    { --row-c: #ffd97a; }
 .lb2-ft-news-row.accent-ink     { --row-c: rgba(180, 200, 220, 0.6); }
 
+/* ── Announcements (Featured Events page) ──
+   Admin-authored cards under the NEON CUP hero. Reuse the news-row look but
+   with a bordered card body and room for the multi-line details text. */
+.lb2-announcements {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+}
+.lb2-announcements .lb2-ann-row {
+  align-items: start;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(2, 6, 10, 0.55);
+}
+.lb2-announcements .lb2-ann-row:last-child { border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.lb2-ann-row .lb2-ft-news-title { white-space: normal; }
+.lb2-ann-details {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  line-height: 1.55;
+  color: var(--c-ink);
+  opacity: 0.85;
+  margin-top: 4px;
+  white-space: pre-line; /* respect admin-entered line breaks */
+}
+
 .lb2-ft-news-tag {
   font-family: var(--f-head);
   font-weight: 900;

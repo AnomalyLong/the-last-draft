@@ -3,6 +3,13 @@ import { PhoneFrameExpanded, DEVICES } from '../PhoneFrame.jsx';
 import { CrtOverlay } from '../StoryFrame.jsx';
 import FeaturedEventsScreen from '@src/components/FeaturedEventsScreen.jsx';
 
+// Mock admin announcements (mirrors the post.getChallenge → announcements.list shape).
+const MOCK_ANNOUNCEMENTS = [
+  { id: 'a1', tag: 'NEWS',  accent: 'cyan',    title: 'CHALLENGE POSTS ARE LIVE', sub: 'Post your roster on r/TheMBA — once per week', body: 'Create a Challenge Me post from the lobby missions.\nDefend your record — every result shows on your card.', createdAt: Date.now() - 2 * 3600_000 },
+  { id: 'a2', tag: 'PATCH', accent: 'gold',    title: 'v1.3 · CREDIT DRAFTS',     sub: 'Buy draft picks with credits — cost doubles monthly', body: 'First draft each month is 2,500 CR, doubling after. Picks bank until used.', createdAt: Date.now() - 26 * 3600_000 },
+  { id: 'a3', tag: 'EVENT', accent: 'magenta', title: 'SEASON 1 KICKOFF',          sub: 'Neon Cup qualifiers open soon', createdAt: Date.now() - 4 * 86400_000 },
+];
+
 const DESKTOP_PRESETS = [
   { label: '628×548 (Reddit)', w: 628, h: 548 },
   { label: '1920×1080', w: 1920, h: 1080 },
@@ -25,6 +32,7 @@ export default function FeaturedEventsStory() {
   const [desktopH, setDesktopH] = useState(548);
   const [scanlines, setScanlines] = useState(0.5);
   const [vignette, setVignette]   = useState(0.75);
+  const [withAnnouncements, setWithAnnouncements] = useState(true);
 
   const push = (msg) => setLog((l) => [`${new Date().toLocaleTimeString()} ${msg}`, ...l].slice(0, 12));
 
@@ -60,6 +68,10 @@ export default function FeaturedEventsStory() {
           VIG
           <input type="range" min={0} max={1} step={0.05} value={vignette}
             onChange={e => setVignette(Number(e.target.value))} style={{ width: 55 }} />
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" checked={withAnnouncements} onChange={e => setWithAnnouncements(e.target.checked)} />
+          Announcements
         </label>
         <button
           onClick={() => setMobile(m => !m)}
@@ -115,7 +127,7 @@ export default function FeaturedEventsStory() {
       {/* Preview */}
       {mobile ? (
         <PhoneFrameExpanded device={DEVICES[deviceKey]}>
-          <FeaturedEventsScreen username="peetan" credits={credits} {...handlers} />
+          <FeaturedEventsScreen username="peetan" credits={credits} announcements={withAnnouncements ? MOCK_ANNOUNCEMENTS : []} {...handlers} />
           <CrtOverlay scanlines={scanlines} vignette={vignette} />
         </PhoneFrameExpanded>
       ) : (
@@ -128,7 +140,7 @@ export default function FeaturedEventsStory() {
           background: '#02060a',
           flexShrink: 0,
         }}>
-          <FeaturedEventsScreen username="peetan" credits={credits} {...handlers} />
+          <FeaturedEventsScreen username="peetan" credits={credits} announcements={withAnnouncements ? MOCK_ANNOUNCEMENTS : []} {...handlers} />
           <CrtOverlay scanlines={scanlines} vignette={vignette} />
         </div>
       )}

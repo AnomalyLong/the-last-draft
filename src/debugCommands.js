@@ -23,6 +23,7 @@ export const COMMAND_META = {
   getUserFlairBySubreddit: { scope: 'both', help: 'getUserFlairBySubreddit [sub] — check user flair (default AnomalyGamesInc)' },
   checkSubActivity: { scope: 'both', help: 'checkSubActivity [sub] — scan recent comments/posts for a sub' },
   dumpRoster: { scope: 'both', help: 'dumpRoster — log server-side roster + lineup for the current user' },
+  dumpAdmins: { scope: 'both', help: 'dumpAdmins — list server-side admin usernames (admins only)' },
 
   // ── Title only ────────────────────────────────────────────────────────
   admin: { scope: 'title', help: 'admin — open admin overlay (admins only)' },
@@ -83,6 +84,17 @@ const sharedImpls = {
         ctx.addLog(`flair: text="${text}" css="${css}"`);
       })
       .catch(e => ctx.addLog(`flair error: ${e.message}`, 'err'));
+  },
+
+  dumpAdmins(args, ctx) {
+    ctx.addLog('fetching admin list...');
+    trpc.admin.getAdmins.query()
+      .then(admins => {
+        ctx.addLog(`${admins.length} admin(s) in Redis:`);
+        admins.forEach(a => ctx.addLog(`  ${a.username} (granted ${new Date(a.grantedAt).toISOString().slice(0,10)})`));
+        ctx.addLog('note: u/AfternoonNo3552 is also a hardcoded creator admin');
+      })
+      .catch(e => ctx.addLog(`error: ${e.message}`, 'err'));
   },
 
   dumpRoster(args, ctx) {

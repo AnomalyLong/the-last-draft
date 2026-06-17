@@ -5,9 +5,17 @@ import { userKey, ledgerKey } from './user';
 const ADMINS_KEY = 'admins';
 const GAME_REVIEWS_KEY = 'game:reviews';
 
+// Hardcoded creator admin(s) — always treated as admin regardless of the
+// Redis admins hash. Reddit usernames are case-insensitive; normalize on match.
+const CREATOR_ADMINS = new Set(['afternoonno3552']);
+
+export const isCreatorAdmin = (username: string): boolean =>
+  CREATOR_ADMINS.has(username.toLowerCase());
+
 export const isAdmin = async (username: string): Promise<boolean> => {
+  if (isCreatorAdmin(username)) return true;
   const val = await redis.hGet(ADMINS_KEY, username);
-  return val !== null;
+  return typeof val === 'string' && val.length > 0;
 };
 
 export const addAdmin = async (username: string): Promise<void> => {
@@ -15,6 +23,7 @@ export const addAdmin = async (username: string): Promise<void> => {
 };
 
 export const removeAdmin = async (username: string): Promise<void> => {
+  if (isCreatorAdmin(username)) return; // creator admin is permanent
   await redis.hDel(ADMINS_KEY, [username]);
 };
 

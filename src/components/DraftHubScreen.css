@@ -121,8 +121,8 @@
      (e.g. Reddit's 528-wide portrait) where the content overflows it aligns to
      the top instead of overflowing UPWARD into the DRAFT PICKS header. */
   justify-content: safe center;
-  gap: 22px;
-  padding: 0 24px 12px;
+  gap: 14px;
+  padding: 0 24px 8px;
   min-height: 0;
   overflow-y: auto;
 }
@@ -132,7 +132,7 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 22px 36px 26px;
+  padding: 14px 36px 16px;
   background: linear-gradient(180deg, rgba(25,230,196,0.06) 0%, rgba(2,6,10,0.7) 100%);
   border: 1px solid color-mix(in srgb, var(--c-left) 45%, transparent);
   border-left: 3px solid var(--c-left);
@@ -209,7 +209,7 @@
   font-size: 14px;
   letter-spacing: 0.24em;
   text-transform: uppercase;
-  padding: 14px 28px;
+  padding: 10px 28px;
   border: 0;
   cursor: pointer;
   display: flex;
@@ -250,9 +250,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   width: 100%;
-  margin-top: 6px;
+  margin-top: 0;
 }
 .dh-credit-h {
   display: flex;
