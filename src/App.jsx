@@ -27,7 +27,7 @@ function toAwayPlayers(roster = []) {
   }));
 }
 
-import { TitleScreen, SplashScreen, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FeaturedEventsScreen, FtueIntroVideo } from './components/index.js';
+import { TitleScreen, SplashScreen, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FeaturedEventsScreen, BattlePassScreen, FtueIntroVideo } from './components/index.js';
 import { TitleStrip } from './components/TitleStrip.jsx';
 
 // Column wrapper that pins the global TitleStrip (lobby header) above a
@@ -77,7 +77,7 @@ export default function App() {
   const [showInGameOptions, setShowInGameOptions] = React.useState(false);
 
   React.useEffect(() => {
-    if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'draftHub' || scene === 'collection' || scene === 'matchmaking' || scene === 'featuredEvents') {
+    if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'draftHub' || scene === 'collection' || scene === 'matchmaking' || scene === 'featuredEvents' || scene === 'battlePass') {
       bgMusic.stop();
       bounceBall.stop();
       titleMusic.start();
@@ -384,7 +384,7 @@ export default function App() {
             if (isFtue && !ftueIntroSeen) setScene('ftueIntro');
             else setScene('draftHub');
           }}
-          onAuction={() => {}}
+          onAuction={() => setScene('battlePass')}
           onOptions={() => setScene('options')}
           onEvents={() => setScene('featuredEvents')}
           onCreateChallenge={() => setChallengeModal('confirm')}
@@ -402,7 +402,22 @@ export default function App() {
             onPlay={() => setScene('title')}
             onCollection={() => setScene('collection')}
             onDraft={() => setScene('draftHub')}
-            onAuction={() => {}}
+            onAuction={() => setScene('battlePass')}
+            onOptions={() => setScene('options')}
+          />
+        </ScreenWithStrip>
+      )}
+
+      {!isInline && scene === 'battlePass' && (
+        <ScreenWithStrip credits={serverCredits} onEvents={() => setScene('featuredEvents')}>
+          <BattlePassScreen
+            username={username}
+            credits={serverCredits}
+            onBack={() => setScene('title')}
+            onPlay={() => setScene('title')}
+            onCollection={() => setScene('collection')}
+            onDraft={() => setScene('draftHub')}
+            onAuction={() => setScene('battlePass')}
             onOptions={() => setScene('options')}
           />
         </ScreenWithStrip>
@@ -843,8 +858,8 @@ export default function App() {
         </div>
       )}
 
-      {/* Debug: FTUE indicator */}
-      {isFtue && (
+      {/* Debug: FTUE indicator — admins only */}
+      {isFtue && isAdmin && (
         <div style={{
           position: 'absolute', bottom: 6, right: 6, zIndex: 20,
           background: 'rgba(0,0,0,0.75)', color: '#00ff88',

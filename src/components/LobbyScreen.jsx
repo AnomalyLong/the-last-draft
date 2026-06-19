@@ -4,6 +4,7 @@ import { RUN_FRAMES } from '../sprites/run.js';
 import { JERSEY_BASE } from '../constants.js';
 import { BballTip } from './BballTip.jsx';
 import { TitleStrip } from './TitleStrip.jsx';
+import { playSelect, playCancel, playCursor, playMenuSelect2 } from '../sound/ui.js';
 
 const POS_COLORS = { PG: '#3ea6ff', SG: '#a855f7', SF: '#19e6c4', PF: '#ff7a3c', C: '#ffc94a' };
 const RARITY_COLORS = { common: '#b0b8c8', rare: '#b0b8c8', super_rare: '#30c0e0', ultra_rare: '#ffc94a' };
@@ -113,7 +114,7 @@ function RosterStrip({ roster, onOpen }) {
 
   if (!roster.length) {
     return (
-      <div className="lb2-rstrip" onClick={onOpen} data-testid="roster-strip-empty">
+      <div className="lb2-rstrip" onClick={() => { playSelect(); onOpen?.(); }} onMouseEnter={() => playCursor()} data-testid="roster-strip-empty">
         <div className="lb2-rstrip-row">
           <div className="lb2-rstrip-label">
             <span className="lb2-rstrip-h">ROSTER</span>
@@ -149,7 +150,8 @@ function RosterStrip({ roster, onOpen }) {
       <div className="lb2-rstrip-row">
         <button
           className="lb2-rstrip-label"
-          onClick={e => { e.stopPropagation(); setCollapsed(c => !c); }}
+          onClick={e => { e.stopPropagation(); playMenuSelect2(); setCollapsed(c => !c); }}
+          onMouseEnter={() => playCursor()}
           aria-expanded={!collapsed}
         >
           <span className="lb2-rstrip-h">ROSTER</span>
@@ -167,7 +169,8 @@ function RosterStrip({ roster, onOpen }) {
                     <div key={i}
                          className={`lb2-rs-card tier-${tier} ${i === 0 ? 'leader' : ''} ${i === safeIdx ? 'selected' : ''}`}
                          style={{ '--pos-c': posColor, '--char-c': posColor, '--rc': rarityColor }}
-                         onClick={e => { e.stopPropagation(); setSelectedIdx(i); }}>
+                         onClick={e => { e.stopPropagation(); playMenuSelect2(); setSelectedIdx(i); }}
+                         onMouseEnter={() => playCursor()}>
                       {i === 0 && <div className="lb2-rs-leader">CAPTAIN</div>}
                       <div className="lb2-rs-pos">{p.pos}</div>
                       <div className="lb2-rs-img">
@@ -190,10 +193,10 @@ function RosterStrip({ roster, onOpen }) {
               </div>
             </div>
             {showNav && idx > 0 && (
-              <button className="lb2-rstrip-nav prev" onClick={e => { e.stopPropagation(); prev(); }}>‹</button>
+              <button className="lb2-rstrip-nav prev" onClick={e => { e.stopPropagation(); playCursor(); prev(); }} onMouseEnter={() => playCursor()}>‹</button>
             )}
             {showNav && idx < maxStart && (
-              <button className="lb2-rstrip-nav next" onClick={e => { e.stopPropagation(); next(); }}>›</button>
+              <button className="lb2-rstrip-nav next" onClick={e => { e.stopPropagation(); playCursor(); next(); }} onMouseEnter={() => playCursor()}>›</button>
             )}
           </div>
         )}
@@ -215,7 +218,8 @@ function RosterStrip({ roster, onOpen }) {
           </span>
           <button
             className="lb2-rs-details"
-            onClick={e => { e.stopPropagation(); onOpen?.(); }}
+            onClick={e => { e.stopPropagation(); playSelect(); onOpen?.(); }}
+            onMouseEnter={() => playCursor()}
           >
             VIEW DETAILS ▸
           </button>
@@ -232,7 +236,7 @@ export function FeaturedSection({ onUnavailable }) {
       <div className="lb2-ft-h">
         <span className="lbl">FEATURED</span>
         <span className="meta">EVENTS · NEWS · UPDATES</span>
-        <button className="lb2-ft-more">ALL ▸</button>
+        <button className="lb2-ft-more" onMouseEnter={() => playCursor()}>ALL ▸</button>
       </div>
       <div className="lb2-ft-hero">
         <div className="lb2-ft-hero-bg">
@@ -253,7 +257,7 @@ export function FeaturedSection({ onUnavailable }) {
             <span><em>FORMAT</em><b>BO3 · 5v5</b></span>
           </div>
         </div>
-        <button className="lb2-ft-hero-cta" onClick={onUnavailable}>
+        <button className="lb2-ft-hero-cta" onClick={() => { playSelect(); onUnavailable?.(); }} onMouseEnter={() => playCursor()}>
           <span className="g">⟫</span>
           <span>REGISTER</span>
         </button>
@@ -349,8 +353,8 @@ function DailyMissionsSection({ missions, animatingIds, onCreateChallenge, chall
       <div className="lb2-ft-h">
         <span className="lbl">MISSIONS</span>
         <div className="lb2-mission-tabs">
-          <button className={`lb2-mission-tab${tab === 'daily' ? ' active' : ''}`} onClick={() => setTab('daily')}>DAILY</button>
-          <button className={`lb2-mission-tab${tab === 'weekly' ? ' active' : ''}`} onClick={() => setTab('weekly')}>WEEKLY</button>
+          <button className={`lb2-mission-tab${tab === 'daily' ? ' active' : ''}`} onClick={() => { playMenuSelect2(); setTab('daily'); }} onMouseEnter={() => playCursor()}>DAILY</button>
+          <button className={`lb2-mission-tab${tab === 'weekly' ? ' active' : ''}`} onClick={() => { playMenuSelect2(); setTab('weekly'); }} onMouseEnter={() => playCursor()}>WEEKLY</button>
         </div>
         <span className="meta">{resetLabel}</span>
       </div>
@@ -380,7 +384,8 @@ function DailyMissionsSection({ missions, animatingIds, onCreateChallenge, chall
                   <button
                     className="lb2-mission-cta"
                     data-testid="mission-create-challenge"
-                    onClick={(e) => { e.stopPropagation(); challengeActive ? onViewChallenge?.() : onCreateChallenge?.(); }}
+                    onClick={(e) => { e.stopPropagation(); playSelect(); challengeActive ? onViewChallenge?.() : onCreateChallenge?.(); }}
+                    onMouseEnter={() => playCursor()}
                     style={{
                       background: 'linear-gradient(180deg,#ffe9bb,#ffd97a 55%,#d6a155)',
                       color: '#2a1a04',
@@ -415,7 +420,8 @@ function QueueButton({ q, selected, onSelect, onUnavailable }) {
   return (
     <button
       className={`lb2-qbtn accent-${q.accent} ${selected ? 'selected' : ''}`}
-      onClick={() => q.unavailable ? onUnavailable?.() : onSelect(q.id)}
+      onClick={() => { playSelect(); q.unavailable ? onUnavailable?.() : onSelect(q.id); }}
+      onMouseEnter={() => playCursor()}
       data-testid={`queue-btn-${q.id}`}
     >
       <div className="lb2-qb-mark" />
@@ -438,7 +444,7 @@ export function BottomNav({ onPlay, onCollection, onDraft, onAuction, onOptions,
     <nav className="bnav" data-testid="bottom-nav">
       <div className="bnav-bg" />
 
-      <button className="bnav-item" onClick={onCollection} data-testid="bnav-collection">
+      <button className="bnav-item" onClick={() => { playSelect(); onCollection?.(); }} onMouseEnter={() => playCursor()} data-testid="bnav-collection">
         <span className="bnav-ico">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="7" height="7" rx="1" />
@@ -450,7 +456,10 @@ export function BottomNav({ onPlay, onCollection, onDraft, onAuction, onOptions,
         <span className="bnav-lbl">ROSTER</span>
       </button>
 
-      <button className={`bnav-item${draftDisabled ? ' disabled' : ''}`} onClick={draftDisabled ? undefined : onDraft} data-testid="bnav-draft" disabled={draftDisabled}>
+      <button className={`bnav-item${draftDisabled ? ' disabled' : ''}`}
+        onClick={draftDisabled ? undefined : () => { playSelect(); onDraft?.(); }}
+        onMouseEnter={draftDisabled ? undefined : () => playCursor()}
+        data-testid="bnav-draft" disabled={draftDisabled}>
         <span className="bnav-ico">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="2" y="4" width="14" height="18" rx="1" />
@@ -461,7 +470,7 @@ export function BottomNav({ onPlay, onCollection, onDraft, onAuction, onOptions,
         <span className="bnav-lbl">DRAFT</span>
       </button>
 
-      <button className="bnav-play" onClick={onPlay} aria-label="Play" data-testid="bnav-play">
+      <button className="bnav-play" onClick={() => { playSelect(); onPlay?.(); }} onMouseEnter={() => playCursor()} aria-label="Play" data-testid="bnav-play">
         <span className="bnav-globe">
           <svg viewBox="0 0 100 100" className="bnav-globe-svg" aria-hidden="true">
             <defs>
@@ -489,16 +498,16 @@ export function BottomNav({ onPlay, onCollection, onDraft, onAuction, onOptions,
         <span className="bnav-globe-lbl">PLAY</span>
       </button>
 
-      <button className="bnav-item" onClick={onAuction} data-testid="bnav-auction">
+      <button className="bnav-item" onClick={() => { playSelect(); onAuction?.(); }} onMouseEnter={() => playCursor()} data-testid="bnav-battlepass">
         <span className="bnav-ico">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
           </svg>
         </span>
-        <span className="bnav-lbl">AUCTION</span>
+        <span className="bnav-lbl">BP</span>
       </button>
 
-      <button className="bnav-item" onClick={onOptions} data-testid="bnav-options">
+      <button className="bnav-item" onClick={() => { playSelect(); onOptions?.(); }} onMouseEnter={() => playCursor()} data-testid="bnav-options">
         <span className="bnav-ico">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />
@@ -684,7 +693,8 @@ export default function LobbyScreen({ username, credits, homeRoster, missions, i
               </div>
             </>)}
             <button
-              onClick={closeModal}
+              onClick={() => { playCancel(); closeModal(); }}
+              onMouseEnter={() => playCursor()}
               style={{
                 background: '#ff7a3c', color: '#000', border: 'none',
                 padding: '6px 20px', fontFamily: 'monospace', fontSize: 10,
@@ -716,7 +726,7 @@ export default function LobbyScreen({ username, credits, homeRoster, missions, i
               <span className="amt">+{missionPopup.reward}</span>
               <span className="unit">CR</span>
             </div>
-            <button className="lb2-mission-modal-cta" onClick={dismissMissionPopup}>
+            <button className="lb2-mission-modal-cta" onClick={() => { playSelect(); dismissMissionPopup(); }} onMouseEnter={() => playCursor()}>
               CLAIMED ▸
             </button>
           </div>

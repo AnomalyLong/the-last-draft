@@ -5,6 +5,7 @@ import '../../lobby/mobile-collection.css';
 import { IDLE_FRAMES } from '../sprites/idle.js';
 import { JERSEY_BASE, SKIN_PIXEL, HAIR_PIXEL, BEARD_PIXEL, resolvePalette } from '../constants.js';
 import { trpc } from '../trpc';
+import { playSelect, playCancel, playCursor, playMenuSelect2 } from '../sound/ui.js';
 
 // ─── Pixel sprite renderer ──────────────────────────────────────
 // When `className` is passed (e.g. "px-sprite px-band"), the SVG has no
@@ -143,7 +144,9 @@ function SquadSlot({ pos, player, isFirst, selected, onClick }) {
 
   if (!player) {
     return (
-      <button className="squad-slot empty" onClick={onClick}
+      <button className="squad-slot empty"
+              onClick={() => { playSelect(); onClick?.(); }}
+              onMouseEnter={() => playCursor()}
               style={{ '--c': posColor, '--ca': posColor }}>
         <span className="squad-pos" style={{ background: posColor }}>{pos}</span>
         <span className="empty-mark">+</span>
@@ -154,7 +157,8 @@ function SquadSlot({ pos, player, isFirst, selected, onClick }) {
   return (
     <button
       className={`squad-slot ${isFirst ? 'leader' : ''} ${selected ? 'selected' : ''}`}
-      onClick={onClick}
+      onClick={() => { playMenuSelect2(); onClick?.(); }}
+      onMouseEnter={() => playCursor()}
       style={{ '--c': rc.color, '--ca': rc.accent }}
     >
       {isFirst && <div className="leader-banner">LEADER</div>}
@@ -181,7 +185,8 @@ function PlayerBand({ player, lineupPos, selected, onClick }) {
   return (
     <button
       className={`player-band ${selected ? 'selected' : ''}`}
-      onClick={() => onClick(player.id)}
+      onClick={() => { playMenuSelect2(); onClick(player.id); }}
+      onMouseEnter={() => playCursor()}
       style={{ '--c': rc.color, '--ca': rc.accent }}
     >
       <div className="band-bg">
@@ -264,7 +269,7 @@ function DetailPanel({ player, lineupPos, lineup, rosterCount, onAssign, onRemov
           <span className="dn-en">{player.name}</span>
           <Stars count={allAbilities.length} size={16} />
         </div>
-        <button className="detail-view">
+        <button className="detail-view" onMouseEnter={() => playCursor()}>
           <span className="ico">⌕</span>
           <span>VIEW FULL</span>
         </button>
@@ -321,31 +326,40 @@ function DetailPanel({ player, lineupPos, lineup, rosterCount, onAssign, onRemov
               return (
                 <button key={pos} className={`act-btn ${isMySlot ? 'primary' : ''}`}
                   style={{ '--c': POS_COLORS[pos], borderColor: isMySlot ? POS_COLORS[pos] : undefined }}
-                  onClick={() => { isMySlot ? onRemove(pos) : onAssign(player.id, pos); setPickingPos(false); }}>
+                  onClick={() => { playSelect(); isMySlot ? onRemove(pos) : onAssign(player.id, pos); setPickingPos(false); }}
+                  onMouseEnter={() => playCursor()}>
                   <span className="ab-glyph" style={{ background: POS_COLORS[pos], color: '#fff' }}>{pos}</span>
                   <span className="ab-lbl">{isMySlot ? 'REMOVE' : isOccupied ? 'SWAP' : 'SET'}</span>
                 </button>
               );
             })}
-            <button className="act-btn" onClick={() => setPickingPos(false)}>
+            <button className="act-btn"
+              onClick={() => { playCancel(); setPickingPos(false); }}
+              onMouseEnter={() => playCursor()}>
               <span className="ab-lbl">CANCEL</span>
             </button>
           </div>
         ) : (
           <div className="actions">
-            <button className="act-btn primary" onClick={() => setPickingPos(true)}>
+            <button className="act-btn primary"
+              onClick={() => { playSelect(); setPickingPos(true); }}
+              onMouseEnter={() => playCursor()}>
               <span className="ab-glyph" style={lineupPos ? { background: POS_COLORS[lineupPos], color: '#fff' } : {}}>
                 {lineupPos ?? '＋'}
               </span>
               <span className="ab-lbl">{lineupPos ? 'CHANGE POS' : 'ASSIGN POS'}</span>
             </button>
             {canSend && (
-              <button className="act-btn" onClick={() => onAction('send')}>
+              <button className="act-btn"
+                onClick={() => { playSelect(); onAction('send'); }}
+                onMouseEnter={() => playCursor()}>
                 <span className="ab-glyph">➤</span>
                 <span className="ab-lbl">SEND</span>
               </button>
             )}
-            <button className="act-btn" onClick={() => onAction('auction')}>
+            <button className="act-btn"
+              onClick={() => { playSelect(); onAction('auction'); }}
+              onMouseEnter={() => playCursor()}>
               <span className="ab-glyph">¤</span>
               <span className="ab-lbl">AUCTION</span>
             </button>
@@ -448,7 +462,7 @@ function SendPlayerModal({ player, onClose, onSent }) {
   return (
     <div className="send-modal-scrim" onClick={onClose}>
       <div className="send-modal" onClick={e => e.stopPropagation()}>
-        <button className="send-modal-close" onClick={onClose} aria-label="Close">✕</button>
+        <button className="send-modal-close" onClick={() => { playCancel(); onClose?.(); }} onMouseEnter={() => playCursor()} aria-label="Close">✕</button>
         <div className="send-modal-h">
           <div className="send-modal-title">SEND PLAYER</div>
           <div className="send-modal-sub">{player.name} · LV {player.level}</div>
@@ -474,10 +488,13 @@ function SendPlayerModal({ player, onClose, onSent }) {
             </div>
             {error && <div className="send-modal-err">{error}</div>}
             <div className="send-modal-actions">
-              <button className="send-modal-btn ghost" onClick={onClose}>CANCEL</button>
+              <button className="send-modal-btn ghost"
+                onClick={() => { playCancel(); onClose?.(); }}
+                onMouseEnter={() => playCursor()}>CANCEL</button>
               <button
                 className="send-modal-btn primary"
-                onClick={handleSearch}
+                onClick={() => { playSelect(); handleSearch(); }}
+                onMouseEnter={() => playCursor()}
                 disabled={searching || !input.trim()}>
                 {searching ? 'SEARCHING…' : 'SEARCH'}
               </button>
@@ -493,8 +510,12 @@ function SendPlayerModal({ player, onClose, onSent }) {
             <div className="send-modal-warn">This cannot be undone. The player will be removed from your roster.</div>
             {error && <div className="send-modal-err">{error}</div>}
             <div className="send-modal-actions">
-              <button className="send-modal-btn ghost" onClick={() => { setPhase('input'); setResolved(null); }}>BACK</button>
-              <button className="send-modal-btn primary" onClick={handleConfirm}>CONFIRM SEND</button>
+              <button className="send-modal-btn ghost"
+                onClick={() => { playCancel(); setPhase('input'); setResolved(null); }}
+                onMouseEnter={() => playCursor()}>BACK</button>
+              <button className="send-modal-btn primary"
+                onClick={() => { playSelect(); handleConfirm(); }}
+                onMouseEnter={() => playCursor()}>CONFIRM SEND</button>
             </div>
           </>
         )}
@@ -634,7 +655,7 @@ export function CollectionScreen({ roster = [], lineup: lineupProp = {}, usernam
     <div ref={containerRef} data-state="collection" style={{ position: 'absolute', inset: 0, overflowY: 'auto' }}>
       <div className="collection">
         <div className="col-topnav">
-          <button className="back-btn" onClick={onBack}>
+          <button className="back-btn" onClick={() => { playCancel(); onBack?.(); }} onMouseEnter={() => playCursor()}>
             <span className="bk-glyph">◀</span>
           </button>
           <div className="col-title">
@@ -653,7 +674,7 @@ export function CollectionScreen({ roster = [], lineup: lineupProp = {}, usernam
         {selected && (
           <div className="col-detail-inline"
                style={{ '--c': rc.color, '--ca': rc.accent }}>
-            <button className="col-detail-close" onClick={() => setSelectedId(null)}>
+            <button className="col-detail-close" onClick={() => { playCancel(); setSelectedId(null); }} onMouseEnter={() => playCursor()}>
               <span className="cdc-glyph">✕</span>
               <span className="cdc-lbl">CLOSE</span>
             </button>

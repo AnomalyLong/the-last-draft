@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { id: 'brandGuide',  label: '📐 Brand Guide' },
   { id: 'lobby',       label: '🏙 Lobby Screen' },
   { id: 'featuredEvents', label: '🎟 Featured Events' },
+  { id: 'battlePass',  label: '🎖 Battle Pass' },
   { id: 'sprites',     label: '🎨 Sprites' },
   { id: 'splash',      label: '✨ Splash (Inline)' },
   { id: 'bidCard',     label: '🪙 Bid Card' },

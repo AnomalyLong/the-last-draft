@@ -3,7 +3,7 @@ import './DraftScreen.css';
 import { JERSEY_BASE, SKIN_PALETTES, SKIN_PIXEL, HAIR_PIXEL, BEARD_PIXEL, resolvePalette } from '../constants.js';
 import { IDLE_FRAMES, RUN_FRAMES } from '../sprites/index.js';
 import { ABILITIES } from '../abilities.js';
-import { playSelect, playCancel, playFlip } from '../sound/ui.js';
+import { playSelect, playCancel, playFlip, playCursor, playMenuSelect2 } from '../sound/ui.js';
 import { playRare } from '../sound/basketball.js';
 import { trpc } from '../trpc.js';
 import { BballTip } from './BballTip.jsx';
@@ -793,6 +793,7 @@ function DraftCardAnim({ card, idx, anim, picked, dimmed, onClick, tick, burstSt
           face==='back' ? 'is-back hologram' : 'is-front',
         ].filter(Boolean).join(' ')}
         onClick={onClick}
+        onMouseEnter={() => playCursor()}
         disabled={phase==='pad'||phase==='dna'}
         style={{
           '--tc': tier.color,
@@ -1328,7 +1329,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
     <div className={`draft-screen ${!entryDone && started ? 'is-downloading' : ''}`}>
       {/* TOP NAV */}
       <div className="draft-topnav">
-        <button className="draft-back-btn" onClick={() => { playCancel(); onBack(); }}>
+        <button className="draft-back-btn" onClick={() => { playCancel(); onBack(); }} onMouseEnter={() => playCursor()}>
           <span>◀</span>
         </button>
         <div className="draft-title">
@@ -1395,7 +1396,10 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
             {/* "INITIATE DRAFT SEQUENCE" button — shown before first pick */}
             {!started && (
               <div className="draft-start-overlay">
-                <button className="draft-start-btn" onClick={startDraft}>
+                <button
+                  className="draft-start-btn"
+                  onClick={() => { playSelect(); startDraft(); }}
+                  onMouseEnter={() => playCursor()}>
                   <span className="dsb-bracket">[</span>
                   <span>INITIATE DRAFT SEQUENCE</span>
                   <span className="dsb-bracket">]</span>
@@ -1442,7 +1446,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
             <>
               <div className="paid-result-title err">DRAFT FAILED</div>
               <div className="paid-result-sub">{paidError}</div>
-              <button className="paid-result-btn" onClick={() => { playCancel(); onPaidComplete?.(null); }}>
+              <button className="paid-result-btn" onClick={() => { playCancel(); onPaidComplete?.(null); }} onMouseEnter={() => playCursor()}>
                 BACK TO DRAFT HUB
               </button>
             </>
@@ -1463,7 +1467,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
                   {paidResult.name} joined your collection{typeof paidResult.costPaid === 'number' ? ` · ${paidResult.costPaid.toLocaleString()} CR` : ''}
                 </div>
                 <div className="paid-result-hint">Set your lineup in the Collection screen.</div>
-                <button className="paid-result-btn" onClick={() => { playSelect(); onPaidComplete?.(paidResult); }}>
+                <button className="paid-result-btn" onClick={() => { playSelect(); onPaidComplete?.(paidResult); }} onMouseEnter={() => playCursor()}>
                   DONE
                 </button>
               </>
@@ -1491,7 +1495,8 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
                 <div key={pos}
                   ref={el => { slotRefs.current[pos] = el; }}
                   className={`assign-slot ${isOccupied?'filled':''} ${isTarget?'droppable':''} ${isDropOver?'drop-over':''}`}
-                  onClick={() => handleSlotClick(pos)}>
+                  onClick={() => handleSlotClick(pos)}
+                  onMouseEnter={() => playCursor()}>
                   <div className="aslot-header" style={{ background:posColor }}>{pos}</div>
                   <div className="aslot-body">
                     {assigned ? <>
@@ -1540,7 +1545,8 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
                   style={{ '--tc':tier.color }}
                   onMouseDown={(e) => startDrag(e, player.id)}
                   onTouchStart={(e) => startDrag(e, player.id)}
-                  onClick={() => { if (!dragId) handleMiniCardClick(player.id); }}>
+                  onClick={() => { if (!dragId) handleMiniCardClick(player.id); }}
+                  onMouseEnter={() => playCursor()}>
                   <div className="acm-universe-header">U·{player.universeId ?? '???'}</div>
                   <div className="acm-body">
                     <div className="acm-sprite">
@@ -1573,19 +1579,22 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
           <div className="assign-actions">
             <button className="da-btn primary big"
               disabled={!canStart || saving}
-              onClick={handleStartGame}>
+              onClick={() => { playSelect(); handleStartGame(); }}
+              onMouseEnter={() => playCursor()}>
               <span>▶</span>
               <span>{saving ? 'SAVING...' : 'START GAME'}</span>
             </button>
             <button className="da-btn ghost"
               disabled={saving}
-              onClick={autoAssign}>
+              onClick={autoAssign}
+              onMouseEnter={() => playCursor()}>
               <span>✨</span><span>AUTO ASSIGN</span>
             </button>
             {canStart && !isFtue && (
               <button className="da-btn ghost"
                 disabled={saving}
-                onClick={handleSaveMenu}>
+                onClick={handleSaveMenu}
+                onMouseEnter={() => playCursor()}>
                 <span>{saving ? 'SAVING...' : 'SAVE & MENU'}</span>
               </button>
             )}
@@ -1603,11 +1612,12 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
           clicks "INITIATE DRAFT SEQUENCE". Clicking it kicks off the scan. */}
       {coachIntro && (
         <>
-        <div style={{ position:'fixed', inset:0, zIndex:19, cursor:'pointer' }} onClick={advanceCoachIntro} />
+        <div style={{ position:'fixed', inset:0, zIndex:19, cursor:'pointer' }} onClick={() => { playMenuSelect2(); advanceCoachIntro(); }} />
         <div className="draft-coach" style={{ pointerEvents: 'auto' }}>
           <svg viewBox="0 0 600 112" preserveAspectRatio="xMidYMid meet"
             width="100%" height="112" style={{ display: 'block', cursor: 'pointer' }}
-            onClick={advanceCoachIntro}>
+            onClick={() => { playMenuSelect2(); advanceCoachIntro(); }}
+            onMouseEnter={() => playCursor()}>
             <BballTip
               text={INTRO_LINES[introIdx]}
               charX={12} charY={12} scale={0.6}
@@ -1624,11 +1634,12 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
       {/* FTUE coach dialogue — blocks card interaction until dismissed. */}
       {coachActive && !coachIntro && (
         <>
-        <div style={{ position:'fixed', inset:0, zIndex:19, cursor:'pointer' }} onClick={() => setCoachDismissed(true)} />
+        <div style={{ position:'fixed', inset:0, zIndex:19, cursor:'pointer' }} onClick={() => { playMenuSelect2(); setCoachDismissed(true); }} />
         <div className="draft-coach" style={{ pointerEvents: 'auto' }}>
           <svg viewBox="0 0 600 112" preserveAspectRatio="xMidYMid meet"
             width="100%" height="112" style={{ display: 'block', cursor: 'pointer' }}
-            onClick={() => setCoachDismissed(true)}>
+            onClick={() => { playMenuSelect2(); setCoachDismissed(true); }}
+            onMouseEnter={() => playCursor()}>
             <BballTip
               text={coachLine}
               charX={12} charY={12} scale={0.6}

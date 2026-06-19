@@ -1,0 +1,919 @@
+/* ────────────────────────────────────────────────
+   BATTLE PASS — page styles + cyber featured card
+   ──────────────────────────────────────────────── */
+
+.battle-pass {
+  position: absolute;
+  inset: 0;
+  z-index: 56;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(192, 132, 255, 0.12), transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(25, 230, 196, 0.10), transparent 50%),
+    linear-gradient(180deg, rgba(2, 6, 10, 0.98) 0%, rgba(4, 2, 10, 0.99) 100%);
+  color: #d6e4f5;
+  font-family: 'Rajdhani', 'Inter', sans-serif;
+  /* Reddit's host CSS inherits line-height: 0 — set a sane base here so
+     every descendant gets a usable default unless it overrides. */
+  line-height: 1.4;
+  /* Container-query context — the responsive rules below key off the
+     width of THIS element, not the viewport. That way the dev-tools
+     phone preview (which renders a desktop browser viewport but a narrow
+     element) and the real Reddit iframe both trigger the right rules. */
+  container-type: inline-size;
+  container-name: battle-pass;
+}
+
+/* ── Top nav ─────────────────────────────────────── */
+/* Uses the shared .lb2-topnav classes from lobby.css so the heading matches
+   the Events / Draft / Collection pages. The only page-specific bit is the
+   tier chip in the right slot. */
+.bp-tier-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid rgba(25, 230, 196, 0.45);
+  background: rgba(25, 230, 196, 0.08);
+  line-height: 1;
+}
+.bp-tier-chip-lbl {
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.55);
+}
+.bp-tier-chip-val {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  color: #19e6c4;
+}
+
+/* ── Scroll body ─────────────────────────────────── */
+.bp-scroll {
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.bp-section { display: flex; flex-direction: column; gap: 16px; }
+
+.bps-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(192, 132, 255, 0.2);
+}
+.bpsh-mark { font-size: 18px; line-height: 1; }
+.bpsh-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.85);
+}
+.bpsh-sub {
+  margin-left: auto;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ── Progress card ───────────────────────────────── */
+.bp-progress-card {
+  background: linear-gradient(135deg, rgba(5, 15, 30, 0.7), rgba(10, 5, 25, 0.7));
+  border: 1px solid rgba(25, 230, 196, 0.2);
+  padding: 32px;
+  display: flex;
+  align-items: center;
+  gap: 40px;
+}
+.bp-progress { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.bpp-track {
+  height: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  position: relative;
+  overflow: hidden;
+}
+.bpp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #19e6c4, #c084ff);
+  box-shadow: 0 0 12px rgba(25, 230, 196, 0.6);
+}
+.bpp-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 16px;
+  letter-spacing: 0.2em;
+  line-height: 1;
+}
+.bppm-val { color: #19e6c4; font-weight: 700; line-height: 1; }
+.bppm-pct { color: rgba(255, 255, 255, 0.5); line-height: 1; }
+
+.bppc-next {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.bppcn-lbl { font-size: 14px; letter-spacing: 0.32em; line-height: 1; color: rgba(255, 255, 255, 0.4); }
+.bppcn-val { font-size: 28px; font-weight: 800; color: #c084ff; letter-spacing: 0.08em; line-height: 1; }
+
+/* ════════════════════════════════════════════════════
+   FEATURED PREMIUM PASS — cyber-cut hero card
+   ════════════════════════════════════════════════════ */
+
+.bp-featured-sec { padding-top: 8px; }
+
+.bp-featured-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  filter: drop-shadow(0 0 40px rgba(192, 132, 255, 0.25));
+}
+
+/* Left sidebar decoration */
+.bpf-sidebar {
+  position: relative;
+  align-self: stretch;
+  width: 22px;
+  margin-right: 8px;
+  border: 3px solid transparent;
+  border-image: linear-gradient(180deg, #19e6c4 0%, #c084ff 100%) 1;
+  background: linear-gradient(135deg, rgba(25, 230, 196, 0.55), rgba(192, 132, 255, 0.55));
+  -webkit-mask: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.45) 18%, rgba(0, 0, 0, 0.45) 82%, #000 100%);
+  mask: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.45) 18%, rgba(0, 0, 0, 0.45) 82%, #000 100%);
+  backdrop-filter: saturate(180%) blur(6px);
+  box-shadow:
+    0 0 24px rgba(192, 132, 255, 0.35),
+    0 0 48px rgba(25, 230, 196, 0.18);
+}
+.bpf-sidebar-tab {
+  position: absolute;
+  left: 100%;
+  top: 3rem;
+  width: 7px;
+  height: 40%;
+  background: linear-gradient(180deg, #19e6c4, #c084ff);
+  opacity: 0.72;
+  clip-path: polygon(0 0, 0 100%, 100% calc(100% - 10px), 100% 10px);
+  box-shadow: 0 0 8px rgba(192, 132, 255, 0.5);
+}
+
+/* Card body — clip-path corner cut */
+.bp-featured-card {
+  --bpf-corner: 36px;
+  --bpf-border: 3px;
+  --bpf-clip: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - var(--bpf-corner)),
+    calc(100% - var(--bpf-corner)) 100%,
+    0 100%
+  );
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 0;
+  min-height: 440px;
+  background:
+    linear-gradient(135deg, rgba(8, 18, 35, 0.94) 0%, rgba(18, 8, 32, 0.94) 100%);
+  clip-path: var(--bpf-clip);
+  box-shadow:
+    inset 0 0 80px rgba(192, 132, 255, 0.10),
+    inset 0 0 60px rgba(25, 230, 196, 0.06);
+  overflow: hidden;
+}
+
+/* Gradient border outline that follows the clip-path */
+.bpf-border-ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  clip-path: var(--bpf-clip);
+  background: linear-gradient(135deg, #19e6c4 0%, #c084ff 100%);
+  padding: var(--bpf-border);
+  box-sizing: border-box;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  z-index: 15;
+}
+
+/* Diagonal accent line across the bottom-right cut */
+.bpf-corner-line {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: var(--bpf-corner);
+  height: var(--bpf-corner);
+  pointer-events: none;
+  z-index: 16;
+  overflow: hidden;
+}
+.bpf-corner-line::after {
+  content: "";
+  position: absolute;
+  height: calc(var(--bpf-border) * 2);
+  width: 200%;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  transform: rotate(135deg);
+  background: linear-gradient(90deg, #19e6c4, #c084ff);
+  box-shadow:
+    0 0 8px rgba(192, 132, 255, 0.7),
+    0 0 16px rgba(25, 230, 196, 0.5);
+}
+
+/* Version tag */
+.bpf-version {
+  position: absolute;
+  top: 16px;
+  right: 28px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  color: rgba(25, 230, 196, 0.5);
+  z-index: 17;
+  pointer-events: none;
+}
+
+/* Left art panel */
+.bpf-art {
+  position: relative;
+  background:
+    radial-gradient(circle at 50% 60%, rgba(192, 132, 255, 0.25), transparent 65%),
+    linear-gradient(135deg, rgba(192, 132, 255, 0.10), rgba(25, 230, 196, 0.05));
+  border-right: 1px solid rgba(192, 132, 255, 0.2);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.bpf-art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(25, 230, 196, 0.03) 3px 4px);
+  pointer-events: none;
+}
+.bpf-art-placeholder {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.bpf-art-glyph {
+  font-size: 160px;
+  line-height: 1;
+  background: linear-gradient(135deg, #19e6c4, #c084ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 24px rgba(192, 132, 255, 0.5));
+}
+.bpf-art-label {
+  font-size: 13px;
+  letter-spacing: 0.32em;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+/* Right content panel */
+.bpf-content {
+  position: relative;
+  padding: 44px 52px 38px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.bpf-title {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin: 0;
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  background: linear-gradient(135deg, #ffffff 0%, #c084ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 30px rgba(192, 132, 255, 0.4);
+}
+.bpf-title-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 2px solid #c084ff;
+  border-radius: 50%;
+  color: #c084ff;
+  -webkit-text-fill-color: #c084ff;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  background: transparent;
+  box-shadow: 0 0 12px rgba(192, 132, 255, 0.4);
+}
+
+.bpf-block-rewards { padding-left: 80px; }
+
+.bpf-block { display: flex; flex-direction: column; gap: 10px; }
+
+.bpf-blocks-row {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: start;
+  gap: 64px;
+  align-items: start;
+}
+
+/* Rewards grid — base: single row, 4 columns (overridden by media queries below) */
+.bpf-rewards-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.bpf-reward-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.bpf-reward-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  text-transform: uppercase;
+}
+
+@container battle-pass (max-width: 1100px) {
+  /* Shrink the art panel so the content panel can keep blocks side-by-side */
+  .bp-featured-card {
+    grid-template-columns: 240px 1fr;
+  }
+  .bpf-art-glyph { font-size: 110px; }
+  .bpf-art-label { font-size: 11px; }
+  .bpf-content { padding: 32px 36px 28px; }
+  .bpf-title { font-size: 44px; }
+  .bpf-reward { width: 72px; height: 72px; }
+  .bpf-reward-glyph { font-size: 36px; }
+}
+
+@container battle-pass (max-width: 940px) {
+  /* Final squeeze before mobile breakpoint kicks in at 880px */
+  .bp-featured-card {
+    grid-template-columns: 180px 1fr;
+  }
+  .bpf-art-glyph { font-size: 84px; }
+  .bpf-art-label { display: none; }
+  .bpf-blocks-row { gap: 80px; }
+  .bpf-block-rewards { padding-left: 0; }
+  .bpf-reward { width: 64px; height: 64px; }
+  .bpf-reward-glyph { font-size: 30px; }
+}
+
+/* ── Compact layout: tablet & mobile ────────────── */
+@container battle-pass (max-width: 880px) {
+  /* Heading shrinks via the shared .lb2-tt-* mobile rules in lobby.css.
+     Battle-pass only needs to shrink the tier chip + body padding. */
+  .bp-tier-chip { padding: 4px 8px; gap: 6px; }
+  .bp-tier-chip-lbl { font-size: 9px; letter-spacing: 0.18em; }
+  .bp-tier-chip-val { font-size: 12px; }
+  .bp-scroll { padding: 20px 16px 16px; gap: 22px; }
+
+  .bp-featured-wrap {
+    flex-direction: column;
+  }
+
+  /* Sidebar decoration becomes a horizontal stripe above the card */
+  .bpf-sidebar {
+    width: auto;
+    height: 14px;
+    margin-right: 0;
+    margin-bottom: 8px;
+    -webkit-mask: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, 0.45) 18%, rgba(0, 0, 0, 0.45) 82%, #000 100%);
+    mask: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, 0.45) 18%, rgba(0, 0, 0, 0.45) 82%, #000 100%);
+  }
+  .bpf-sidebar-tab {
+    left: 3rem;
+    top: 100%;
+    width: 40%;
+    height: 7px;
+    clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 10px 100%);
+  }
+
+  .bp-featured-card {
+    --bpf-corner: 24px;
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  /* Drop the art panel entirely on narrow screens — it's the main height hog */
+  .bpf-art { display: none; }
+
+  .bpf-content {
+    padding: 22px 22px 22px;
+    gap: 14px;
+  }
+
+  /* Title row gets a compact inline glyph badge to replace the dropped art */
+  .bpf-title {
+    font-size: 30px;
+    gap: 12px;
+  }
+  .bpf-title::before {
+    content: "◆";
+    color: #c084ff;
+    font-size: 28px;
+    filter: drop-shadow(0 0 8px rgba(192, 132, 255, 0.6));
+  }
+  .bpf-title-mark {
+    width: 26px;
+    height: 26px;
+    font-size: 14px;
+    margin-left: auto;
+  }
+
+  /* Stack the two blocks vertically — at iframe widths the side-by-side
+     layout squishes both columns and clips the BUY TO RECEIVE header. */
+  .bpf-blocks-row {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .bpf-block-rewards { padding-left: 0; }
+
+  .bpf-block-head {
+    font-size: 12px;
+    padding: 6px 14px;
+  }
+
+  /* Tighter perks list */
+  .bpf-perks {
+    font-size: 13px;
+    gap: 4px;
+    line-height: 1.4;
+  }
+
+  /* Rewards row gets the full width back — keep 4 columns so the four
+     items sit in one tidy line under the block heading. */
+  .bpf-rewards-row { gap: 10px; grid-template-columns: repeat(4, 1fr); }
+  .bpf-reward { width: 58px; height: 58px; }
+  .bpf-reward-glyph { font-size: 28px; }
+  .bpf-reward-tag { font-size: 9px; top: 3px; right: 5px; }
+  .bpf-reward-count { font-size: 10px; bottom: 3px; }
+
+  .bpf-disclaimer {
+    font-size: 11px;
+    padding: 8px 10px;
+    gap: 8px;
+    line-height: 1.35;
+  }
+
+  .bpf-cta-row { gap: 10px; padding-top: 4px; }
+  .bpf-cta {
+    padding: 12px 16px;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+  }
+
+  .bpf-version {
+    font-size: 9px;
+    top: 8px;
+    right: 14px;
+  }
+
+  /* Compact tiles for the tier grid on small screens */
+  .bp-tiers-grid {
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 10px;
+  }
+  .bp-tier { padding: 14px; gap: 10px; }
+  .bptr-glyph { font-size: 38px; }
+  .bptr-name { font-size: 11px; letter-spacing: 0.08em; }
+
+  /* Progress card stacks on narrow screens */
+  .bp-progress-card { flex-direction: column; align-items: stretch; gap: 16px; padding: 18px; }
+  .bppc-next { align-items: flex-start; }
+
+  /* Skip + challenges padding */
+  .bp-skip-card { gap: 14px; padding: 14px 16px; flex-wrap: wrap; }
+  .bpsk-title { font-size: 13px; }
+  .bpsk-price { font-size: 13px; }
+  .bpsk-btn { padding: 10px 18px; font-size: 12px; }
+  .bpcl-item { padding: 14px 16px; gap: 14px; }
+  .bpclii-name { font-size: 13px; }
+  .bpcli-reward { font-size: 12px; }
+}
+
+@container battle-pass (max-width: 560px) {
+  .bp-featured-card { --bpf-corner: 20px; }
+  .bpf-content { padding: 18px 16px; gap: 12px; }
+  .bpf-title { font-size: 24px; }
+  .bpf-title::before { font-size: 22px; }
+  .bpf-perks { font-size: 12px; }
+  .bpf-cta-row { flex-direction: column; gap: 8px; }
+
+  /* At phone widths the 4-tile row would overflow — fall back to a 2×2 grid. */
+  .bpf-rewards-row { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .bpf-reward { width: 64px; height: 64px; }
+  .bpf-reward-glyph { font-size: 30px; }
+
+  /* Very narrow screens: drop the tier-chip label, keep just the value */
+  .bp-tier-chip-lbl { display: none; }
+}
+.bpf-block-head {
+  display: inline-block;
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  line-height: 1;
+  color: #fff;
+  background: linear-gradient(90deg, rgba(192, 132, 255, 0.5), rgba(192, 132, 255, 0));
+  border-left: 3px solid #c084ff;
+  align-self: flex-start;
+}
+
+/* Perks list */
+.bpf-perks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 16px;
+  color: rgba(220, 230, 245, 0.88);
+  line-height: 1.5;
+}
+.bpf-perks li {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.bpf-bullet {
+  color: #c084ff;
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Rewards grid base moved above media queries */
+
+.bpf-reward {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+  border: 1px solid rgba(192, 132, 255, 0.3);
+  display: grid;
+  place-items: center;
+  clip-path: polygon(
+    0 0, 100% 0,
+    100% calc(100% - 12px), calc(100% - 12px) 100%,
+    0 100%
+  );
+}
+.bpf-reward-glyph {
+  font-size: 42px;
+  line-height: 1;
+  filter: drop-shadow(0 0 8px currentColor);
+}
+.bpf-reward-tag {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 700;
+}
+.bpf-reward-count {
+  position: absolute;
+  bottom: 6px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+}
+
+/* Disclaimer */
+.bpf-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 14px;
+  color: rgba(220, 230, 245, 0.65);
+  padding: 12px 16px;
+  background: rgba(255, 200, 80, 0.04);
+  border-left: 2px solid rgba(255, 200, 80, 0.4);
+  line-height: 1.45;
+}
+.bpf-disc-mark { color: rgba(255, 200, 80, 0.8); font-size: 15px; line-height: 1.45; flex-shrink: 0; }
+
+/* CTA row */
+.bpf-cta-row {
+  margin-top: auto;
+  display: flex;
+  gap: 16px;
+  padding-top: 12px;
+}
+
+.bpf-cta {
+  position: relative;
+  flex: 1;
+  appearance: none;
+  border: 0;
+  padding: 20px 28px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: all 200ms;
+  clip-path: polygon(
+    16px 0, calc(100% - 16px) 0,
+    100% 50%,
+    calc(100% - 16px) 100%, 16px 100%,
+    0 50%
+  );
+}
+.bpf-cta-corner { display: none; }
+
+.bpf-cta-claim {
+  background: linear-gradient(135deg, rgba(25, 230, 196, 0.18), rgba(25, 230, 196, 0.06));
+  color: #19e6c4;
+  box-shadow: inset 0 0 0 1px rgba(25, 230, 196, 0.5);
+}
+.bpf-cta-claim:hover {
+  background: linear-gradient(135deg, rgba(25, 230, 196, 0.35), rgba(25, 230, 196, 0.15));
+  box-shadow:
+    inset 0 0 0 1px #19e6c4,
+    0 0 24px rgba(25, 230, 196, 0.4);
+}
+
+.bpf-cta-buy {
+  background: linear-gradient(135deg, #c084ff 0%, #7c4dff 100%);
+  color: #fff;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+    0 0 24px rgba(192, 132, 255, 0.4);
+}
+.bpf-cta-buy:hover {
+  background: linear-gradient(135deg, #d9a0ff 0%, #9466ff 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 0 36px rgba(192, 132, 255, 0.7);
+  transform: translateY(-1px);
+}
+
+.bpf-cta-glyph { font-size: 18px; line-height: 1; }
+
+/* ── Tier grid (other sections) ──────────────────── */
+.bp-track-header {
+  display: flex;
+  gap: 14px;
+}
+.bpth-label {
+  font-size: 14px;
+  letter-spacing: 0.24em;
+  line-height: 1;
+  padding: 6px 16px;
+  background: rgba(25, 230, 196, 0.12);
+  color: #19e6c4;
+  border-left: 2px solid #19e6c4;
+}
+.bpth-label.premium {
+  background: rgba(192, 132, 255, 0.12);
+  color: #c084ff;
+  border-color: #c084ff;
+}
+
+.bp-tiers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+.bp-tier {
+  background: linear-gradient(135deg, rgba(5, 15, 30, 0.7), rgba(10, 5, 25, 0.7));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+  transition: all 200ms;
+}
+.bp-tier.active {
+  border-color: var(--reward-color, #19e6c4);
+  box-shadow: 0 0 20px color-mix(in oklch, var(--reward-color, #19e6c4) 30%, transparent);
+}
+.bp-tier.premium.active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(192, 132, 255, 0.06), transparent);
+  pointer-events: none;
+}
+.bpt-marker {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.5);
+}
+.bptm-num {
+  font-weight: 800;
+  font-size: 16px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.85);
+}
+.bptm-lock { color: #ffc94a; font-size: 16px; line-height: 1; }
+
+.bpt-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.bptr-glyph {
+  font-size: 52px;
+  line-height: 1;
+  color: var(--reward-color, #19e6c4);
+  filter: drop-shadow(0 0 8px currentColor);
+}
+.bptr-name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+}
+.bptr-rarity {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--reward-color, #19e6c4);
+  letter-spacing: 0.16em;
+}
+
+/* ── Skip tier card ──────────────────────────────── */
+.bp-skip-card {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 24px 32px;
+  background: linear-gradient(135deg, rgba(255, 201, 74, 0.10), rgba(5, 15, 30, 0.7));
+  border: 1px solid rgba(255, 201, 74, 0.3);
+}
+.bpsk-icon { font-size: 32px; line-height: 1; color: #ffc94a; }
+.bpsk-title { font-weight: 800; letter-spacing: 0.16em; font-size: 16px; line-height: 1.2; flex: 1; }
+.bpsk-price { font-size: 16px; letter-spacing: 0.12em; line-height: 1; color: #ffc94a; font-weight: 700; }
+.bpsk-btn {
+  appearance: none;
+  border: 2px solid #ffc94a;
+  background: rgba(255, 201, 74, 0.1);
+  color: #ffc94a;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  padding: 14px 26px;
+  cursor: pointer;
+  transition: all 200ms;
+}
+.bpsk-btn:hover { background: rgba(255, 201, 74, 0.25); box-shadow: 0 0 16px rgba(255, 201, 74, 0.4); }
+
+/* ── Locked-section overlay ──────────────────────── */
+.bp-locked-wrap {
+  position: relative;
+}
+.bp-locked-wrap .bp-challenges-list {
+  filter: blur(2px) grayscale(0.8);
+  opacity: 0.45;
+  pointer-events: none;
+  user-select: none;
+}
+.bp-lock-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(2, 6, 10, 0.55);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(192, 132, 255, 0.25);
+  pointer-events: auto;
+}
+.bp-lock-icon {
+  font-size: 36px;
+  line-height: 1;
+  filter: drop-shadow(0 0 12px rgba(192, 132, 255, 0.6));
+}
+.bp-lock-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  line-height: 1;
+  color: #c084ff;
+}
+.bp-lock-sub {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+  padding: 0 16px;
+}
+
+/* ── Challenges ──────────────────────────────────── */
+.bp-challenges-list { display: flex; flex-direction: column; gap: 12px; }
+.bpcl-item {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 20px 26px;
+  background: rgba(5, 15, 30, 0.5);
+  border-left: 2px solid rgba(192, 132, 255, 0.4);
+}
+.bpcli-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  background: rgba(192, 132, 255, 0.15);
+  color: #c084ff;
+  border: 1px solid rgba(192, 132, 255, 0.4);
+  font-size: 18px;
+  line-height: 1;
+}
+.bpcli-info { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.bpclii-name { font-size: 16px; font-weight: 700; line-height: 1.2; color: rgba(255, 255, 255, 0.92); letter-spacing: 0.04em; }
+.bpclip-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+.bpclip-fill { height: 100%; background: linear-gradient(90deg, #19e6c4, #c084ff); }
+.bpcli-reward {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  color: #19e6c4;
+  letter-spacing: 0.16em;
+}
+
+/* ── Footer tag ──────────────────────────────────── */
+.bp-footer-tag {
+  text-align: center;
+  padding: 32px;
+  font-size: 13px;
+  letter-spacing: 0.32em;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.35);
+  font-family: 'Courier New', monospace;
+}

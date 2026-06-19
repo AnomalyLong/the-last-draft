@@ -49,7 +49,7 @@ export default function FeaturedEventsScreen({ username, credits, onBack, onPlay
           <span>◀</span>
         </button>
         <div className="lb2-topnav-title">
-          <span className="lb2-tt-big">FEATURED EVENTS</span>
+          <span className="lb2-tt-big">EVENTS</span>
           <span className="lb2-tt-sub">LIMITED-TIME DROPS</span>
         </div>
         {/* Credits now live in the global TitleStrip above — keep the spacer so

@@ -36,14 +36,19 @@ export function useAnnouncements(limit = 10) {
   return items;
 }
 
-function NotifDropdown({ announcements }) {
+function NotifDropdown({ announcements, onSelect }) {
   const rows = announcements.length
     ? announcements.map(a => ({ key: a.id, tag: a.tag, accent: a.accent, title: a.title, sub: a.sub, time: timeAgo(a.createdAt) }))
     : NOTIF_ITEMS.map(n => ({ key: n.tag, ...n }));
   return (
     <div className="lb2-notif-dropdown" data-testid="notif-dropdown">
       {rows.map(n => (
-        <div key={n.key} className={`lb2-ft-news-row accent-${n.accent}`}>
+        <div key={n.key}
+          className={`lb2-ft-news-row accent-${n.accent}`}
+          role={onSelect ? 'button' : undefined}
+          tabIndex={onSelect ? 0 : undefined}
+          onClick={onSelect}
+          style={onSelect ? { cursor: 'pointer' } : undefined}>
           <div className="lb2-ft-news-tag">{n.tag}</div>
           <div className="lb2-ft-news-body">
             <div className="lb2-ft-news-title">{n.title}</div>
@@ -102,7 +107,12 @@ export function TitleStrip({ credits = 0, onEvents }) {
           {hasUnread && <span className="lb2-ts-bell-dot" data-testid="notif-unread-dot" />}
         </button>
       </div>
-      {showNotifs && <NotifDropdown announcements={announcements} />}
+      {showNotifs && (
+        <NotifDropdown
+          announcements={announcements}
+          onSelect={() => { setShowNotifs(false); onEvents?.(); }}
+        />
+      )}
     </div>
   );
 }

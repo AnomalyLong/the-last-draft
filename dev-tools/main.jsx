@@ -12,6 +12,7 @@ import AdminStory from './AdminStory.jsx';
 import MatchmakingStory from './stories/MatchmakingStory.jsx';
 import LobbyStory from './stories/LobbyStory.jsx';
 import FeaturedEventsStory from './stories/FeaturedEventsStory.jsx';
+import BattlePassStory from './stories/BattlePassStory.jsx';
 import SplashStory from './stories/SplashStory.jsx';
 import BidCardStory from './stories/BidCardStory.jsx';
 import BrandGuideStory from './stories/BrandGuideStory.jsx';
@@ -21,6 +22,7 @@ const pages = {
   brandGuide:   BrandGuideStory,
   lobby:        LobbyStory,
   featuredEvents: FeaturedEventsStory,
+  battlePass:   BattlePassStory,
   sprites:      SpritePreview,
   splash:       SplashStory,
   bidCard:      BidCardStory,

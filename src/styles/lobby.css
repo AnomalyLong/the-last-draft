@@ -207,6 +207,19 @@
   background: var(--c-right);
   box-shadow: 0 0 4px var(--c-right);
 }
+
+/* Mobile / narrow viewports: shrink the centered top-nav title so long
+   labels like "FEATURED EVENTS" don't reach into the back button.
+   Anything <= 480px is the Reddit portrait iframe range. */
+@media (max-width: 480px) {
+  .lb2-tt-big {
+    font-size: 18px;
+    letter-spacing: 0.18em;
+  }
+  .lb2-tt-sub { font-size: 9px; letter-spacing: 0.18em; }
+  .lb2-topnav-back { padding: 10px 12px; font-size: 12px; }
+  .lb2-topnav { padding: 0 8px; gap: 8px; }
+}
 .lb2-notif-dropdown {
   position: absolute;
   top: 100%;
