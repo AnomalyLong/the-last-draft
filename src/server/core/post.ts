@@ -82,7 +82,7 @@ export const createChallengePost = async (
   }
 
   const post = await reddit.submitCustomPost({
-    title: `${username}'s team is open for challenge — r/TheMBA`,
+    title: `${username}'s team is open for challenge — r/LastDraftGame`,
   });
   const postId = post.id;
   const now = Date.now();

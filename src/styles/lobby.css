@@ -113,6 +113,18 @@
 }
 .lb2-ts-back:hover { opacity: 1; }
 .lb2-ts-time { color: var(--c-left); font-weight: 700; text-shadow: 0 0 6px var(--c-left); }
+
+/* Brief celebratory flash when credits land here — triggered by the
+   BattlePassScreen after its credit-warp coins arrive. Class is added
+   imperatively for ~700ms then removed. */
+.lb2-ts-time-pulse {
+  animation: lb2TimePulse 700ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+@keyframes lb2TimePulse {
+  0%   { transform: scale(1);    color: var(--c-left); text-shadow: 0 0 6px var(--c-left); }
+  35%  { transform: scale(1.22); color: #ffd97a;        text-shadow: 0 0 24px #ffd97a, 0 0 12px rgba(255, 217, 122, 0.8); }
+  100% { transform: scale(1);    color: var(--c-left); text-shadow: 0 0 6px var(--c-left); }
+}
 .lb2-ts-right {
   display: flex;
   align-items: center;
@@ -1128,6 +1140,26 @@
   color: #ffd97a;
   opacity: 0.85;
 }
+.lb2-mission-claim-btn {
+  appearance: none;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  color: #5bf2d4;
+  background: rgba(91, 242, 212, 0.1);
+  border: 1px solid rgba(91, 242, 212, 0.45);
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.lb2-mission-claim-btn:hover {
+  background: rgba(91, 242, 212, 0.22);
+  border-color: rgba(91, 242, 212, 0.7);
+}
+
 .lb2-mission-modal-cta {
   appearance: none;
   border: 1px solid #5bf2d4;

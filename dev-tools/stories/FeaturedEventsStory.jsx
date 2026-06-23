@@ -5,7 +5,7 @@ import FeaturedEventsScreen from '@src/components/FeaturedEventsScreen.jsx';
 
 // Mock admin announcements (mirrors the post.getChallenge → announcements.list shape).
 const MOCK_ANNOUNCEMENTS = [
-  { id: 'a1', tag: 'NEWS',  accent: 'cyan',    title: 'CHALLENGE POSTS ARE LIVE', sub: 'Post your roster on r/TheMBA — once per week', body: 'Create a Challenge Me post from the lobby missions.\nDefend your record — every result shows on your card.', createdAt: Date.now() - 2 * 3600_000 },
+  { id: 'a1', tag: 'NEWS',  accent: 'cyan',    title: 'CHALLENGE POSTS ARE LIVE', sub: 'Post your roster on r/LastDraftGame — once per week', body: 'Create a Challenge Me post from the lobby missions.\nDefend your record — every result shows on your card.', createdAt: Date.now() - 2 * 3600_000 },
   { id: 'a2', tag: 'PATCH', accent: 'gold',    title: 'v1.3 · CREDIT DRAFTS',     sub: 'Buy draft picks with credits — cost doubles monthly', body: 'First draft each month is 2,500 CR, doubling after. Picks bank until used.', createdAt: Date.now() - 26 * 3600_000 },
   { id: 'a3', tag: 'EVENT', accent: 'magenta', title: 'SEASON 1 KICKOFF',          sub: 'Neon Cup qualifiers open soon', createdAt: Date.now() - 4 * 86400_000 },
 ];

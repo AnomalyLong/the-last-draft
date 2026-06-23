@@ -5,6 +5,7 @@ import { JERSEY_BASE } from '../constants.js';
 import { BballTip } from './BballTip.jsx';
 import { TitleStrip } from './TitleStrip.jsx';
 import { playSelect, playCancel, playCursor, playMenuSelect2 } from '../sound/ui.js';
+import { trpc } from '../trpc';
 
 const POS_COLORS = { PG: '#3ea6ff', SG: '#a855f7', SF: '#19e6c4', PF: '#ff7a3c', C: '#ffc94a' };
 const RARITY_COLORS = { common: '#b0b8c8', rare: '#b0b8c8', super_rare: '#30c0e0', ultra_rare: '#ffc94a' };
@@ -277,7 +278,7 @@ const WARP_COLORS = [
   '#5bf2d4',                            // cyan accent (matches modal border)
   '#ffd97a',                            // gold accent (matches reward number)
 ];
-function WarpLines({ count = 48 }) {
+export function WarpLines({ count = 48 }) {
   const lines = React.useMemo(() => Array.from({ length: count }, (_, i) => {
     const color = WARP_COLORS[i % WARP_COLORS.length];
     return {
@@ -331,7 +332,7 @@ function formatResetCountdown(type, now = Date.now()) {
   return `${h}h ${m}m`;
 }
 
-function DailyMissionsSection({ missions, animatingIds, onCreateChallenge, challengeActive, onViewChallenge }) {
+function DailyMissionsSection({ missions, onClaim, onCreateChallenge, challengeActive, onViewChallenge }) {
   const [tab, setTab] = React.useState('daily');
   const [, forceTick] = React.useState(0);
   // Re-render once a minute so the reset countdown stays current.
@@ -343,8 +344,10 @@ function DailyMissionsSection({ missions, animatingIds, onCreateChallenge, chall
   // Featured missions (e.g. CREATE A CHALLENGE ME) live in the weekly list but
   // are surfaced in BOTH tabs. On the daily tab we prepend them; on the weekly
   // tab they're already present in the list, so we don't double them up.
-  const featured = (missions?.weekly ?? []).filter(m => m.featured);
-  const baseRows = missions?.[tab] ?? [];
+  // Each row is tagged with its source `type` so the claim mutation can route
+  // to the correct period hash regardless of which display tab is active.
+  const featured = (missions?.weekly ?? []).filter(m => m.featured).map(m => ({ ...m, type: 'weekly' }));
+  const baseRows = (missions?.[tab] ?? []).map(m => ({ ...m, type: tab }));
   const rows = tab === 'daily' ? [...featured, ...baseRows] : baseRows;
   const resetLabel = `RESETS IN ${formatResetCountdown(tab)}`;
 
@@ -360,10 +363,9 @@ function DailyMissionsSection({ missions, animatingIds, onCreateChallenge, chall
       </div>
       <div className="lb2-ft-news">
         {rows.map(m => {
-          const done = m.progress >= m.total;
-          const animating = animatingIds?.has?.(m.id);
+          const claimable = m.completed && !m.claimed;
           return (
-            <div key={m.id} className={`lb2-ft-news-row accent-${m.accent}${done ? ' done' : ''}${animating ? ' just-completed' : ''}`}>
+            <div key={m.id} className={`lb2-ft-news-row accent-${m.accent}${m.claimed ? ' done' : ''}`}>
               <div className="lb2-ft-news-tag" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                 <span style={{ fontSize: 13, fontWeight: 900, lineHeight: 1 }}>{m.reward}</span>
                 <span style={{ fontSize: 8, letterSpacing: '0.1em', opacity: 0.7 }}>CR</span>
@@ -381,25 +383,36 @@ function DailyMissionsSection({ missions, animatingIds, onCreateChallenge, chall
                   // mission progress — so a deleted post (challengeActive=false)
                   // flips back to POST NOW even though the weekly mission already
                   // credited. challengeActive → VIEW (open results), else POST NOW.
-                  <button
-                    className="lb2-mission-cta"
-                    data-testid="mission-create-challenge"
-                    onClick={(e) => { e.stopPropagation(); playSelect(); challengeActive ? onViewChallenge?.() : onCreateChallenge?.(); }}
-                    onMouseEnter={() => playCursor()}
-                    style={{
-                      background: 'linear-gradient(180deg,#ffe9bb,#ffd97a 55%,#d6a155)',
-                      color: '#2a1a04',
-                      border: '1px solid #ffe9bb',
-                      borderRadius: 4,
-                      padding: '5px 10px',
-                      fontFamily: 'inherit', fontSize: 9, fontWeight: 900, letterSpacing: '0.08em',
-                      cursor: 'pointer', whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {challengeActive ? '✓ VIEW' : 'POST NOW ▸'}
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                    <button
+                      className="lb2-mission-cta"
+                      data-testid="mission-create-challenge"
+                      onClick={(e) => { e.stopPropagation(); playSelect(); challengeActive ? onViewChallenge?.() : onCreateChallenge?.(); }}
+                      onMouseEnter={() => playCursor()}
+                      style={{
+                        background: 'linear-gradient(180deg,#ffe9bb,#ffd97a 55%,#d6a155)',
+                        color: '#2a1a04',
+                        border: '1px solid #ffe9bb',
+                        borderRadius: 4,
+                        padding: '5px 10px',
+                        fontFamily: 'inherit', fontSize: 9, fontWeight: 900, letterSpacing: '0.08em',
+                        cursor: 'pointer', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {challengeActive ? '✓ VIEW' : 'POST NOW ▸'}
+                    </button>
+                    {claimable && (
+                      <button className="lb2-mission-claim-btn" onClick={(e) => { e.stopPropagation(); onClaim?.(m); }} onMouseEnter={() => playCursor()}>
+                        CLAIM ▸
+                      </button>
+                    )}
+                  </div>
                 ) : (
-                  done ? <span style={{ color: '#5bf2d4' }}>✓ DONE</span> : `${m.progress}/${m.total}`
+                  m.claimed
+                    ? <span style={{ color: '#5bf2d4' }}>✓ DONE</span>
+                    : claimable
+                      ? <button className="lb2-mission-claim-btn" onClick={(e) => { e.stopPropagation(); onClaim?.(m); }} onMouseEnter={() => playCursor()}>CLAIM ▸</button>
+                      : `${m.progress}/${m.total}`
                 )}
               </div>
             </div>
@@ -521,7 +534,7 @@ export function BottomNav({ onPlay, onCollection, onDraft, onAuction, onOptions,
 }
 
 // ── Main LobbyScreen ──────────────────────────────────────
-export default function LobbyScreen({ username, credits, homeRoster, missions, isFtue, onPlay, onCollection, onDraft, onAuction, onOptions, onEvents, onCreateChallenge, challengeActive, onViewChallenge }) {
+export default function LobbyScreen({ username, credits, homeRoster, missions, isFtue, onPlay, onCollection, onDraft, onAuction, onOptions, onEvents, onCreateChallenge, challengeActive, onViewChallenge, onClaim }) {
   const [selectedMode, setSelectedMode] = React.useState('training');
   const [modal, setModal] = React.useState(() => !username ? 'guest' : null);
   const [coachDismissed, setCoachDismissed] = React.useState(false);
@@ -543,73 +556,28 @@ export default function LobbyScreen({ username, credits, homeRoster, missions, i
   const closeModal = () => setModal(null);
   const hasDraft = homeRoster.length >= 5;
 
-  // Mission-complete celebration. Diff the incoming missions snapshot
-  // against the previous one — any mission that flipped from
-  // not-awarded → awarded triggers a sequence:
-  //   1. progress bar slides to 100% + row pulses (~800ms via CSS)
-  //   2. modal pops with warp streaks
-  //
-  // Baseline rules (important on re-login):
-  //   - The initial render has missions = { daily: [], weekly: [] } (empty
-  //     placeholder before the server fetch resolves). We MUST NOT treat
-  //     this as the prev snapshot, or the first real fetch will look like
-  //     "everything just got awarded" and fire celebrations for missions
-  //     completed in prior sessions.
-  //   - prevAwardedRef stays null until the first NON-EMPTY snapshot
-  //     arrives. That snapshot becomes the baseline (no animation). Only
-  //     subsequent diffs fire celebrations.
-  const BAR_FILL_MS = 750;
-  const prevAwardedRef = React.useRef(null);
+  // Mission claim celebration. The modal is queued explicitly when the user
+  // presses CLAIM — no polling or snapshot diffing needed. Each claimed mission
+  // is pushed onto missionQueue; the modal pops one at a time and the user
+  // dismisses each with COLLECT before the next appears.
   const [missionQueue, setMissionQueue] = React.useState([]);
-  const [animatingIds, setAnimatingIds] = React.useState(() => new Set());
-  // Track in-flight timers so we can clear them on unmount only. We must
-  // NOT clear them on every missions re-render — a refresh that lands
-  // between BAR_FILL_MS and the popTimer's scheduled fire would otherwise
-  // cancel the modal pop entirely (this was the "2 missions completed at
-  // the same time → only 1 popup" bug — game.end fires refreshMissions,
-  // then the scene effect fires another refresh, and the second cleanup
-  // killed the still-pending timer from the first).
-  const pendingTimersRef = React.useRef([]);
-  React.useEffect(() => () => {
-    pendingTimersRef.current.forEach(clearTimeout);
-    pendingTimersRef.current = [];
-  }, []);
-  React.useEffect(() => {
-    if (!missions) return;
-    const allRows = [...(missions.daily ?? []), ...(missions.weekly ?? [])];
-    if (allRows.length === 0) return; // server hasn't returned yet
-    const currentAwarded = new Set(allRows.filter(m => m.awarded).map(m => m.id));
-    const prev = prevAwardedRef.current;
-    prevAwardedRef.current = currentAwarded;
-    if (prev === null) return; // first real snapshot is the baseline — no animation
-    const newlyAwarded = allRows.filter(m => m.awarded && !prev.has(m.id));
-    if (newlyAwarded.length === 0) return;
-
-    // Highlight rows immediately; React's commit then flips the bar widths
-    // and the CSS transition slides them to 100%.
-    setAnimatingIds(prevSet => {
-      const next = new Set(prevSet);
-      newlyAwarded.forEach(m => next.add(m.id));
-      return next;
-    });
-
-    const popTimer = setTimeout(() => {
-      setMissionQueue(q => [...q, ...newlyAwarded]);
-    }, BAR_FILL_MS);
-    // Drop the highlight a bit after the modal is up so it doesn't linger
-    // behind a dismissed modal.
-    const clearTimer = setTimeout(() => {
-      setAnimatingIds(prevSet => {
-        const next = new Set(prevSet);
-        newlyAwarded.forEach(m => next.delete(m.id));
-        return next;
-      });
-    }, BAR_FILL_MS + 1200);
-
-    pendingTimersRef.current.push(popTimer, clearTimer);
-  }, [missions]);
   const missionPopup = missionQueue[0] ?? null;
   const dismissMissionPopup = () => setMissionQueue(q => q.slice(1));
+
+  // Called by DailyMissionsSection when the user clicks CLAIM on a mission row.
+  // Fires the claim mutation, pushes the mission onto the celebration queue,
+  // then refreshes missions so the row flips to DONE.
+  const handleClaimMission = async (mission) => {
+    try {
+      const result = await trpc.missions.claim.mutate({ type: mission.type, missionId: mission.id });
+      if (result.claimed) {
+        setMissionQueue(q => [...q, mission]);
+        onClaim?.();
+      }
+    } catch {
+      // Claim errors are silent — the row stays in CLAIM state and the user can retry.
+    }
+  };
 
   const handlePlay = () => {
     if (isFtue || !homeRoster.length) {
@@ -654,7 +622,7 @@ export default function LobbyScreen({ username, credits, homeRoster, missions, i
         </div>
 
         {/* Daily missions */}
-        <DailyMissionsSection missions={missions} animatingIds={animatingIds} onCreateChallenge={onCreateChallenge} challengeActive={challengeActive} onViewChallenge={onViewChallenge} />
+        <DailyMissionsSection missions={missions} onClaim={handleClaimMission} onCreateChallenge={onCreateChallenge} challengeActive={challengeActive} onViewChallenge={onViewChallenge} />
 
         {/* Queue selector */}
         <div className="lb2-section-h">
@@ -707,10 +675,9 @@ export default function LobbyScreen({ username, credits, homeRoster, missions, i
         </div>
       )}
 
-      {/* Mission complete celebration. Shows one at a time when a new
-          mission flipped to awarded since the previous missions snapshot.
-          The 750ms bar-fill delay (see useEffect above) plays first, then
-          the modal pops with confetti raining over the backdrop. */}
+      {/* Mission claim celebration. Shows one at a time after the user
+          presses CLAIM on a mission row. Each queued popup remounts its
+          warp streaks and card animation so multi-claim sequences feel distinct. */}
       {missionPopup && (
         <div data-testid="mission-complete-modal" className="lb2-mission-modal" onClick={dismissMissionPopup}>
           {/* Re-key both children on the popup id so each queued popup
@@ -727,7 +694,7 @@ export default function LobbyScreen({ username, credits, homeRoster, missions, i
               <span className="unit">CR</span>
             </div>
             <button className="lb2-mission-modal-cta" onClick={() => { playSelect(); dismissMissionPopup(); }} onMouseEnter={() => playCursor()}>
-              CLAIMED ▸
+              COLLECT ▸
             </button>
           </div>
         </div>

@@ -13,6 +13,7 @@ import { createAnnouncement, listAnnouncements, deleteAnnouncement, hasUnreadAnn
 import { startGame, recordPlay, endGame, getGame, type PlayEvent } from './core/game';
 import {
   listMissions,
+  claimMission,
   resetUserMissions,
   adminSetMissionProgress,
   adminCompleteMission,
@@ -22,6 +23,10 @@ import {
   updateMissionDef,
   moveMissionType,
   DEFAULT_MISSION_CATALOG,
+  listBpMissions,
+  claimBpMission,
+  adminCompleteBpMission,
+  BP_MISSIONS,
   type MissionDef,
 } from './core/missions';
 import {
@@ -48,6 +53,7 @@ import {
   settleAuction,
 } from './core/auction';
 import { countDecrement, countGet, countIncrement } from './core/count';
+import { getMyPass, adminGrantPass, adminRevokePass, retryFounderFlair } from './core/battlePass';
 
 const t = initTRPC.context<Context>().create({ transformer });
 export const router = t.router;
@@ -468,6 +474,28 @@ export const appRouter = t.router({
       const username = await requireUsername();
       return await listMissions(username);
     }),
+
+    claim: publicProcedure
+      .input(z.object({
+        type: z.enum(['daily', 'weekly']),
+        missionId: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const username = await requireUsername();
+        return await claimMission(username, input.type, input.missionId);
+      }),
+
+    listPass: publicProcedure.query(async () => {
+      const username = await requireUsername();
+      return await listBpMissions(username);
+    }),
+
+    claimPass: publicProcedure
+      .input(z.object({ missionId: z.string() }))
+      .mutation(async ({ input }) => {
+        const username = await requireUsername();
+        return await claimBpMission(username, input.missionId);
+      }),
   }),
 
   // ── Auction ─────────────────────────────────────────────────────────────
@@ -528,6 +556,19 @@ export const appRouter = t.router({
       const username = await requireUsername();
       await markAnnouncementsSeen(username);
       return { ok: true };
+    }),
+  }),
+
+  // ── Founders Pass ────────────────────────────────────────────────────────
+  // The actual purchase flow is server-to-server via Devvit Payments
+  // (handlers in src/server/index.ts → src/server/core/battlePass.ts). This
+  // tRPC branch is read-only — the BattlePassScreen calls getMine to
+  // know which tier the user owns and whether they've earned the
+  // lifetime founder flag.
+  pass: t.router({
+    getMine: publicProcedure.query(async () => {
+      const username = await requireUsername();
+      return await getMyPass(username);
     }),
   }),
 
@@ -636,6 +677,33 @@ export const appRouter = t.router({
     grantFreeDrafts: adminProcedure
       .input(z.object({ username: z.string(), amount: z.number().int().positive() }))
       .mutation(async ({ input }) => { await grantFreeDrafts(input.username, input.amount); return { success: true }; }),
+
+    // Battle-pass management — fetch / grant / revoke for any user.
+    // Grant behaves like a real purchase (credit grant, founder flag,
+    // ledger entry tagged with admin's username). Revoke clears the
+    // season record but leaves credits and the founder flag alone.
+    getUserPass: adminProcedure
+      .input(z.string())
+      .query(async ({ input }) => await getMyPass(input)),
+
+    grantPass: adminProcedure
+      .input(z.object({ username: z.string(), tier: z.enum(['basic', 'premium']) }))
+      .mutation(async ({ input, ctx }) => {
+        return await adminGrantPass(input.username, input.tier, ctx.adminUsername);
+      }),
+
+    revokePass: adminProcedure
+      .input(z.string())
+      .mutation(async ({ input, ctx }) => {
+        return await adminRevokePass(input, ctx.adminUsername);
+      }),
+
+    // Re-issues the FOUNDER Reddit flair for a user whose original
+    // grant didn't land. Safe to call even when flairGranted is already
+    // true — Reddit just re-sets the same flair.
+    retryFlair: adminProcedure
+      .input(z.string())
+      .mutation(async ({ input }) => await retryFounderFlair(input)),
 
     adjustCredits: adminProcedure
       .input(z.object({ username: z.string(), amount: z.number().int(), reason: z.string() }))
@@ -771,6 +839,22 @@ export const appRouter = t.router({
         const user = await getUser(input.username);
         if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input.username}" not found` });
         return await adminCompleteMission(input.username, input.type, input.missionId);
+      }),
+
+    completeBpMission: adminProcedure
+      .input(z.object({ username: z.string(), missionId: z.string() }))
+      .mutation(async ({ input }) => {
+        const user = await getUser(input.username);
+        if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input.username}" not found` });
+        return await adminCompleteBpMission(input.username, input.missionId);
+      }),
+
+    getBpMissions: adminProcedure
+      .input(z.string())
+      .query(async ({ input: username }) => {
+        const user = await getUser(username);
+        if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${username}" not found` });
+        return { missions: await listBpMissions(username), catalog: BP_MISSIONS };
       }),
   }),
 

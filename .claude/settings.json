@@ -52,7 +52,33 @@
       "Bash(sed -n '20,50p' lobby/collection.css)",
       "Bash(grep -n \"setScorePopup\\('2 POINTS'\\)\\\\|setScorePopup\\(\\\\`\\\\${points}\\\\|swish!\\\\|DUNK! +2\" \"c:/Users/dolon/Documents/basketball/the-last-draft/src/useGame.js\")",
       "Bash(agent-browser press *)",
-      "Bash(agent-browser key *)"
+      "Bash(agent-browser key *)",
+      "WebFetch(domain:www.termsfeed.com)",
+      "Bash(wrangler --version)",
+      "Bash(wrangler whoami *)",
+      "Read(//c/Users/dolon/**)",
+      "Bash(npx wrangler *)",
+      "Bash(curl -sS -o /tmp/terms-out.html -w \"HTTP %{http_code} · %{size_download} bytes · %{time_total}s\\\\n\" \"https://lastdraft.anomalygames.ai/terms\")",
+      "Bash(nslookup anomalygames.ai)",
+      "Bash(nslookup lastdraft.anomalygames.ai)",
+      "Bash(nslookup -type=NS anomalygames.ai)",
+      "Bash(curl -sS -o /tmp/terms-out.html -w \"HTTP %{http_code} · %{size_download} bytes · server=%{http_connect} · ttfb=%{time_starttransfer}s\\\\n\" \"https://lastdraft.anomalygames.ai/terms\")",
+      "Bash(curl -sS -o /tmp/terms-out.html -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/127.0.0.0 Safari/537.36\" -w \"HTTP %{http_code} · %{size_download} bytes · ttfb=%{time_starttransfer}s · final=%{url_effective}\\\\n\" \"https://lastdraft.anomalygames.ai/terms\")",
+      "Bash(npm test *)",
+      "Bash(node /tmp/convert-net.cjs)",
+      "Bash(grep -iB1 \"Court \\(Live\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(command -v python)",
+      "Bash(python -c ' *)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(grep -iB1 \"DBG\")",
+      "Bash(cp src/sprites/court-nonet2.png dev-tools/tmp/_court.png)",
+      "Bash(cp src/sprites/court-nonet2.png dev-tools/tmp/_courtR.png)",
+      "Bash(cp src/sprites/court-nonet2.png dev-tools/tmp/_c.png)",
+      "Bash(cd \"c:/Users/dolon/Documents/basketball/the-last-draft\" && rm -f dev-tools/tmp/swish-sheet.svg /tmp/swishmod.cjs && echo done)"
+    ],
+    "additionalDirectories": [
+      "c:\\tmp"
     ]
   }
 }

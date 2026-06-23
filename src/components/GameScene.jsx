@@ -63,7 +63,7 @@ export function GameScene({
   // from useGame
   players, shot, logs, handleCommand, cameraX,
   possession, homeScore, awayScore, quarter, time,
-  scorePopup, hypePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade,
+  scorePopup, hypePopup, netSwish, netDunk, netMiss, levelUpState, onPickLevelUp, onDismissStatUpgrade,
   playPickState, onPickPlay, lastPickedPlayIdRef,
   defensePickState, onPickDefense,
   defenseFtueState, onDismissDefenseFtue,
@@ -189,7 +189,7 @@ export function GameScene({
         </defs>
 
         <rect x={0} y={0} width={W} height={TOTAL_H} fill="#111" />
-        <Court />
+        <Court netSwish={netSwish} netDunk={netDunk} netMiss={netMiss} />
         <rect x={0} y={336} width={W} height={BOT_BAR} fill="#111" />
 
         <g opacity={playerAlpha}>

@@ -100,6 +100,18 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const [homeScore, setHomeScore] = useState(0);
   const [awayScore, setAwayScore] = useState(0);
   const [scorePopup, setScorePopup] = useState(null);
+  // Net animations: per-side counters; bumping one plays on that basket.
+  // Home attacks the right basket, away attacks the left.
+  const [netSwish, setNetSwish] = useState({ left: 0, right: 0 });
+  const [netDunk, setNetDunk] = useState({ left: 0, right: 0 });
+  const [netMiss, setNetMiss] = useState({ left: 0, right: 0 });
+  const bumpSide = (setter, team) =>
+    setter(prev => team === 'home'
+      ? { ...prev, right: prev.right + 1 }
+      : { ...prev, left: prev.left + 1 });
+  const triggerSwish    = (team) => bumpSide(setNetSwish, team);
+  const triggerDunkNet  = (team) => bumpSide(setNetDunk, team);
+  const triggerMissNet  = (team) => bumpSide(setNetMiss, team);
   const [hypePopup, setHypePopup] = useState(null);
   const hypeIdRef = useRef(0);
   const showHype = (textOrPool, color = '#ff3344') => {
@@ -1123,7 +1135,8 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
       }
 
       playShot();
-      setTimeout(playSwish, 700); // 700ms into 800ms arc — ball enters net before landing
+      setTimeout(() => triggerSwish(pg.team), 550); // ripple starts so the billow peaks as the ball enters
+      setTimeout(playSwish, 700); // sound at ball-enters-net
       driftTowardBasket(pg.team);
       const startTime = performance.now();
       const animate = (now) => {
@@ -1233,7 +1246,8 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         return;
       }
       playShot();
-      setTimeout(playSwish, 700);
+      setTimeout(() => triggerSwish(pg.team), 550); // ripple starts so the billow peaks as the ball enters
+      setTimeout(playSwish, 700); // sound at ball-enters-net
       driftTowardBasket(pg.team);
       const startTime = performance.now();
       const animate = (now) => {
@@ -1299,6 +1313,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
 
     setTimeout(() => {
       playShot();
+      setTimeout(() => triggerMissNet(pg.team), 550); // rim wobble ~250ms before the ball clanks off (arc is 800ms)
       driftTowardBasket(pg.team);
       const startTime = performance.now();
       const animateShot = (now) => {
@@ -1404,7 +1419,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         quarterStatsRef.current[isHome ? 'home' : 'away'].dunks += 1;
         quarterPointsRef.current[isHome ? 'home' : 'away'] += 2;
         awardXp(dunker.id, 15, startCx, startCy);
-        playDunk(); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_DUNK, '#ff3344');
+        playDunk(); triggerDunkNet(isHome ? 'home' : 'away'); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_DUNK, '#ff3344');
       }, 4 * DF);
       setTimeout(() => {
         setShot({ cx: basketCx, cy: basketCy });
@@ -1488,7 +1503,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         quarterStatsRef.current[isHome ? 'home' : 'away'].dunks += 1;
         quarterPointsRef.current[isHome ? 'home' : 'away'] += 2;
         awardXp(dunker.id, 15, startCx, startCy);
-        playDunk(); addLog('SPIN DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_DUNK, '#ff3344');
+        playDunk(); triggerDunkNet(isHome ? 'home' : 'away'); addLog('SPIN DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_DUNK, '#ff3344');
       }, 7 * DF2);
       setTimeout(() => {
         setShot({ cx: basketCx, cy: basketCy });
@@ -2247,7 +2262,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
             quarterStatsRef.current[isHome ? 'home' : 'away'].dunks += 1;
             quarterPointsRef.current[isHome ? 'home' : 'away'] += 2;
             awardXp(dunker.id, 15, startCx, startCy);
-            playDunk(); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_DUNK, '#ff3344');
+            playDunk(); triggerDunkNet(isHome ? 'home' : 'away'); addLog('DUNK! +2'); setScorePopup('2 POINTS'); setTimeout(() => setScorePopup(null), 1600); showHype(HYPE_DUNK, '#ff3344');
           }, 4 * DF2);
           setTimeout(() => {
             setShot({ cx: basketCx, cy: basketCy });
@@ -2548,5 +2563,5 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     });
   };
 
-  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, hypePopup, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, lastPickedPlayIdRef, defensePickState, onPickDefense, defenseFtueState, onDismissDefenseFtue, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
+  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, hypePopup, netSwish, netDunk, netMiss, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, lastPickedPlayIdRef, defensePickState, onPickDefense, defenseFtueState, onDismissDefenseFtue, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
 }

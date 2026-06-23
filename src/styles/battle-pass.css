@@ -357,6 +357,12 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
 }
+/* Credits-only variant — 2 tiles (Basic / Premium) so we force a balanced
+   2-column layout instead of leaving two empty columns from the 4-up base. */
+.bpf-rewards-row-credits {
+  grid-template-columns: repeat(2, 1fr);
+  max-width: 320px;
+}
 
 .bpf-reward-item {
   display: flex;
@@ -394,7 +400,7 @@
   }
   .bpf-art-glyph { font-size: 84px; }
   .bpf-art-label { display: none; }
-  .bpf-blocks-row { gap: 80px; }
+  .bpf-blocks-row { gap: 32px; }
   .bpf-block-rewards { padding-left: 0; }
   .bpf-reward { width: 64px; height: 64px; }
   .bpf-reward-glyph { font-size: 30px; }
@@ -413,22 +419,12 @@
     flex-direction: column;
   }
 
-  /* Sidebar decoration becomes a horizontal stripe above the card */
-  .bpf-sidebar {
-    width: auto;
-    height: 14px;
-    margin-right: 0;
-    margin-bottom: 8px;
-    -webkit-mask: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, 0.45) 18%, rgba(0, 0, 0, 0.45) 82%, #000 100%);
-    mask: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, 0.45) 18%, rgba(0, 0, 0, 0.45) 82%, #000 100%);
-  }
-  .bpf-sidebar-tab {
-    left: 3rem;
-    top: 100%;
-    width: 40%;
-    height: 7px;
-    clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 10px 100%);
-  }
+  /* Sidebar decoration — only meaningful as a left-edge vertical bar on
+     full-screen widths. As a horizontal stripe above the card it doesn't
+     tie back to the card visually, so hide it entirely on Devvit-desktop
+     and mobile widths. The element returns when the container exceeds
+     880px (true full-screen layout). */
+  .bpf-sidebar { display: none; }
 
   .bp-featured-card {
     --bpf-corner: 24px;
@@ -462,12 +458,11 @@
     margin-left: auto;
   }
 
-  /* Stack the two blocks vertically — at iframe widths the side-by-side
-     layout squishes both columns and clips the BUY TO RECEIVE header. */
-  .bpf-blocks-row {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
+  /* Keep the two blocks side-by-side even at this width — with the art
+     panel dropped, content has the full card width and the credits-only
+     reward grid fits comfortably alongside the privileges list. Stacking
+     only kicks in at the narrow-phone breakpoint below. */
+  .bpf-blocks-row { gap: 24px; }
   .bpf-block-rewards { padding-left: 0; }
 
   .bpf-block-head {
@@ -478,8 +473,8 @@
   /* Tighter perks list */
   .bpf-perks {
     font-size: 13px;
-    gap: 4px;
-    line-height: 1.4;
+    gap: 2px;
+    line-height: 1.3;
   }
 
   /* Rewards row gets the full width back — keep 4 columns so the four
@@ -534,6 +529,12 @@
 }
 
 @container battle-pass (max-width: 560px) {
+  /* Phone widths — stack the privileges + credits blocks since side-by-side
+     would squish the privileges text into single-word-per-line column. */
+  .bpf-blocks-row {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
   .bp-featured-card { --bpf-corner: 20px; }
   .bpf-content { padding: 18px 16px; gap: 12px; }
   .bpf-title { font-size: 24px; }
@@ -569,10 +570,10 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
   font-size: 16px;
   color: rgba(220, 230, 245, 0.88);
-  line-height: 1.5;
+  line-height: 1.35;
 }
 .bpf-perks li {
   display: flex;
@@ -707,6 +708,240 @@
 }
 
 .bpf-cta-glyph { font-size: 18px; line-height: 1; }
+
+/* Reddit-Gold star icon inside the CTA labels. Sits inline with the
+   price text, slight gold glow so it reads against both teal (claim)
+   and purple (buy) button backgrounds. */
+.bpf-cta-gold {
+  vertical-align: -2px;
+  margin: 0 1px 0 4px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
+}
+
+/* Disabled state — used for already-owned tiers and during the in-flight
+   purchase request. The clip-path stays so the button keeps its shape. */
+.bpf-cta:disabled {
+  cursor: default;
+  opacity: 0.55;
+  filter: saturate(0.6);
+  transform: none;
+}
+.bpf-cta:disabled:hover {
+  background: inherit;
+  box-shadow: inherit;
+}
+
+/* Inline error surfaced when purchase() rejects (network failure, user
+   cancelled, sku not approved, etc). Sits directly below the CTA row. */
+.bpf-purchase-error {
+  margin-top: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  color: #ff8a8a;
+  background: rgba(255, 80, 80, 0.08);
+  border-left: 2px solid rgba(255, 80, 80, 0.55);
+}
+
+/* ── Purchase success modal ─────────────────────────────── */
+/* `position: fixed` (not absolute) so the modal pins to the visible
+   iframe viewport regardless of how far the user has scrolled inside
+   .battle-pass. Without this, a scrolled-down user wouldn't see the
+   modal because it would render at the top of the scrollable content. */
+.bp-success-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(2, 6, 10, 0.75);
+  backdrop-filter: blur(6px);
+  animation: bp-success-fade 220ms ease-out;
+}
+
+.bp-success-card {
+  position: relative;
+  width: min(420px, 100%);
+  padding: 32px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  background:
+    linear-gradient(135deg, rgba(8, 18, 35, 0.97), rgba(18, 8, 32, 0.97));
+  border: 2px solid #19e6c4;
+  box-shadow:
+    0 0 48px rgba(25, 230, 196, 0.35),
+    inset 0 0 32px rgba(25, 230, 196, 0.06);
+  clip-path: polygon(
+    0 0, 100% 0,
+    100% calc(100% - 28px), calc(100% - 28px) 100%,
+    0 100%
+  );
+  animation: bp-success-pop 280ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.bp-success-card.bp-success-premium {
+  border-color: #c084ff;
+  box-shadow:
+    0 0 48px rgba(192, 132, 255, 0.4),
+    inset 0 0 32px rgba(192, 132, 255, 0.08);
+}
+
+.bp-success-glyph {
+  font-size: 48px;
+  line-height: 1;
+  color: #19e6c4;
+  filter: drop-shadow(0 0 16px currentColor);
+}
+.bp-success-card.bp-success-premium .bp-success-glyph { color: #c084ff; }
+
+.bp-success-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.bp-success-tier {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  background: linear-gradient(135deg, #19e6c4, #c084ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.bp-success-rewards {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 12px 18px;
+  background: rgba(25, 230, 196, 0.08);
+  border-left: 2px solid #19e6c4;
+}
+.bp-success-card.bp-success-premium .bp-success-rewards {
+  background: rgba(192, 132, 255, 0.10);
+  border-color: #c084ff;
+}
+.bp-success-coin {
+  font-size: 18px;
+  line-height: 1;
+  color: #ffc94a;
+}
+.bp-success-amount {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: #fff;
+}
+.bp-success-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.bp-success-sub {
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: rgba(220, 230, 245, 0.7);
+  max-width: 320px;
+}
+
+.bp-success-cta {
+  appearance: none;
+  margin-top: 4px;
+  padding: 14px 32px;
+  border: 2px solid #19e6c4;
+  background: rgba(25, 230, 196, 0.12);
+  color: #19e6c4;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 200ms;
+}
+.bp-success-cta:hover {
+  background: rgba(25, 230, 196, 0.25);
+  box-shadow: 0 0 18px rgba(25, 230, 196, 0.4);
+}
+.bp-success-card.bp-success-premium .bp-success-cta {
+  border-color: #c084ff;
+  background: rgba(192, 132, 255, 0.12);
+  color: #c084ff;
+}
+.bp-success-card.bp-success-premium .bp-success-cta:hover {
+  background: rgba(192, 132, 255, 0.25);
+  box-shadow: 0 0 18px rgba(192, 132, 255, 0.45);
+}
+
+@keyframes bp-success-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes bp-success-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+/* ── Credit-warp coins ───────────────────────────────────
+   On dismiss, ~12 little ◉ coins fly from the modal's reward
+   row up to the TitleStrip's credits badge. Each has its
+   own --dx/--dy translate target and random duration so the
+   fleet staggers naturally. position: fixed + viewport-coord
+   top/left so they're not clipped by scroll containers. */
+.bp-coin-fly {
+  position: fixed;
+  z-index: 95;
+  font-size: 20px;
+  line-height: 1;
+  color: #ffd97a;
+  pointer-events: none;
+  text-shadow: 0 0 8px currentColor;
+  filter: drop-shadow(0 0 8px rgba(255, 217, 122, 0.7));
+  animation-name: bp-coin-fly;
+  animation-duration: var(--dur, 700ms);
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: both;
+}
+@keyframes bp-coin-fly {
+  0%   { transform: translate(-50%, -50%) scale(1.2); opacity: 0; }
+  12%  { opacity: 1; }
+  70%  { opacity: 1; }
+  100% {
+    transform: translate(
+      calc(-50% + var(--dx, 0px)),
+      calc(-50% + var(--dy, 0px))
+    ) scale(0.4);
+    opacity: 0;
+  }
+}
+
+/* Tighter modal on narrow widths */
+@container battle-pass (max-width: 560px) {
+  .bp-success-card { padding: 24px 18px 18px; gap: 10px; }
+  .bp-success-glyph { font-size: 38px; }
+  .bp-success-title { font-size: 12px; letter-spacing: 0.24em; }
+  .bp-success-tier { font-size: 22px; letter-spacing: 0.12em; }
+  .bp-success-amount { font-size: 22px; }
+  .bp-success-label { font-size: 10px; letter-spacing: 0.18em; }
+  .bp-success-sub { font-size: 12px; }
+  .bp-success-cta { padding: 12px 26px; font-size: 12px; letter-spacing: 0.2em; }
+}
 
 /* ── Tier grid (other sections) ──────────────────── */
 .bp-track-header {
@@ -898,13 +1133,96 @@
   background: rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
-.bpclip-fill { height: 100%; background: linear-gradient(90deg, #19e6c4, #c084ff); }
+.bpclip-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #19e6c4, #c084ff);
+  transition: width 800ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
 .bpcli-reward {
   font-size: 15px;
   font-weight: 800;
   line-height: 1;
   color: #19e6c4;
   letter-spacing: 0.16em;
+}
+
+/* ── Mission accent colors ───────────────────────── */
+.bpcl-item.accent-cyan    { border-left-color: #19e6c4; }
+.bpcl-item.accent-magenta { border-left-color: #ff2d6f; }
+.bpcl-item.accent-gold    { border-left-color: #ffd97a; }
+.bpcl-item.accent-ink     { border-left-color: rgba(180, 200, 220, 0.5); }
+
+/* ── Claimed / completed states ──────────────────── */
+.bpcl-item.claimed {
+  opacity: 0.52;
+  border-left-color: rgba(91, 242, 212, 0.4);
+}
+.bpcl-item.claimed .bpcli-icon {
+  background: rgba(91, 242, 212, 0.1);
+  border-color: rgba(91, 242, 212, 0.4);
+  color: #5bf2d4;
+}
+.bpcl-item.claimed .bpclip-fill {
+  background: #5bf2d4;
+}
+
+/* ── CLAIM button ────────────────────────────────── */
+.bpcl-claim-btn {
+  appearance: none;
+  font-family: var(--f-mono, 'Courier New', monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  color: #19e6c4;
+  background: rgba(25, 230, 196, 0.1);
+  border: 1px solid rgba(25, 230, 196, 0.45);
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.bpcl-claim-btn:hover {
+  background: rgba(25, 230, 196, 0.22);
+  border-color: rgba(25, 230, 196, 0.7);
+}
+
+/* ── Missions lock overlay (non-pass holders) ────── */
+.bpcl-missions-locked {
+  position: absolute;
+  inset: 0;
+  min-height: 140px;
+  background: rgba(2, 6, 10, 0.82);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 24px;
+  text-align: center;
+  line-height: 1.4;
+}
+.bpcl-lock-icon {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.bpcl-lock-title {
+  font-family: var(--f-mono, 'Courier New', monospace);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: #ffd97a;
+  line-height: 1.3;
+}
+.bpcl-lock-sub {
+  font-family: var(--f-mono, 'Courier New', monospace);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.45);
+  max-width: 280px;
+  line-height: 1.5;
 }
 
 /* ── Footer tag ──────────────────────────────────── */

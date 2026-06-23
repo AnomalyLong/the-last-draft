@@ -2,16 +2,20 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { trpcServer } from '@hono/trpc-server';
 
-import { createServer, getServerPort, redis } from '@devvit/web/server';
+import { createServer, getServerPort, redis, reddit } from '@devvit/web/server';
+import type { PaymentHandlerResponse } from '@devvit/web/server';
+import type { Order } from '@devvit/web/shared';
 import { menu } from './routes/menu';
 import { triggers } from './routes/triggers';
 import { appRouter } from './trpc';
 import { createContext } from './context';
 import { userKey, ledgerKey, gamesKey, getUser, MAX_ENERGY, USERS_INDEX_KEY } from './core/user';
+import { fulfillPass, refundPass, getMyPass, adminGrantPass, adminRevokePass, retryFounderFlair, type PassTier } from './core/battlePass';
 import { rosterKey, lineupKey, getUserRoster, getPlayer, playerKey } from './core/player';
 import { challengePostKey } from './core/post';
 import {
   listMissions,
+  claimMission,
   resetUserMissions,
   adminSetMissionProgress,
   adminCompleteMission,
@@ -21,6 +25,9 @@ import {
   updateMissionDef,
   moveMissionType,
   DEFAULT_MISSION_CATALOG,
+  listBpMissions,
+  claimBpMission,
+  adminCompleteBpMission,
 } from './core/missions';
 
 const app = new Hono();
@@ -38,6 +45,38 @@ api.use(
 const internal = new Hono();
 internal.route('/menu', menu);
 internal.route('/triggers', triggers);
+
+// ── Devvit Payments handlers ────────────────────────────────────────────
+// Devvit calls these by URL (configured in devvit.json) after the user
+// completes a purchase. The Order body does NOT carry a userId field —
+// we identify the buyer via reddit.getCurrentUsername() inside the
+// request scope, same as our tRPC procedures.
+internal.post('/payments/fulfill', async (c) => {
+  const order = await c.req.json<Order>();
+  const username = await reddit.getCurrentUsername();
+  if (!username) {
+    return c.json<PaymentHandlerResponse>({
+      success: false,
+      reason: 'Unable to identify purchaser',
+    });
+  }
+  const result = await fulfillPass(order, username);
+  return c.json<PaymentHandlerResponse>(result);
+});
+
+internal.post('/payments/refund', async (c) => {
+  const order = await c.req.json<Order>();
+  const username = await reddit.getCurrentUsername();
+  if (!username) {
+    // Don't fail the refund flow if we can't resolve the user — just
+    // return success so Devvit moves on. The user already got their
+    // money back via Reddit; the pass record will be cleared next time
+    // the user touches the app.
+    return c.json<PaymentHandlerResponse>({ success: true });
+  }
+  const result = await refundPass(order, username);
+  return c.json<PaymentHandlerResponse>(result);
+});
 
 app.route('/api', api);
 app.route('/internal', internal);
@@ -103,6 +142,36 @@ if (process.env.NODE_ENV !== 'production') {
     const { credits } = await c.req.json<{ credits: number }>();
     await redis.hSet(userKey(c.req.param('username')), { credits: String(credits) });
     return c.json({ success: true });
+  });
+
+  // ── Founders Pass (admin) ─────────────────────────────────
+  // Same operations as the tRPC admin.{getUserPass,grantPass,revokePass}
+  // procedures, exposed as REST for the dev-tools AdminStory panel.
+  devAdmin.get('/user/:username/pass', async (c) => {
+    const pass = await getMyPass(c.req.param('username'));
+    return c.json(pass);
+  });
+
+  devAdmin.post('/user/:username/pass/grant', async (c) => {
+    const { tier } = await c.req.json<{ tier: PassTier }>();
+    if (tier !== 'basic' && tier !== 'premium') {
+      return c.json({ error: 'tier must be "basic" or "premium"' }, 400);
+    }
+    const result = await adminGrantPass(c.req.param('username'), tier, 'dev-admin');
+    return c.json(result);
+  });
+
+  devAdmin.post('/user/:username/pass/revoke', async (c) => {
+    const result = await adminRevokePass(c.req.param('username'), 'dev-admin');
+    return c.json(result);
+  });
+
+  // Re-attempts the FOUNDER flair write for a user whose original grant
+  // had `flairGranted: '0'` (network blip, missing perms, user not in
+  // r/lastdraftgame at time of purchase, etc.).
+  devAdmin.post('/user/:username/pass/retry-flair', async (c) => {
+    const result = await retryFounderFlair(c.req.param('username'));
+    return c.json(result);
   });
 
   // Roster inspection — returns each owned player's id, name, position-less
@@ -214,6 +283,51 @@ if (process.env.NODE_ENV !== 'production') {
     const body = await c.req.json<{ type: 'daily' | 'weekly'; missionId: string }>();
     const result = await adminCompleteMission(username, body.type, body.missionId);
     return c.json(result);
+  });
+
+  devAdmin.post('/user/:username/missions/claim', async (c) => {
+    const username = c.req.param('username');
+    try { await requireExistingUser(username); }
+    catch (e: any) { return c.json({ error: e.message }, 404); }
+    const body = await c.req.json<{ type: 'daily' | 'weekly'; missionId: string }>();
+    try {
+      const result = await claimMission(username, body.type, body.missionId);
+      return c.json(result);
+    } catch (e: any) {
+      return c.json({ error: e.message }, 400);
+    }
+  });
+
+  // ── BP Missions (dev-admin) ────────────────────────────────────────────────
+  devAdmin.get('/user/:username/missions/pass', async (c) => {
+    const username = c.req.param('username');
+    try { await requireExistingUser(username); }
+    catch (e: any) { return c.json({ error: e.message }, 404); }
+    return c.json(await listBpMissions(username));
+  });
+
+  devAdmin.post('/user/:username/missions/pass/complete', async (c) => {
+    const username = c.req.param('username');
+    try { await requireExistingUser(username); }
+    catch (e: any) { return c.json({ error: e.message }, 404); }
+    const body = await c.req.json<{ missionId: string }>();
+    try {
+      return c.json(await adminCompleteBpMission(username, body.missionId));
+    } catch (e: any) {
+      return c.json({ error: e.message }, 400);
+    }
+  });
+
+  devAdmin.post('/user/:username/missions/pass/claim', async (c) => {
+    const username = c.req.param('username');
+    try { await requireExistingUser(username); }
+    catch (e: any) { return c.json({ error: e.message }, 404); }
+    const body = await c.req.json<{ missionId: string }>();
+    try {
+      return c.json(await claimBpMission(username, body.missionId));
+    } catch (e: any) {
+      return c.json({ error: e.message }, 400);
+    }
   });
 
   app.route('/dev-admin', devAdmin);

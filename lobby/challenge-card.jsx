@@ -262,7 +262,7 @@ export default function ChallengeCard({
         {/* Record moved up under the owner avatar; footer removed. */}
 
         <div className="ps-substrip">
-          <div className="ps-sub">r/TheMBA</div>
+          <div className="ps-sub">r/LastDraftGame</div>
           <div className="ps-sub-meta">
             <span>▲ 14.2k</span>
             <span>💬 482</span>

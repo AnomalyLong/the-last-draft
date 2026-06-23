@@ -112,10 +112,17 @@ export default function App() {
   const [freeDrafts,    setFreeDrafts]    = React.useState(0);
   const [paidPicks,     setPaidPicks]     = React.useState(0); // banked credit-draft picks
   const [serverMissions, setServerMissions] = React.useState({ daily: [], weekly: [] });
+  const [serverBpMissions, setServerBpMissions] = React.useState([]);
 
   const refreshMissions = React.useCallback(() => {
     return trpc.missions.list.query()
       .then(setServerMissions)
+      .catch(() => {});
+  }, []);
+
+  const refreshBpMissions = React.useCallback(() => {
+    return trpc.missions.listPass.query()
+      .then(setServerBpMissions)
       .catch(() => {});
   }, []);
 
@@ -166,6 +173,14 @@ export default function App() {
     ]);
   }, [refreshMissions]);
 
+  // Founders Pass state — { tier: 'basic' | 'premium' | null, purchasedAt, founder }.
+  // Refreshed on mount + after every successful purchase (BattlePassScreen calls
+  // onPassRefresh which invokes refreshPass + refreshUser to pick up the credit grant).
+  const [passState, setPassState] = React.useState({ tier: null, purchasedAt: 0, founder: false });
+  const refreshPass = React.useCallback(() => {
+    return trpc.pass.getMine.query().then(setPassState).catch(() => {});
+  }, []);
+
   React.useEffect(() => {
     trpc.user.init.query().then((user) => {
       setServerCredits(user.credits);
@@ -175,9 +190,12 @@ export default function App() {
       if (user.teamName) setHomeTeamName(user.teamName);
     }).catch(() => {});
 
+    refreshPass();
+    refreshBpMissions();
+
     // Load saved roster + lineup so returning players can skip the draft
     refreshRoster().finally(() => setRosterLoaded(true));
-  }, [refreshRoster]);
+  }, [refreshRoster, refreshPass]);
 
   const [titleLogs, setTitleLogs] = React.useState([]);
   const [showTitleDebug, setShowTitleDebug] = React.useState(false);
@@ -268,10 +286,11 @@ export default function App() {
   React.useEffect(() => {
     if (scene === 'draftHub' || scene === 'title') refreshUser();
     if (scene === 'draftHub') refreshDraftCost();
+    if (scene === 'battlePass') refreshBpMissions();
     // Collection reads rawRoster — refresh on open so newly minted players
     // (e.g. from a paid draft) always show without a full app reload.
     if (scene === 'collection') refreshRoster();
-  }, [scene, refreshUser, refreshDraftCost, refreshRoster]);
+  }, [scene, refreshUser, refreshDraftCost, refreshRoster, refreshBpMissions]);
   const [awayTeam, setAwayTeam] = React.useState(
     () => {
       const team = OPPONENTS[Math.floor(Math.random() * OPPONENTS.length)];
@@ -390,6 +409,7 @@ export default function App() {
           onCreateChallenge={() => setChallengeModal('confirm')}
           challengeActive={!!myChallenge}
           onViewChallenge={() => setMyChallengeOpen(true)}
+          onClaim={refreshMissions}
         />
       )}
 
@@ -413,6 +433,14 @@ export default function App() {
           <BattlePassScreen
             username={username}
             credits={serverCredits}
+            passState={passState}
+            bpMissions={serverBpMissions}
+            onPassRefresh={async () => {
+              await refreshPass();
+              await refreshUser();
+              await refreshBpMissions();
+            }}
+            onBpClaim={refreshBpMissions}
             onBack={() => setScene('title')}
             onPlay={() => setScene('title')}
             onCollection={() => setScene('collection')}
@@ -718,7 +746,7 @@ export default function App() {
             ) : challengeModal === 'posted' ? (<>
               <div style={{ color: '#5bf2d4', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>✓ CHALLENGE POSTED</div>
               <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 12 }}>
-                Your team is live on r/TheMBA. Other Redditors can now challenge your roster.
+                Your team is live on r/LastDraftGame. Other Redditors can now challenge your roster.
               </div>
               {challengeUrl && (
                 <div style={{ color: '#cbd5e1', fontSize: 9, lineHeight: 1.5, marginBottom: 16, padding: '8px 10px', background: 'rgba(0,0,0,0.35)', border: '1px solid #2a3340', wordBreak: 'break-all', userSelect: 'all' }}>
@@ -746,7 +774,7 @@ export default function App() {
             </>) : (<>
               <div style={{ color: '#ffd97a', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>POST CHALLENGE ME?</div>
               <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 20 }}>
-                Post <b style={{ color: '#eaf6f3' }}>{(homeTeamName && homeTeamName !== 'HOME') ? homeTeamName : 'your team'}</b> to r/TheMBA. Other Redditors can challenge your roster — once per week.
+                Post <b style={{ color: '#eaf6f3' }}>{(homeTeamName && homeTeamName !== 'HOME') ? homeTeamName : 'your team'}</b> to r/LastDraftGame. Other Redditors can challenge your roster — once per week.
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
                 <button onClick={() => setChallengeModal(null)} style={{ background: 'transparent', color: '#8899aa', border: '1px solid #2a3340', padding: '6px 16px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer' }}>CANCEL</button>

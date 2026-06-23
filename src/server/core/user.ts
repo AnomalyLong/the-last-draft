@@ -18,6 +18,10 @@ export type UserData = {
   teamName: string;
   wins: number;
   losses: number;
+  // Lifetime flag set when a user buys ANY Founders Pass tier in Season 0.
+  // Stays true forever — used to auto-grant free season passes when S1
+  // ships. Distinct from the season-scoped pass record (see core/battlePass.ts).
+  founder: 0 | 1;
 };
 
 export const userKey = (username: string) => `user:${username}`;
@@ -40,6 +44,8 @@ const parseUser = (raw: Record<string, string>): UserData => ({
   teamName: raw.teamName ?? '',
   wins: Number(raw.wins ?? 0),
   losses: Number(raw.losses ?? 0),
+  // Defensive default: any pre-pass user reads as non-founder.
+  founder: raw.founder === '1' ? 1 : 0,
 });
 
 export const computeEnergy = (energy: number, energyUpdatedAt: number): number => {

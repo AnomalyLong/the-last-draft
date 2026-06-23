@@ -20,7 +20,7 @@ const MISSION_SCENARIOS = {
       { id: 'play3',  label: 'PLAY 3 GAMES',   sub: 'Any mode counts',            reward: 100, total: 3, accent: 'gold',    progress: 0, awarded: false },
     ],
     weekly: [
-      { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/TheMBA', reward: 200, total: 1, accent: 'gold', featured: true, progress: 0, awarded: false },
+      { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/LastDraftGame', reward: 200, total: 1, accent: 'gold', featured: true, progress: 0, awarded: false },
       { id: 'wwin5',   label: 'WIN 5 GAMES',     sub: 'Any mode',                reward: 300, total: 5, accent: 'cyan',    progress: 0, awarded: false },
       { id: 'wdraft',  label: 'DRAFT 3 PLAYERS', sub: 'Free or credit drafts',   reward: 150, total: 3, accent: 'magenta', progress: 0, awarded: false },
     ],
@@ -33,7 +33,7 @@ const MISSION_SCENARIOS = {
       { id: 'play3',  label: 'PLAY 3 GAMES',   sub: 'Any mode counts',            reward: 100, total: 3, accent: 'gold',    progress: 2, awarded: false },
     ],
     weekly: [
-      { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/TheMBA', reward: 200, total: 1, accent: 'gold', featured: true, progress: 0, awarded: false },
+      { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/LastDraftGame', reward: 200, total: 1, accent: 'gold', featured: true, progress: 0, awarded: false },
       { id: 'wwin5',   label: 'WIN 5 GAMES',     sub: 'Any mode',                reward: 300, total: 5, accent: 'cyan',    progress: 3, awarded: false },
       { id: 'wdraft',  label: 'DRAFT 3 PLAYERS', sub: 'Free or credit drafts',   reward: 150, total: 3, accent: 'magenta', progress: 1, awarded: false },
     ],
@@ -46,7 +46,7 @@ const MISSION_SCENARIOS = {
       { id: 'play3',  label: 'PLAY 3 GAMES',   sub: 'Any mode counts',            reward: 100, total: 3, accent: 'gold',    progress: 3, awarded: true },
     ],
     weekly: [
-      { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/TheMBA', reward: 200, total: 1, accent: 'gold', featured: true, progress: 1, awarded: true },
+      { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/LastDraftGame', reward: 200, total: 1, accent: 'gold', featured: true, progress: 1, awarded: true },
       { id: 'wwin5',   label: 'WIN 5 GAMES',     sub: 'Any mode',                reward: 300, total: 5, accent: 'cyan',    progress: 5, awarded: true  },
       { id: 'wdraft',  label: 'DRAFT 3 PLAYERS', sub: 'Free or credit drafts',   reward: 150, total: 3, accent: 'magenta', progress: 2, awarded: false },
     ],

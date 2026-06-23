@@ -1,5 +1,6 @@
 import { redis } from '@devvit/web/server';
 import { userKey, ledgerKey } from './user';
+import { CURRENT_SEASON, passKey } from './battlePass';
 
 // ── Catalog ────────────────────────────────────────────────────────────────
 // Single source of truth for both server logic and the client UI. Daily
@@ -24,7 +25,13 @@ export type MissionDef = {
 
 export type MissionView = MissionDef & {
   progress: number;
-  awarded: boolean;
+  // completed: progress reached the target — mission is claimable.
+  // claimed:   user explicitly claimed the reward — credits deposited.
+  // A legacy `{id}:awarded` flag (written before this split) is treated as
+  // both completed and claimed so old period hashes remain correct until
+  // they TTL out (max 21 days).
+  completed: boolean;
+  claimed: boolean;
 };
 
 export type MissionCatalog = Record<MissionType, MissionDef[]>;
@@ -39,7 +46,7 @@ export const DEFAULT_MISSION_CATALOG: MissionCatalog = {
     { id: 'play3',  label: 'PLAY 3 GAMES',   sub: 'Any mode counts',            reward: 100, total: 3, accent: 'gold' },
   ],
   weekly: [
-    { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/TheMBA', reward: 200, total: 1, accent: 'gold', featured: true },
+    { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/LastDraftGame', reward: 200, total: 1, accent: 'gold', featured: true },
     { id: 'wwin5',   label: 'WIN 5 GAMES',     sub: 'Any mode',                reward: 300, total: 5, accent: 'cyan' },
     { id: 'wdraft',  label: 'DRAFT 3 PLAYERS', sub: 'Free or credit drafts',   reward: 150, total: 3, accent: 'magenta' },
     // wranked: PLAY RANKED — disabled until ranked mode ships. Re-add when
@@ -189,11 +196,18 @@ const buildViews = (
   defs: MissionDef[],
   raw: Record<string, string> | null,
 ): MissionView[] =>
-  defs.map(def => ({
-    ...def,
-    progress: Math.min(def.total, Number(raw?.[def.id] ?? 0)),
-    awarded: (raw?.[`${def.id}:awarded`] ?? '') === '1',
-  }));
+  defs.map(def => {
+    // Legacy support: old `{id}:awarded` flag (written before the
+    // completed/claimed split) is treated as both completed and claimed so
+    // existing period hashes remain correct until they TTL out.
+    const legacy = (raw?.[`${def.id}:awarded`] ?? '') === '1';
+    return {
+      ...def,
+      progress: Math.min(def.total, Number(raw?.[def.id] ?? 0)),
+      completed: legacy || (raw?.[`${def.id}:completed`] ?? '') === '1',
+      claimed:   legacy || (raw?.[`${def.id}:claimed`]   ?? '') === '1',
+    };
+  });
 
 export const listMissions = async (
   username: string,
@@ -234,22 +248,26 @@ const awardMissionCredits = async (
   ]);
 };
 
-// Increment a single mission's progress within its current period. If the
-// increment carries the count to/past the target AND no award has been issued
-// for this period, atomically claim the award flag and credit the user.
+// Increment a single mission's progress within its current period. When the
+// increment carries the count to/past the target AND no completion flag has
+// been set for this period, atomically set the `completed` flag so the client
+// can surface a CLAIM button.
 //
-// Returns whether the award was issued by *this* call so callers can decide
-// whether to surface a "mission complete" notification downstream.
+// Credits are NOT deposited here — that happens in claimMission() when the
+// user explicitly claims the reward.
+//
+// Returns whether completion was triggered by *this* call so callers can
+// decide whether to surface a "ready to claim" notification downstream.
 export const incrementMission = async (
   username: string,
   type: MissionType,
   missionId: string,
   amount = 1,
   catalog?: MissionCatalog,
-): Promise<{ progress: number; awarded: boolean; justAwarded: boolean }> => {
+): Promise<{ progress: number; completed: boolean; claimed: boolean; justCompleted: boolean }> => {
   const cat = catalog ?? await getMissionCatalog();
   const def = cat[type].find(m => m.id === missionId);
-  if (!def) return { progress: 0, awarded: false, justAwarded: false };
+  if (!def) return { progress: 0, completed: false, claimed: false, justCompleted: false };
 
   const now = Date.now();
   const period = type === 'daily' ? dailyPeriodKey(now) : weeklyPeriodKey(now);
@@ -264,20 +282,55 @@ export const incrementMission = async (
   }
 
   if (progress < def.total) {
-    return { progress, awarded: false, justAwarded: false };
+    return { progress, completed: false, claimed: false, justCompleted: false };
   }
 
-  // Race-safe award guard: hSetNX returns true only for the writer that
+  // Race-safe completion guard: hSetNX returns true only for the writer that
   // actually set the flag.
-  const flagField = `${missionId}:awarded`;
-  const claimed = await redis.hSetNX(key, flagField, '1');
+  const completedField = `${missionId}:completed`;
+  const justCompleted = (await redis.hSetNX(key, completedField, '1')) === 1;
 
-  if (claimed) {
+  // Check if already claimed (e.g. from a prior session in the same period).
+  const claimedVal = await redis.hGet(key, `${missionId}:claimed`);
+  const claimed = (claimedVal ?? '') === '1';
+
+  return { progress, completed: true, claimed, justCompleted };
+};
+
+// Claim a completed mission — deposits credits exactly once per period.
+// Returns { claimed: true, reward } if credits were deposited by this call,
+// or { claimed: false, reward: 0 } if already claimed (idempotent, no error).
+// Throws if the mission is not yet completed.
+export const claimMission = async (
+  username: string,
+  type: MissionType,
+  missionId: string,
+): Promise<{ claimed: boolean; reward: number }> => {
+  const catalog = await getMissionCatalog();
+  const def = catalog[type].find(m => m.id === missionId);
+  if (!def) throw new Error(`Unknown mission: ${type}/${missionId}`);
+
+  const now = Date.now();
+  const period = type === 'daily' ? dailyPeriodKey(now) : weeklyPeriodKey(now);
+  const key = periodKey(username, type, period);
+
+  // Verify the mission is actually completed. Check both new flag and legacy.
+  const raw = await redis.hGetAll(key);
+  const isCompleted =
+    (raw?.[`${missionId}:completed`] ?? '') === '1' ||
+    (raw?.[`${missionId}:awarded`]   ?? '') === '1';
+  if (!isCompleted) throw new Error(`Mission "${missionId}" is not yet completed`);
+
+  // Race-safe claim guard: only the first caller deposits credits.
+  const claimedField = `${missionId}:claimed`;
+  const justClaimed = (await redis.hSetNX(key, claimedField, '1')) === 1;
+
+  if (justClaimed) {
     await awardMissionCredits(username, def.reward, missionId);
-    return { progress, awarded: true, justAwarded: true };
+    return { claimed: true, reward: def.reward };
   }
 
-  return { progress, awarded: true, justAwarded: false };
+  return { claimed: false, reward: 0 };
 };
 
 // ── Event hooks ────────────────────────────────────────────────────────────
@@ -296,6 +349,7 @@ const tickById = (
 };
 
 // Game completion ticks `play3` always; on a win also `win1` and `wwin5`.
+// BP missions: `bp_play50` always; on a win also `bp_win10` and `bp_win25`.
 // Errors are swallowed — mission tracking must never break a game finalize.
 export const recordGameCompletion = async (
   username: string,
@@ -312,6 +366,11 @@ export const recordGameCompletion = async (
       if (w1) ops.push(w1);
       if (w5) ops.push(w5);
     }
+    ops.push(incrementBpMission(username, 'bp_play50', 1));
+    if (won) {
+      ops.push(incrementBpMission(username, 'bp_win10', 1));
+      ops.push(incrementBpMission(username, 'bp_win25', 1));
+    }
     await Promise.all(ops);
   } catch {
     // Mission tracking must not break game finalization.
@@ -320,6 +379,7 @@ export const recordGameCompletion = async (
 
 // Each minted player adds one tick to `draft1` and `wdraft`. freeDraft is
 // called once per player so a 5-player FTUE draft fires this 5x.
+// BP missions: `bp_draft5` and `bp_draft10` track season-total drafts.
 export const recordDraftCompletion = async (
   username: string,
   count = 1,
@@ -332,6 +392,8 @@ export const recordDraftCompletion = async (
     const wd = tickById(catalog, username, 'wdraft', count);
     if (d1) ops.push(d1);
     if (wd) ops.push(wd);
+    ops.push(incrementBpMission(username, 'bp_draft5', count));
+    ops.push(incrementBpMission(username, 'bp_draft10', count));
     await Promise.all(ops);
   } catch {
     // Mission tracking must not break draft.
@@ -339,24 +401,132 @@ export const recordDraftCompletion = async (
 };
 
 // Posting a "Challenge Me" card ticks the featured weekly `wchallenge`
-// mission. Post creation is already gated to once-per-week (see
-// createChallengePost in post.ts); the hSetNX award guard in incrementMission
-// prevents a double-credit regardless.
+// mission and the BP `bp_challenge` (3 posts per season for pass holders).
+// Post creation is already gated to once-per-week; the hSetNX completion
+// guard in incrementMission prevents a double-complete regardless.
 export const recordChallengeCreated = async (
   username: string,
 ): Promise<void> => {
   try {
     const catalog = await getMissionCatalog();
     const op = tickById(catalog, username, 'wchallenge', 1);
-    if (op) await op;
+    await Promise.all([
+      op ?? Promise.resolve(),
+      incrementBpMission(username, 'bp_challenge', 1),
+    ]);
   } catch {
     // Mission tracking must not break post creation.
   }
 };
 
+// ── Battle Pass missions ───────────────────────────────────────────────────
+// Season-scoped missions exclusive to pass holders. Progress is stored in a
+// single hash per user per season (not daily/weekly period churn). Non-holders
+// earn no progress — the pass ownership check lives inside incrementBpMission
+// so call sites don't need to gate it themselves.
+
+export const BP_MISSIONS: MissionDef[] = [
+  { id: 'bp_win10',     label: 'WIN 10 GAMES',     sub: 'Any mode',                reward: 1000, total: 10, accent: 'cyan'    },
+  { id: 'bp_win25',     label: 'WIN 25 GAMES',      sub: 'Dominate the season',     reward: 2500, total: 25, accent: 'cyan'    },
+  { id: 'bp_draft5',    label: 'DRAFT 5 PLAYERS',   sub: 'Free or credit drafts',   reward: 500,  total: 5,  accent: 'magenta' },
+  { id: 'bp_draft10',   label: 'DRAFT 10 PLAYERS',  sub: 'Build your empire',       reward: 1200, total: 10, accent: 'magenta' },
+  { id: 'bp_challenge', label: 'POST 3 CHALLENGES', sub: 'Challenge the community', reward: 750,  total: 3,  accent: 'gold'    },
+  { id: 'bp_play50',    label: 'PLAY 50 GAMES',     sub: 'The grind is real',       reward: 3000, total: 50, accent: 'gold'    },
+];
+
+const BP_TTL_SECS = 90 * 24 * 60 * 60; // 90 days — covers a full season
+
+const bpMissionKey = (username: string) =>
+  `user:missions:${username}:pass:${CURRENT_SEASON}`;
+
+export const incrementBpMission = async (
+  username: string,
+  missionId: string,
+  amount = 1,
+): Promise<{ progress: number; completed: boolean; claimed: boolean; justCompleted: boolean }> => {
+  // Cheap pass check: one hGet on the pass hash. Non-holders are skipped.
+  const tier = await redis.hGet(passKey(CURRENT_SEASON, username), 'tier');
+  if (!tier) return { progress: 0, completed: false, claimed: false, justCompleted: false };
+
+  const def = BP_MISSIONS.find(m => m.id === missionId);
+  if (!def) return { progress: 0, completed: false, claimed: false, justCompleted: false };
+
+  const key = bpMissionKey(username);
+  const progress = await redis.hIncrBy(key, missionId, amount);
+
+  if (progress === amount) {
+    await redis.expire(key, BP_TTL_SECS);
+  }
+
+  if (progress < def.total) {
+    return { progress, completed: false, claimed: false, justCompleted: false };
+  }
+
+  const completedField = `${missionId}:completed`;
+  const justCompleted = (await redis.hSetNX(key, completedField, '1')) === 1;
+
+  const claimedVal = await redis.hGet(key, `${missionId}:claimed`);
+  const claimed = (claimedVal ?? '') === '1';
+
+  return { progress: Math.min(progress, def.total), completed: true, claimed, justCompleted };
+};
+
+export const listBpMissions = async (username: string): Promise<MissionView[]> => {
+  const raw = await redis.hGetAll(bpMissionKey(username));
+  return buildViews(BP_MISSIONS, raw);
+};
+
+export const claimBpMission = async (
+  username: string,
+  missionId: string,
+): Promise<{ claimed: boolean; reward: number }> => {
+  const def = BP_MISSIONS.find(m => m.id === missionId);
+  if (!def) throw new Error(`Unknown BP mission: ${missionId}`);
+
+  const key = bpMissionKey(username);
+  const raw = await redis.hGetAll(key);
+  const isCompleted = (raw?.[`${missionId}:completed`] ?? '') === '1';
+  if (!isCompleted) throw new Error(`BP mission "${missionId}" is not yet completed`);
+
+  const justClaimed = (await redis.hSetNX(key, `${missionId}:claimed`, '1')) === 1;
+  if (justClaimed) {
+    await awardMissionCredits(username, def.reward, missionId);
+    return { claimed: true, reward: def.reward };
+  }
+  return { claimed: false, reward: 0 };
+};
+
+export const adminCompleteBpMission = async (
+  username: string,
+  missionId: string,
+): Promise<{ completed: boolean; claimed: boolean }> => {
+  const def = BP_MISSIONS.find(m => m.id === missionId);
+  if (!def) throw new Error(`Unknown BP mission: ${missionId}`);
+  const key = bpMissionKey(username);
+
+  const raw = await redis.hGetAll(key);
+  const current = Number(raw?.[missionId] ?? 0);
+  if (current < def.total) {
+    await redis.hSet(key, { [missionId]: String(def.total) });
+    await redis.expire(key, BP_TTL_SECS);
+  }
+  await redis.hSetNX(key, `${missionId}:completed`, '1');
+
+  const justClaimed = (await redis.hSetNX(key, `${missionId}:claimed`, '1')) === 1;
+  if (justClaimed) {
+    await awardMissionCredits(username, def.reward, missionId);
+  }
+
+  return { completed: true, claimed: true };
+};
+
+export const resetUserBpMissions = async (username: string): Promise<void> => {
+  await redis.del(bpMissionKey(username));
+};
+
 // ── Admin operations ───────────────────────────────────────────────────────
 // Reset the user's CURRENT daily + weekly period hashes — wipes progress and
-// the awarded flags so they can complete the missions again this period.
+// all flags so they can complete the missions again this period.
 // (Past periods are left alone; they'll TTL out on their own.)
 export const resetUserMissions = async (username: string): Promise<void> => {
   const now = Date.now();
@@ -366,8 +536,8 @@ export const resetUserMissions = async (username: string): Promise<void> => {
   ]);
 };
 
-// Directly set progress for a single mission. Does NOT touch the awarded
-// flag and does NOT credit the user — use adminCompleteMission for that.
+// Directly set progress for a single mission. Does NOT touch completion or
+// claim flags — use adminCompleteMission for that.
 export const adminSetMissionProgress = async (
   username: string,
   type: MissionType,
@@ -384,22 +554,32 @@ export const adminSetMissionProgress = async (
   await redis.expire(key, ttlForType(type));
 };
 
-// Force-complete a mission: jump progress to total, fire the award path
-// exactly once (same race-safe `hSetNX` guard used by organic completion).
+// Force-complete AND auto-claim a mission for admin convenience. Sets both
+// the `completed` and `claimed` flags and deposits credits immediately —
+// skipping the user-facing claim step so admins don't need to simulate the
+// full UI flow.
 export const adminCompleteMission = async (
   username: string,
   type: MissionType,
   missionId: string,
-): Promise<{ awarded: boolean }> => {
+): Promise<{ completed: boolean; claimed: boolean }> => {
   const catalog = await getMissionCatalog();
   const def = catalog[type].find(m => m.id === missionId);
   if (!def) throw new Error(`Unknown mission: ${type}/${missionId}`);
   const period = type === 'daily' ? dailyPeriodKey() : weeklyPeriodKey();
   const key = periodKey(username, type, period);
 
+  // Jump progress to total, set completion flag.
   const raw = await redis.hGetAll(key);
   const current = Number(raw?.[missionId] ?? 0);
   const delta = Math.max(1, def.total - current);
-  const result = await incrementMission(username, type, missionId, delta, catalog);
-  return { awarded: result.justAwarded };
+  await incrementMission(username, type, missionId, delta, catalog);
+
+  // Auto-claim — deposit credits immediately (admin convenience).
+  const justClaimed = (await redis.hSetNX(key, `${missionId}:claimed`, '1')) === 1;
+  if (justClaimed) {
+    await awardMissionCredits(username, def.reward, missionId);
+  }
+
+  return { completed: true, claimed: true };
 };

@@ -45,6 +45,13 @@
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install"
   },
+  "payments": {
+    "productsFile": "./src/products.json",
+    "endpoints": {
+      "fulfillOrder": "/internal/payments/fulfill",
+      "refundOrder": "/internal/payments/refund"
+    }
+  },
   "scripts": {
     "dev": "vite build --watch",
     "build": "vite build"

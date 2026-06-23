@@ -99,6 +99,7 @@ function UserPanel() {
   const [username, setUsername] = useState('');
   const [user, setUser] = useState(null);
   const [roster, setRoster] = useState(null);
+  const [pass, setPass] = useState(null);
   const [credits, setCredits] = useState('');
   const [freeDrafts, setFreeDrafts] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
@@ -111,24 +112,29 @@ function UserPanel() {
     setUsername(target);
     setConfirmReset(false);
     setRoster(null);
+    setPass(null);
     wrap(async () => {
-      const [data, rosterData] = await Promise.all([
+      const [data, rosterData, passData] = await Promise.all([
         trpc.admin.getUser.query(target),
         trpc.admin.getUserRoster.query(target).catch(() => null),
+        trpc.admin.getUserPass.query(target).catch(() => null),
       ]);
       setUser(data);
       setRoster(rosterData);
+      setPass(passData);
     });
   };
 
   const reload = async (name) => {
     const target = name ?? username.trim();
-    const [data, rosterData] = await Promise.all([
+    const [data, rosterData, passData] = await Promise.all([
       trpc.admin.getUser.query(target),
       trpc.admin.getUserRoster.query(target).catch(() => null),
+      trpc.admin.getUserPass.query(target).catch(() => null),
     ]);
     setUser(data);
     setRoster(rosterData);
+    setPass(passData);
   };
 
   const restore = () => wrap(async () => {
@@ -149,6 +155,37 @@ function UserPanel() {
     if (isNaN(n) || n < 1) throw new Error('Enter a positive number');
     await trpc.admin.grantFreeDrafts.mutate({ username: username.trim(), amount: n });
     await reload(); setMsg({ text: `Granted ${n} free draft(s).`, ok: true });
+  });
+
+  const grantPass = (tier) => wrap(async () => {
+    const result = await trpc.admin.grantPass.mutate({ username: username.trim(), tier });
+    await reload();
+    setMsg({
+      text: `Granted ${tier.toUpperCase()} pass · +${(result.creditsGranted ?? 0).toLocaleString()} credits.`,
+      ok: true,
+    });
+  });
+
+  const revokePass = () => wrap(async () => {
+    const result = await trpc.admin.revokePass.mutate(username.trim());
+    await reload();
+    setMsg({
+      text: result.revokedTier
+        ? `Revoked ${result.revokedTier.toUpperCase()} pass. Founder flag + granted credits preserved.`
+        : 'No active pass to revoke.',
+      ok: true,
+    });
+  });
+
+  const retryFlair = () => wrap(async () => {
+    const result = await trpc.admin.retryFlair.mutate(username.trim());
+    await reload();
+    setMsg({
+      text: result.flairGranted
+        ? '✓ FOUNDER flair applied.'
+        : 'Flair write failed again — check server logs and r/lastdraftgame perms.',
+      ok: result.flairGranted,
+    });
   });
 
   const reset = () => {
@@ -221,6 +258,57 @@ function UserPanel() {
           <input style={{ ...S.input, width: 100 }} placeholder="# Drafts" value={freeDrafts}
             onChange={e => setFreeDrafts(e.target.value)} type="number" />
           <button style={S.btn('#1a3a4a')} onClick={grantDrafts} disabled={busy || !freeDrafts}>Grant Free Drafts</button>
+        </div>
+
+        {/* Founders Pass — admin grant / revoke. Mirrors core/battlePass.ts
+            behavior: grant deposits credits + sets founder flag; revoke
+            clears the season record but keeps credits & founder. */}
+        <hr style={S.divider} />
+        <div style={S.heading}>Founders Pass</div>
+        <table style={{ ...S.table, marginBottom: 8 }}>
+          <tbody>
+            <tr>
+              <td style={S.tdKey}>Current tier</td>
+              <td style={S.td}>
+                {pass?.tier
+                  ? <span style={{ color: pass.tier === 'premium' ? '#c084ff' : '#19e6c4', fontWeight: 700 }}>
+                      {pass.tier.toUpperCase()}
+                    </span>
+                  : <span style={{ color: '#556' }}>none</span>}
+              </td>
+            </tr>
+            <tr>
+              <td style={S.tdKey}>Purchased</td>
+              <td style={S.td}>{pass?.purchasedAt ? fmt(pass.purchasedAt) : '—'}</td>
+            </tr>
+            <tr>
+              <td style={S.tdKey}>Founder flag</td>
+              <td style={S.td}>{pass?.founder ? '✓ lifetime' : '—'}</td>
+            </tr>
+            <tr>
+              <td style={S.tdKey}>Reddit flair</td>
+              <td style={S.td}>
+                {pass?.tier == null
+                  ? <span style={{ color: '#556' }}>—</span>
+                  : pass?.flairGranted
+                    ? <span style={{ color: '#19e6c4' }}>✓ FOUNDER applied</span>
+                    : <span style={{ color: '#e0a030' }}>⚠ not applied (retry below)</span>}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div style={{ ...S.row, flexWrap: 'wrap' }}>
+          <button style={S.btn('#1a4a4a')} onClick={() => grantPass('basic')}
+            disabled={busy || pass?.tier === 'basic'}>Grant BASIC</button>
+          <button style={S.btn('#3a1a5a')} onClick={() => grantPass('premium')}
+            disabled={busy || pass?.tier === 'premium'}>Grant PREMIUM</button>
+          <button style={S.danger} onClick={revokePass}
+            disabled={busy || !pass?.tier}>Revoke</button>
+          {pass?.tier && !pass?.flairGranted && (
+            <button style={S.btn('#4a3a1a')} onClick={retryFlair} disabled={busy}>
+              Retry Flair
+            </button>
+          )}
         </div>
 
         {roster !== null && (<>

@@ -1,6 +1,6 @@
 # Challenge Me Posts — How They Work
 
-A "Challenge Me" post advertises a user's roster on r/TheMBA. Other Redditors open it,
+A "Challenge Me" post advertises a user's roster on r/LastDraftGame. Other Redditors open it,
 see the owner's team, and can play a game against that roster. This doc is the reference
 for the feature's data model, control flow, files, and the non-obvious gotchas.
 

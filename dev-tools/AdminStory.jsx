@@ -87,6 +87,7 @@ const S = {
 function UserPanel() {
   const [username, setUsername] = useState('');
   const [user, setUser]         = useState(null);
+  const [pass, setPass]         = useState(null);
   const [error, setError]       = useState('');
   const [busy, setBusy]         = useState(false);
   const [credits, setCredits]   = useState('');
@@ -94,11 +95,18 @@ function UserPanel() {
 
   const wrap = async (fn) => { setBusy(true); setError(''); try { await fn(); } catch (e) { setError(e.message); } finally { setBusy(false); } };
 
+  const reloadPass = async (name) => {
+    try { setPass(await api('GET', `/user/${name}/pass`)); } catch { setPass(null); }
+  };
+
   const load = (name) => wrap(async () => {
     const target = (name ?? username).trim();
     if (!target) return;
     setUsername(target);
-    const data = await api('GET', `/user/${target}`);
+    const [data] = await Promise.all([
+      api('GET', `/user/${target}`),
+      reloadPass(target),
+    ]);
     setUser(data);
   });
 
@@ -118,6 +126,24 @@ function UserPanel() {
     if (isNaN(n)) { setError('Enter a valid number'); return; }
     await api('POST', `/user/${username.trim()}/credits`, { credits: n });
     await api('GET', `/user/${username.trim()}`).then(setUser);
+  });
+
+  const grantPass = (tier) => wrap(async () => {
+    await api('POST', `/user/${username.trim()}/pass/grant`, { tier });
+    await Promise.all([
+      api('GET', `/user/${username.trim()}`).then(setUser),
+      reloadPass(username.trim()),
+    ]);
+  });
+
+  const revokePass = () => wrap(async () => {
+    await api('POST', `/user/${username.trim()}/pass/revoke`);
+    await reloadPass(username.trim());
+  });
+
+  const retryFlair = () => wrap(async () => {
+    await api('POST', `/user/${username.trim()}/pass/retry-flair`);
+    await reloadPass(username.trim());
   });
 
   const fmt = (ts) => ts ? new Date(ts).toLocaleString() : '—';
@@ -173,6 +199,54 @@ function UserPanel() {
             <input style={{ ...S.input, width: 120 }} placeholder="Credits" value={credits}
               onChange={e => setCredits(e.target.value)} type="number" />
             <button style={S.btn('#4a3a1a')} onClick={setC} disabled={busy || !credits}>Set Credits</button>
+          </div>
+
+          {/* Founders Pass — admin grant / revoke. See src/server/core/battlePass.ts. */}
+          <div style={{ ...S.heading, marginTop: 18 }}>Founders Pass</div>
+          <table style={{ ...S.table, marginBottom: 8 }}>
+            <tbody>
+              <tr>
+                <td style={S.tdKey}>Current tier</td>
+                <td style={S.td}>
+                  {pass?.tier
+                    ? <span style={{ color: pass.tier === 'premium' ? '#c084ff' : '#19e6c4', fontWeight: 700 }}>
+                        {pass.tier.toUpperCase()}
+                      </span>
+                    : <span style={{ color: '#556' }}>none</span>}
+                </td>
+              </tr>
+              <tr>
+                <td style={S.tdKey}>Purchased</td>
+                <td style={S.td}>{pass?.purchasedAt ? fmt(pass.purchasedAt) : '—'}</td>
+              </tr>
+              <tr>
+                <td style={S.tdKey}>Founder flag</td>
+                <td style={S.td}>{pass?.founder ? '✓ lifetime' : '—'}</td>
+              </tr>
+              <tr>
+                <td style={S.tdKey}>Reddit flair</td>
+                <td style={S.td}>
+                  {pass?.tier == null
+                    ? <span style={{ color: '#556' }}>—</span>
+                    : pass?.flairGranted
+                      ? <span style={{ color: '#19e6c4' }}>✓ FOUNDER applied</span>
+                      : <span style={{ color: '#e0a030' }}>⚠ not applied</span>}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ ...S.row, flexWrap: 'wrap' }}>
+            <button style={S.btn('#1a4a4a')} onClick={() => grantPass('basic')}
+              disabled={busy || pass?.tier === 'basic'}>Grant BASIC</button>
+            <button style={S.btn('#3a1a5a')} onClick={() => grantPass('premium')}
+              disabled={busy || pass?.tier === 'premium'}>Grant PREMIUM</button>
+            <button style={S.danger} onClick={revokePass}
+              disabled={busy || !pass?.tier}>Revoke</button>
+            {pass?.tier && !pass?.flairGranted && (
+              <button style={S.btn('#4a3a1a')} onClick={retryFlair} disabled={busy}>
+                Retry Flair
+              </button>
+            )}
           </div>
         </>
       )}
@@ -350,6 +424,7 @@ function CatalogPanel() {
 function MissionsPanel() {
   const [username, setUsername] = useState('');
   const [missions, setMissions] = useState(null); // { daily, weekly }
+  const [bpMissions, setBpMissions] = useState(null); // MissionView[] for BP seasonal
   const [editProg, setEditProg] = useState({});   // { [missionId]: string }
   const [error, setError]       = useState('');
   const [busy, setBusy]         = useState(false);
@@ -361,14 +436,22 @@ function MissionsPanel() {
     const target = (name ?? username).trim();
     if (!target) return;
     setUsername(target);
-    const data = await api('GET', `/user/${target}/missions`);
+    const [data, bpData] = await Promise.all([
+      api('GET', `/user/${target}/missions`),
+      api('GET', `/user/${target}/missions/pass`).catch(() => []),
+    ]);
     setMissions(data);
+    setBpMissions(Array.isArray(bpData) ? bpData : []);
     setEditProg({});
   });
 
   const reload = async () => {
-    const data = await api('GET', `/user/${username.trim()}/missions`);
+    const [data, bpData] = await Promise.all([
+      api('GET', `/user/${username.trim()}/missions`),
+      api('GET', `/user/${username.trim()}/missions/pass`).catch(() => []),
+    ]);
     setMissions(data);
+    setBpMissions(Array.isArray(bpData) ? bpData : []);
   };
 
   const resetAll = () => wrap(async () => {
@@ -391,6 +474,21 @@ function MissionsPanel() {
     await reload();
   });
 
+  const forceClaim = (type, missionId) => wrap(async () => {
+    await api('POST', `/user/${username.trim()}/missions/claim`, { type, missionId });
+    await reload();
+  });
+
+  const completeBp = (missionId) => wrap(async () => {
+    await api('POST', `/user/${username.trim()}/missions/pass/complete`, { missionId });
+    await reload();
+  });
+
+  const forceClaimBp = (missionId) => wrap(async () => {
+    await api('POST', `/user/${username.trim()}/missions/pass/claim`, { missionId });
+    await reload();
+  });
+
   const renderGroup = (type, rows) => (
     <div style={{ marginBottom: 18 }}>
       <div style={{ ...S.heading, color: '#7aaff0', marginBottom: 8 }}>{type.toUpperCase()}</div>
@@ -398,6 +496,8 @@ function MissionsPanel() {
         <tbody>
           {rows.map(m => {
             const pct = Math.min(100, Math.round((m.progress / m.total) * 100));
+            // Three states: in-progress (blue), completed-unclaimed (gold), claimed (cyan)
+            const barColor = m.claimed ? '#5bf2d4' : m.completed ? '#ffd97a' : '#3a8fd4';
             return (
               <tr key={m.id}>
                 <td style={{ ...S.tdKey }}>
@@ -407,12 +507,13 @@ function MissionsPanel() {
                 <td style={S.td}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ flex: 1, minWidth: 80, height: 6, background: '#1a2030', borderRadius: 3, overflow: 'hidden' }}>
-                      <div style={{ width: `${pct}%`, height: '100%', background: m.awarded ? '#5bf2d4' : '#3a8fd4' }} />
+                      <div style={{ width: `${pct}%`, height: '100%', background: barColor }} />
                     </div>
                     <span style={{ fontSize: 11, color: '#aab', minWidth: 36, textAlign: 'right' }}>
                       {m.progress}/{m.total}
                     </span>
-                    {m.awarded && <span style={S.tag('#1a4a3a')}>AWARDED</span>}
+                    {m.claimed    && <span style={S.tag('#1a4a3a')}>CLAIMED</span>}
+                    {m.completed && !m.claimed && <span style={S.tag('#3a3010')}>COMPLETED</span>}
                   </div>
                   <div style={{ ...S.row, marginTop: 6, marginBottom: 0, gap: 6 }}>
                     <input
@@ -427,9 +528,15 @@ function MissionsPanel() {
                       Set
                     </button>
                     <button style={{ ...S.btn('#1a4a2a'), padding: '4px 10px', fontSize: 11 }}
-                      onClick={() => complete(type, m.id)} disabled={busy || m.awarded}>
-                      Complete
+                      onClick={() => complete(type, m.id)} disabled={busy || m.claimed}>
+                      Complete+Claim
                     </button>
+                    {m.completed && !m.claimed && (
+                      <button style={{ ...S.btn('#1a3a4a'), padding: '4px 10px', fontSize: 11 }}
+                        onClick={() => forceClaim(type, m.id)} disabled={busy}>
+                        Force Claim
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -464,6 +571,56 @@ function MissionsPanel() {
         <div style={{ marginTop: 14 }}>
           {renderGroup('daily', missions.daily)}
           {renderGroup('weekly', missions.weekly)}
+          {/* BP Seasonal Missions */}
+          {bpMissions !== null && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ ...S.heading, color: '#c084ff', marginBottom: 8 }}>BATTLE PASS — SEASONAL (pass holders only)</div>
+              {bpMissions.length === 0 ? (
+                <div style={{ color: '#555', fontFamily: 'monospace', fontSize: 12 }}>No progress yet — user may not have a pass.</div>
+              ) : (
+                <table style={S.table}>
+                  <tbody>
+                    {bpMissions.map(m => {
+                      const pct = Math.min(100, Math.round((m.progress / m.total) * 100));
+                      const barColor = m.claimed ? '#5bf2d4' : m.completed ? '#ffd97a' : '#3a8fd4';
+                      return (
+                        <tr key={m.id}>
+                          <td style={{ ...S.tdKey }}>
+                            <div style={{ color: '#cde', fontWeight: 700 }}>{m.label}</div>
+                            <div style={{ color: '#555', fontSize: 10, marginTop: 2 }}>{m.id} · +{m.reward}CR · {m.total}×</div>
+                          </td>
+                          <td style={S.td}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ flex: 1, minWidth: 80, height: 6, background: '#1a2030', borderRadius: 3, overflow: 'hidden' }}>
+                                <div style={{ width: `${pct}%`, height: '100%', background: barColor }} />
+                              </div>
+                              <span style={{ fontSize: 11, color: '#aab', minWidth: 36, textAlign: 'right' }}>
+                                {m.progress}/{m.total}
+                              </span>
+                              {m.claimed     && <span style={S.tag('#1a4a3a')}>CLAIMED</span>}
+                              {m.completed && !m.claimed && <span style={S.tag('#3a3010')}>COMPLETED</span>}
+                            </div>
+                            <div style={{ ...S.row, marginTop: 6, marginBottom: 0, gap: 6 }}>
+                              <button style={{ ...S.btn('#1a4a2a'), padding: '4px 10px', fontSize: 11 }}
+                                onClick={() => completeBp(m.id)} disabled={busy || m.claimed}>
+                                Complete+Claim
+                              </button>
+                              {m.completed && !m.claimed && (
+                                <button style={{ ...S.btn('#1a3a4a'), padding: '4px 10px', fontSize: 11 }}
+                                  onClick={() => forceClaimBp(m.id)} disabled={busy}>
+                                  Force Claim
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

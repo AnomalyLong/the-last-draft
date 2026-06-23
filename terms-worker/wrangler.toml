@@ -1,0 +1,24 @@
+name = "tld-terms"
+main = "src/worker.ts"
+compatibility_date = "2026-06-21"
+
+# Custom route on the anomalygames.ai zone.
+# Matches /terms and /terms/anything under lastdraft.anomalygames.ai.
+# Requires:
+#   1. anomalygames.ai must already be on Cloudflare (active zone).
+#   2. A DNS record for lastdraft.anomalygames.ai must exist with the
+#      orange-cloud proxy enabled — point it at any dummy A (e.g.
+#      192.0.2.1) or use a CNAME to a Cloudflare-owned hostname; the
+#      Worker hijacks the request before the origin matters.
+routes = [
+  { pattern = "lastdraft.anomalygames.ai/terms*", zone_name = "anomalygames.ai" }
+]
+
+# Bundle imported .md files as plain text strings at deploy time so the
+# Worker has the terms content embedded — no runtime fetch, no GitHub
+# dependency. Updates to TERMS.md require a redeploy, which is what we
+# want anyway for a legal document (deploys are versioned).
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = true

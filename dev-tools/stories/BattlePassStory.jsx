@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { PhoneFrameExpanded, DEVICES } from '../PhoneFrame.jsx';
 import { CrtOverlay } from '../StoryFrame.jsx';
 import BattlePassScreen from '@src/components/BattlePassScreen.jsx';
@@ -25,16 +25,41 @@ export default function BattlePassStory() {
   const [desktopH, setDesktopH] = useState(800);
   const [scanlines, setScanlines] = useState(0.5);
   const [vignette, setVignette]   = useState(0.75);
+  // Mock pass entitlement state. 'none' / 'basic' / 'premium' covers the three
+  // visual variants. Real purchase() is stubbed in the story — see handlers.
+  const [passTier, setPassTier] = useState('none');
 
   const push = (msg) => setLog((l) => [`${new Date().toLocaleTimeString()} ${msg}`, ...l].slice(0, 12));
 
+  // Build a passState that matches what App.jsx hands the screen in prod.
+  // founder=true once any pass is owned, mirroring the server-side behavior
+  // in core/battlePass.ts where the lifetime flag is set on first purchase.
+  const passState = {
+    tier: passTier === 'none' ? null : passTier,
+    purchasedAt: passTier === 'none' ? 0 : Date.now(),
+    founder: passTier !== 'none',
+  };
+
+  // Mock BP-exclusive missions covering all three states: in-progress,
+  // completed-unclaimed, claimed. Mirrors the MissionView shape from core/missions.ts.
+  const mockBpMissions = [
+    { id: 'bp_win10',     label: 'WIN 10 GAMES',      sub: 'Any mode',                  reward: 1000, total: 10, progress: 3,  completed: false, claimed: false, accent: 'cyan'    },
+    { id: 'bp_win25',     label: 'WIN 25 GAMES',       sub: 'Dominate the season',       reward: 2500, total: 25, progress: 3,  completed: false, claimed: false, accent: 'cyan'    },
+    { id: 'bp_draft5',    label: 'DRAFT 5 PLAYERS',    sub: 'Free or credit drafts',     reward: 500,  total: 5,  progress: 5,  completed: true,  claimed: false, accent: 'magenta' },
+    { id: 'bp_draft10',   label: 'DRAFT 10 PLAYERS',   sub: 'Build your empire',         reward: 1200, total: 10, progress: 5,  completed: false, claimed: false, accent: 'magenta' },
+    { id: 'bp_challenge', label: 'POST 3 CHALLENGES',  sub: 'Challenge the community',   reward: 750,  total: 3,  progress: 3,  completed: true,  claimed: true,  accent: 'gold'    },
+    { id: 'bp_play50',    label: 'PLAY 50 GAMES',      sub: 'The grind is real',         reward: 3000, total: 50, progress: 12, completed: false, claimed: false, accent: 'gold'    },
+  ];
+
   const handlers = {
-    onBack:       () => push('onBack'),
-    onPlay:       () => push('onPlay'),
-    onCollection: () => push('onCollection'),
-    onDraft:      () => push('onDraft'),
-    onAuction:    () => push('onAuction (re-open battle pass)'),
-    onOptions:    () => push('onOptions'),
+    onBack:        () => push('onBack'),
+    onPlay:        () => push('onPlay'),
+    onCollection:  () => push('onCollection'),
+    onDraft:       () => push('onDraft'),
+    onAuction:     () => push('onAuction (re-open battle pass)'),
+    onOptions:     () => push('onOptions'),
+    onBpClaim:     () => push('onBpClaim (refreshBpMissions)'),
+    onPassRefresh: () => push('onPassRefresh (story: no real purchase wired)'),
   };
 
   return (
@@ -60,6 +85,18 @@ export default function BattlePassStory() {
           VIG
           <input type="range" min={0} max={1} step={0.05} value={vignette}
             onChange={e => setVignette(Number(e.target.value))} style={{ width: 55 }} />
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          Pass
+          <select
+            value={passTier}
+            onChange={e => setPassTier(e.target.value)}
+            style={{ background: '#1a1a1a', border: '1px solid #444', color: '#ccc', borderRadius: 3, padding: '2px 6px', fontSize: 12 }}
+          >
+            <option value="none">none</option>
+            <option value="basic">basic</option>
+            <option value="premium">premium</option>
+          </select>
         </label>
         <button
           onClick={() => setMobile(m => !m)}
@@ -115,7 +152,7 @@ export default function BattlePassStory() {
       {/* Preview */}
       {mobile ? (
         <PhoneFrameExpanded device={DEVICES[deviceKey]}>
-          <BattlePassScreen username="peetan" credits={credits} {...handlers} />
+          <BattlePassScreen username="peetan" credits={credits} passState={passState} bpMissions={mockBpMissions} {...handlers} />
           <CrtOverlay scanlines={scanlines} vignette={vignette} />
         </PhoneFrameExpanded>
       ) : (
@@ -128,7 +165,7 @@ export default function BattlePassStory() {
           background: '#02060a',
           flexShrink: 0,
         }}>
-          <BattlePassScreen username="peetan" credits={credits} {...handlers} />
+          <BattlePassScreen username="peetan" credits={credits} passState={passState} bpMissions={mockBpMissions} {...handlers} />
           <CrtOverlay scanlines={scanlines} vignette={vignette} />
         </div>
       )}

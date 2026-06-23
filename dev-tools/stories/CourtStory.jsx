@@ -25,6 +25,9 @@ export default function CourtStory() {
 
   const gameSceneProps = {
     ...gameState,
+    // Always admin in the story so the in-game DebugConsole is available
+    // for testing — production gates it on the real admin check in App.jsx.
+    isAdmin: true,
     homeTeamName: OPPONENTS[0].name,
     awayTeamName: AWAY_TEAM.name,
     homeRoster: HOME_ROSTER,

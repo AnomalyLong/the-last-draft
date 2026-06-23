@@ -18,3 +18,7 @@ export { FADEAWAY_FRAMES } from './fadeaway.js';
 export { CELEBRATION_FRAMES } from './celebration.js';
 export { PICK_FRAMES } from './pick.js';
 export { STAGGER_FRAMES } from './stagger.js';
+export { NET_PIXELS } from './net.js';
+export { SWISH_FRAMES } from './swish.js';
+export { DUNK_NET_FRAMES } from './dunknet.js';
+export { MISS_NET_FRAMES } from './missnet.js';
