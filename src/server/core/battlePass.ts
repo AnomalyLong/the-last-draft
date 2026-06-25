@@ -7,7 +7,7 @@ import { userKey, awardCredits, getUser } from './user';
 // Teal accent (#19e6c4) matches the game's primary brand color; dark
 // text reads well against it on both light and dark Reddit themes.
 const FOUNDER_FLAIR = {
-  text: 'FOUNDER',
+  text: 'Founder Pass Contributor',
   backgroundColor: '#19e6c4',
   textColor: 'dark' as const,
 };

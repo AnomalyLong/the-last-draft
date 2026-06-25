@@ -1,22 +1,10 @@
 import React from 'react';
 import '../styles/lobby.css';
 import '../styles/battle-pass.css';
-import { BottomNav, WarpLines } from './LobbyScreen.jsx';
+import { WarpLines } from './LobbyScreen.jsx';
 import { playSelect, playCancel, playCursor } from '../sound/ui.js';
 import { purchase, OrderResultStatus } from '@devvit/web/client';
 import { trpc } from '../trpc';
-
-// ── Static reward data (mock — not wired to server) ──────────
-const PREMIUM_REWARDS = [
-  { tier: 1,  name: 'WARPLATE CROWN',   rarity: 5, glyph: '◐', color: '#ff2d6f' },
-  { tier: 2,  name: 'TITAN CUFF',       rarity: 5, glyph: '◈', color: '#ff7a3c' },
-  { tier: 4,  name: 'VOIDWALK SHOES',   rarity: 5, glyph: '◆', color: '#fb923c' },
-  { tier: 6,  name: 'ZANSHIN BAND',     rarity: 5, glyph: '◐', color: '#a855f7' },
-  { tier: 8,  name: 'GLACIER BOOSTERS', rarity: 5, glyph: '◆', color: '#3ea6ff' },
-  { tier: 12, name: 'PARRY GUARD',      rarity: 5, glyph: '◈', color: '#f472b6' },
-  { tier: 16, name: 'FROST CUFF',       rarity: 4, glyph: '◈', color: '#67e8f9' },
-  { tier: 25, name: 'BOOSTER HI-LO',    rarity: 5, glyph: '◆', color: '#22d3ee' },
-];
 
 const SKU_BASIC = 'founders_pass_basic';
 const SKU_PREMIUM = 'founders_pass_premium';
@@ -27,28 +15,8 @@ const SKU_PREMIUM = 'founders_pass_premium';
 const CREDITS_BY_TIER = { basic: 25_000, premium: 150_000 };
 const SKU_TO_TIER = { [SKU_BASIC]: 'basic', [SKU_PREMIUM]: 'premium' };
 
-function RewardTier({ reward, isPremium, currentTier }) {
-  const isActive = currentTier >= reward.tier;
-  return (
-    <div
-      className={`bp-tier ${isActive ? 'active' : ''} ${isPremium ? 'premium' : 'free'}`}
-      style={{ '--reward-color': reward.color }}
-    >
-      <div className="bpt-marker">
-        <span className="bptm-num">{reward.tier}</span>
-        {isActive && isPremium && <span className="bptm-lock">★</span>}
-      </div>
-      <div className="bpt-reward">
-        <div className="bptr-glyph">{reward.glyph}</div>
-        <div className="bptr-name">{reward.name}</div>
-        <div className="bptr-rarity">★★★</div>
-      </div>
-    </div>
-  );
-}
-
 function ProgressBar({ current, max }) {
-  const pct = (current / max) * 100;
+  const pct = max > 0 ? (current / max) * 100 : 0;
   return (
     <div className="bp-progress">
       <div className="bpp-track">
@@ -73,20 +41,15 @@ export default function BattlePassScreen({
   onPassRefresh,
   onBpClaim,
   onBack,
-  onPlay,
-  onCollection,
-  onDraft,
-  onAuction,
-  onOptions,
 }) {
   const tier = passState?.tier ?? null;
   const isPremium = tier === 'premium';
   const isBasic = tier === 'basic';
   const hasAnyPass = tier !== null;
 
-  // Mock tier progress for the rewards display when premium is active.
-  // Replace with server-tracked progress when battle-pass advancement ships.
-  const currentTier = 8;
+  // BP mission progress — how many seasonal missions the player has completed.
+  const missionsTotal = bpMissions.length;
+  const missionsCompleted = bpMissions.filter(m => m.completed).length;
 
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -222,10 +185,10 @@ export default function BattlePassScreen({
               <span className="bpsh-title">YOUR PROGRESS</span>
             </div>
             <div className="bp-progress-card">
-              <ProgressBar current={currentTier} max={50} />
+              <ProgressBar current={missionsCompleted} max={missionsTotal} />
               <div className="bppc-next">
-                <span className="bppcn-lbl">NEXT REWARD IN</span>
-                <span className="bppcn-val">{50 - currentTier} TIERS</span>
+                <span className="bppcn-lbl">MISSIONS COMPLETED</span>
+                <span className="bppcn-val">{missionsCompleted} / {missionsTotal}</span>
               </div>
             </div>
           </section>
@@ -327,24 +290,12 @@ export default function BattlePassScreen({
           </section>
         )}
 
-        {/* Tier display — premium track only, shown after Founders Pass purchase */}
+        {/* Confirmation — shown after Founders Pass purchase */}
         {isPremium && (
           <section className="bp-section bp-tiers-sec">
             <div className="bps-head">
               <span className="bpsh-mark">🎁</span>
-              <span className="bpsh-title">SEASON REWARDS</span>
-              <span className="bpsh-sub">PREMIUM TRACK</span>
-            </div>
-
-            <div className="bp-tiers-grid">
-              {PREMIUM_REWARDS.map((reward) => (
-                <RewardTier
-                  key={`premium-${reward.tier}`}
-                  reward={reward}
-                  isPremium={true}
-                  currentTier={currentTier}
-                />
-              ))}
+              <span className="bpsh-title">PREMIUM PASS PURCHASED</span>
             </div>
           </section>
         )}
@@ -397,18 +348,9 @@ export default function BattlePassScreen({
           </div>
         </section>
 
-        {/* Spacer so content isn't hidden behind BottomNav */}
-        <div style={{ height: 96 }} />
+        {/* Bottom spacer so the last section clears the viewport edge */}
+        <div style={{ height: 24 }} />
       </div>
-
-      <BottomNav
-        onPlay={onPlay}
-        onCollection={onCollection}
-        onDraft={onDraft}
-        onAuction={onAuction}
-        onOptions={onOptions}
-        draftDisabled={false}
-      />
 
       {/* Success modal — shown after purchase() resolves successfully. The
           tier + credit count come from the SKU we just initiated; the

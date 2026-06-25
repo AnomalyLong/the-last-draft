@@ -442,11 +442,6 @@ export default function App() {
             }}
             onBpClaim={refreshBpMissions}
             onBack={() => setScene('title')}
-            onPlay={() => setScene('title')}
-            onCollection={() => setScene('collection')}
-            onDraft={() => setScene('draftHub')}
-            onAuction={() => setScene('battlePass')}
-            onOptions={() => setScene('options')}
           />
         </ScreenWithStrip>
       )}
