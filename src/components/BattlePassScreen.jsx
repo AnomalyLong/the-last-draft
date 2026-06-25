@@ -181,7 +181,6 @@ export default function BattlePassScreen({
         {isPremium && (
           <section className="bp-section bp-progress-sec">
             <div className="bps-head">
-              <span className="bpsh-mark">📊</span>
               <span className="bpsh-title">YOUR PROGRESS</span>
             </div>
             <div className="bp-progress-card">
@@ -286,16 +285,6 @@ export default function BattlePassScreen({
                   )}
                 </div>
               </article>
-            </div>
-          </section>
-        )}
-
-        {/* Confirmation — shown after Founders Pass purchase */}
-        {isPremium && (
-          <section className="bp-section bp-tiers-sec">
-            <div className="bps-head">
-              <span className="bpsh-mark">🎁</span>
-              <span className="bpsh-title">PREMIUM PASS PURCHASED</span>
             </div>
           </section>
         )}

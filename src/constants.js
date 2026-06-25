@@ -29,6 +29,15 @@ export const MISS_REBOUND_MAX_FT  = 15; // grid-ft: farthest rebound lands from 
 export const BLOCK_REBOUND_MIN_FT = 5;  // grid-ft: nearest rebound lands from basket on a block
 export const BLOCK_REBOUND_MAX_FT = 8;  // grid-ft: farthest rebound lands from basket on a block
 
+// ─── Defense Guarding ─────────────────────────────────────────────────────────
+// A defender stands this fraction of the way from the attacker they cover toward
+// the attacked basket. 0 = on top of the attacker, 1 = at the basket.
+// 0.2 keeps the defender tight on their man while cutting off the lane.
+export const GUARD_GAP_FRAC = 0.2;
+// How often (ms) each defender repositions onto their assignment.
+export const GUARD_REPOSITION_MIN_MS = 200;
+export const GUARD_REPOSITION_MAX_MS = 400;
+
 // ─── Court Layout ────────────────────────────────────────────────────────────
 export const W = 680;
 export const ZOOM_W = Math.round(W * 0.6); // 408 — camera viewport width

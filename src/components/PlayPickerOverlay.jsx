@@ -8,11 +8,25 @@ const PLAYS = [
   { id: 'iso',      tag: 'ISO',     name: 'Isolation',   desc: ['1-on-1', 'Matchup'], color: '#e8c060', tint: 'rgba(232,192,96,0.20)' },
 ];
 
+// Isolation target picker — who the PG feeds for the 1-on-1.
+// 'PG' keeps the ball (no pass); the rest receive a pass after the step-back.
+const ISO_TARGETS = [
+  { role: 'PG', label: 'PG', action: 'KEEP' },
+  { role: 'SG', label: 'SG', action: 'PASS' },
+  { role: 'SF', label: 'SF', action: 'PASS' },
+  { role: 'PF', label: 'PF', action: 'PASS' },
+  { role: 'C',  label: 'C',  action: 'PASS' },
+];
+const ISO_COLOR = '#e8c060';
+
 const DLG_W    = 300;
 const SIDE_PAD = 10;
 const CARD_GAP = 8;
 const CARD_W   = Math.floor((DLG_W - SIDE_PAD * 2 - CARD_GAP * (PLAYS.length - 1)) / PLAYS.length); // 88
 const CARD_H   = 78;
+const TGT_GAP  = 6;
+const TGT_W    = Math.floor((DLG_W - SIDE_PAD * 2 - TGT_GAP * (ISO_TARGETS.length - 1)) / ISO_TARGETS.length); // 51
+const TGT_H    = CARD_H;
 const DLG_H    = Math.round(TOTAL_H / 3); // 116 — bottom third of screen
 const DLG_Y    = TOTAL_H - DLG_H;
 const N_PARTS  = 10;
@@ -85,10 +99,48 @@ function PlayCard({ play, x, y, onClick, disabled }) {
   );
 }
 
+// ─── Isolation target button ────────────────────────────────────────────────
+
+function IsoTargetButton({ tgt, x, y, onClick }) {
+  const [hover, setHover] = React.useState(false);
+
+  return (
+    <g onClick={onClick} style={{ cursor: 'pointer' }}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+
+      {/* Shadow */}
+      <rect x={x + 2} y={y + 3} width={TGT_W} height={TGT_H} rx={4}
+        fill="rgba(0,0,0,0.50)" shapeRendering="crispEdges" />
+
+      {/* Body */}
+      <rect x={x} y={y} width={TGT_W} height={TGT_H} rx={4}
+        fill={hover ? '#263c60' : '#192840'} opacity={0.2} shapeRendering="crispEdges" />
+      <rect x={x} y={y} width={TGT_W} height={TGT_H} rx={4}
+        fill="none" stroke={ISO_COLOR} strokeWidth={hover ? 2 : 1} />
+      {hover && (
+        <rect x={x} y={y} width={TGT_W} height={TGT_H} rx={4}
+          fill="white" opacity={0.06} shapeRendering="crispEdges" />
+      )}
+
+      {/* Position label (large) */}
+      <PixelTextC text={tgt.label} cx={x + TGT_W / 2} y={y + 18}
+        scale={2} fill="#e8f0ff" outline="#0a1828" />
+
+      {/* Action button */}
+      <rect x={x + 5} y={y + TGT_H - 18} width={TGT_W - 10} height={14} rx={3}
+        fill={hover ? ISO_COLOR : '#1a3060'} opacity={0.2} shapeRendering="crispEdges" />
+      <PixelTextC text={tgt.action} cx={x + TGT_W / 2} y={y + TGT_H - 15}
+        scale={1} fill={hover ? '#000' : ISO_COLOR} outline={null} />
+    </g>
+  );
+}
+
 // ─── Picker dialog ────────────────────────────────────────────────────────────
 
 export function PlayPickerOverlay({ cameraX, onPick, disabledPlayId }) {
   const [tick, setTick] = React.useState(0);
+  // When the ISO card is chosen we switch to a target picker instead of resolving.
+  const [isoMode, setIsoMode] = React.useState(false);
   React.useEffect(() => {
     let rafId;
     const loop = () => { setTick(t => t + 1); rafId = requestAnimationFrame(loop); };
@@ -98,6 +150,7 @@ export function PlayPickerOverlay({ cameraX, onPick, disabledPlayId }) {
 
   const dlgX    = cameraX + Math.round((ZOOM_W - DLG_W) / 2);
   const panelCX = cameraX + ZOOM_W / 2;
+  const isoPlay = PLAYS.find(p => p.id === 'iso');
 
   const fadeIn  = Math.min(tick / 12, 1);
   const bPulse  = (Math.sin(tick * 0.055) + 1) / 2;
@@ -193,11 +246,24 @@ export function PlayPickerOverlay({ cameraX, onPick, disabledPlayId }) {
       </g>
 
       {/* Header text */}
-      <PixelTextC text="CALL A PLAY" cx={panelCX} y={DLG_Y + 9 + hBob}
+      <PixelTextC text={isoMode ? 'CHOOSE A PLAYER' : 'CALL A PLAY'} cx={panelCX} y={DLG_Y + 9 + hBob}
         scale={1} fill={hFlash} outline={null} />
 
-      {/* Cards with staggered entrance — laid out horizontally */}
-      {PLAYS.map((play, i) => {
+      {/* Back button (target picker only) */}
+      {isoMode && (
+        <g onClick={() => setIsoMode(false)} style={{ cursor: 'pointer' }}>
+          <rect x={dlgX + 5} y={DLG_Y + 6} width={30} height={13} rx={2}
+            fill="#1a3060" opacity={0.5} shapeRendering="crispEdges" />
+          <rect x={dlgX + 5} y={DLG_Y + 6} width={30} height={13} rx={2}
+            fill="none" stroke={ISO_COLOR} strokeWidth={1} />
+          <PixelTextC text="BACK" cx={dlgX + 20} y={DLG_Y + 9}
+            scale={1} fill={ISO_COLOR} outline={null} />
+        </g>
+      )}
+
+      {/* Play cards with staggered entrance — laid out horizontally.
+          Clicking ISO opens the target picker instead of resolving immediately. */}
+      {!isoMode && PLAYS.map((play, i) => {
         const { yOff, op } = cardAnim(i);
         const cardX = dlgX + SIDE_PAD + i * (CARD_W + CARD_GAP);
         const cardY = DLG_Y + 32;
@@ -207,10 +273,25 @@ export function PlayPickerOverlay({ cameraX, onPick, disabledPlayId }) {
               play={play}
               x={cardX}
               y={cardY}
-              onClick={() => onPick(play)}
+              onClick={() => play.id === 'iso' ? setIsoMode(true) : onPick(play)}
               disabled={play.id === disabledPlayId}
             />
           </g>
+        );
+      })}
+
+      {/* Isolation target buttons — pick which player the PG feeds. */}
+      {isoMode && ISO_TARGETS.map((tgt, i) => {
+        const btnX = dlgX + SIDE_PAD + i * (TGT_W + TGT_GAP);
+        const btnY = DLG_Y + 32;
+        return (
+          <IsoTargetButton
+            key={tgt.role}
+            tgt={tgt}
+            x={btnX}
+            y={btnY}
+            onClick={() => onPick({ ...isoPlay, isoTarget: tgt.role })}
+          />
         );
       })}
     </g>

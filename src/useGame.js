@@ -4,7 +4,8 @@ import { gridToSvg, svgToGrid, INITIAL_PLAYERS, SHOOT_TARGET_LEFT, SHOOT_TARGET_
   BLOCK_REBOUND_MIN_FT, BLOCK_REBOUND_MAX_FT, JUMP_BALL_FORMATION, ABILITY_LEVELUP_RATE,
   MOTION_MIN_PASSES, MOTION_MAX_PASSES,
   ISO_PASS_RATE, ISO_DUNK_RATE,
-  PICKROLL_DRIVE_RATE, PICKROLL_C_DUNK_RATE, NUM_PERIODS, DEFENSE_PICK_MS } from './constants.js';
+  PICKROLL_DRIVE_RATE, PICKROLL_C_DUNK_RATE, NUM_PERIODS, DEFENSE_PICK_MS,
+  GUARD_GAP_FRAC, GUARD_REPOSITION_MIN_MS, GUARD_REPOSITION_MAX_MS } from './constants.js';
 import { SHOOT_CHAR_FRAMES } from './sprites/index.js';
 import { ABILITIES } from './abilities.js';
 import { runCommand } from './debugCommands.js';
@@ -809,8 +810,12 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   };
 
   // ISO play: C + PF clear to opposite 3-pt corners, then ball handler goes 1-on-1.
-  // 33% pass to SG / 33% pass to SF / 33% keep. After 0.3s: 75% drive for dunk, 25% kick out to onComplete.
-  const triggerIsolation = (onAttempt = null, onScore = null, onSteal = null) => {
+  // targetRole picks who finishes the iso:
+  //   - undefined → legacy random (33% SG / 33% SF / 33% PG keeps)
+  //   - a role string ('SG','SF','PF','C') → PG steps back then passes to that player
+  //   - null → PG keeps it and goes 1-on-1
+  // After 0.3s: 75% drive for dunk, 25% kick out to onComplete.
+  const triggerIsolation = (onAttempt = null, onScore = null, onSteal = null, targetRole = undefined) => {
     wanderActiveRef.current = false;
     const carrier = playersRef.current.find(p => p.hasBall);
     if (!carrier) return;
@@ -836,11 +841,17 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
       const ballHolder = playersRef.current.find(p => p.hasBall);
       if (!ballHolder) return;
 
-      //Executes a isolation play for SG, or SF, if neither than the PG does the play
-      const roll = Math.random();
-      const targetRole = roll < ISO_PASS_RATE ? 'SG' : roll < ISO_PASS_RATE * 2 ? 'SF' : null;
-      const target = targetRole
-        ? playersRef.current.find(p => p.team === ballHolder.team && p.role === targetRole)
+      // Pick who finishes: explicit user choice if given, else legacy random SG/SF/keep.
+      let role;
+      if (targetRole === undefined) {
+        const roll = Math.random();
+        role = roll < ISO_PASS_RATE ? 'SG' : roll < ISO_PASS_RATE * 2 ? 'SF' : null;
+      } else {
+        // A chosen role of 'PG' (the ball handler) means keep it → no pass.
+        role = targetRole === ballHolder.role ? null : targetRole;
+      }
+      const target = role
+        ? playersRef.current.find(p => p.team === ballHolder.team && p.role === role)
         : null;
 
       //Do Finish is 75% dunk, 25% shoot
@@ -1899,7 +1910,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
 
     const scheduleGuard = (defenderId, offenderId) => {
       if (!guardActiveRef.current || !gameLoopActiveRef.current || gamePausedRef.current) return;
-      const delay = 200 + Math.random() * 200; // reposition every 200–400ms
+      const delay = GUARD_REPOSITION_MIN_MS + Math.random() * (GUARD_REPOSITION_MAX_MS - GUARD_REPOSITION_MIN_MS);
       setTimeout(() => {
         if (!guardActiveRef.current || !gameLoopActiveRef.current || gamePausedRef.current) return;
         if (bumpedDefendersRef.current.has(defenderId)) { scheduleGuard(defenderId, offenderId); return; }
@@ -1908,10 +1919,9 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
 
         const { x: ox, y: oy } = svgToGrid(offender.cx, offender.cy);
 
-        // Stand 20% of the way from the offensive player toward the basket shadow.
-        // t=0 → on top of attacker, t=1 → at basket. 0.2 keeps defender tight
-        // on the attacker while still cutting off the lane.
-        const t = 0.2;
+        // Stand GUARD_GAP_FRAC of the way from the offensive player toward the
+        // basket shadow (see constants.js). t=0 → on top of attacker, t=1 → at basket.
+        const t = GUARD_GAP_FRAC;
         const gx = Math.round(ox + (basketGx - ox) * t);
         const gy = Math.round(oy + (BASKET_GY - oy) * t);
 
@@ -2076,7 +2086,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         startWander('home');
         startGuarding('away');
         if (play?.id === 'iso') {
-          triggerIsolation(afterPlay, finishMake, onPassSteal);
+          triggerIsolation(afterPlay, finishMake, onPassSteal, play.isoTarget);
         } else if (play?.id === 'pickroll') {
           triggerPickAndRoll(afterPlay, finishMake, onPassSteal);
         } else {
@@ -2477,7 +2487,8 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
 
   const onPickPlay = (play) => {
     if (play) {
-      addLog(`Play called: ${play.name}`);
+      const tgt = play.id === 'iso' && play.isoTarget ? ` → ${play.isoTarget}` : '';
+      addLog(`Play called: ${play.name}${tgt}`);
       lastPickedPlayIdRef.current = (play.id === 'iso' || play.id === 'pickroll') ? play.id : null;
     }
     setPlayPickState(false);

@@ -524,6 +524,7 @@ body.is-narrow .party-tag { display: none; }
   font-size: 18px;
   font-weight: 900;
   letter-spacing: 0.28em;
+  line-height: 1.2;
   color: var(--c-left, #19e6c4);
   text-shadow: 0 0 12px color-mix(in srgb, var(--c-left, #19e6c4) 40%, transparent);
 }
@@ -531,12 +532,14 @@ body.is-narrow .party-tag { display: none; }
   font-family: var(--f-mono, monospace);
   font-size: 11px;
   letter-spacing: 0.18em;
+  line-height: 1.4;
   color: var(--c-ink-dim, #6a7a8a);
 }
 .send-modal-lbl {
   font-family: var(--f-mono, monospace);
   font-size: 10px;
   letter-spacing: 0.26em;
+  line-height: 1.4;
   color: var(--c-ink-dim, #6a7a8a);
 }
 .send-modal-row {
@@ -550,6 +553,7 @@ body.is-narrow .party-tag { display: none; }
 .send-modal-prefix {
   font-family: var(--f-mono, monospace);
   font-size: 13px;
+  line-height: 1.4;
   color: var(--c-ink-dim, #6a7a8a);
 }
 .send-modal-input {
@@ -562,6 +566,7 @@ body.is-narrow .party-tag { display: none; }
   font-family: var(--f-mono, monospace);
   font-size: 14px;
   letter-spacing: 0.06em;
+  line-height: 1.4;
   padding: 0;
 }
 .send-modal-input::placeholder { color: rgba(255,255,255,0.25); }
@@ -581,6 +586,7 @@ body.is-narrow .party-tag { display: none; }
   font-family: var(--f-mono, monospace);
   font-size: 10px;
   letter-spacing: 0.18em;
+  line-height: 1.4;
   color: #e0a050;
   text-align: center;
   text-transform: uppercase;
@@ -589,6 +595,7 @@ body.is-narrow .party-tag { display: none; }
   font-family: var(--f-mono, monospace);
   font-size: 11px;
   letter-spacing: 0.14em;
+  line-height: 1.4;
   color: #ff6b6b;
   text-align: center;
   padding: 4px 0;
@@ -599,6 +606,7 @@ body.is-narrow .party-tag { display: none; }
   font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.32em;
+  line-height: 1.4;
   text-align: center;
   padding: 18px 0;
 }
