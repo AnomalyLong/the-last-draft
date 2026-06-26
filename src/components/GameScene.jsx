@@ -2,7 +2,7 @@ import React from 'react';
 import {
   W, TOTAL_H, TOP_BAR, BOT_BAR, ZOOM_W,
   JERSEY_HOME, JERSEY_AWAY,
-  resolvePalette,
+  resolvePalette, DEFENSE_BONUS_CREDITS,
 } from '../constants.js';
 import { Court } from './Court.jsx';
 import { Ball } from './Ball.jsx';
@@ -14,6 +14,7 @@ import { Shadow } from './Shadow.jsx';
 import { PowerBar } from './PowerBar.jsx';
 import { ScorePopup } from './ScorePopup.jsx';
 import { HypePopup } from './HypePopup.jsx';
+import { DefenseBonusPopup } from './DefenseBonusPopup.jsx';
 import { XpFlyup } from './XpFlyup.jsx';
 import { StealFlyup } from './StealFlyup.jsx';
 import { BlockFlyup } from './BlockFlyup.jsx';
@@ -63,7 +64,7 @@ export function GameScene({
   // from useGame
   players, shot, logs, handleCommand, cameraX,
   possession, homeScore, awayScore, quarter, time,
-  scorePopup, hypePopup, netSwish, netDunk, netMiss, levelUpState, onPickLevelUp, onDismissStatUpgrade,
+  scorePopup, hypePopup, defenseBonus, netSwish, netDunk, netMiss, levelUpState, onPickLevelUp, onDismissStatUpgrade,
   playPickState, onPickPlay, lastPickedPlayIdRef,
   defensePickState, onPickDefense,
   defenseFtueState, onDismissDefenseFtue,
@@ -256,6 +257,7 @@ export function GameScene({
 
         {scorePopup && <ScorePopup text={scorePopup} cameraX={cameraX} />}
         {hypePopup && <HypePopup key={hypePopup.id} text={hypePopup.text} color={hypePopup.color} cameraX={cameraX} />}
+        {defenseBonus && <DefenseBonusPopup key={defenseBonus.id} credits={DEFENSE_BONUS_CREDITS} cameraX={cameraX} />}
         {xpFlyup    && <XpFlyup    key={xpFlyup.id}    fromCx={xpFlyup.fromCx}    fromCy={xpFlyup.fromCy}    toCx={xpFlyup.toCx}    toCy={xpFlyup.toCy}    amount={xpFlyup.amount} />}
         {stealFlyup && <StealFlyup key={stealFlyup.id}  fromCx={stealFlyup.fromCx} fromCy={stealFlyup.fromCy} toCx={stealFlyup.toCx} toCy={stealFlyup.toCy} color={stealFlyup.color} />}
         {blockFlyup && <BlockFlyup key={blockFlyup.id}  fromCx={blockFlyup.fromCx} fromCy={blockFlyup.fromCy} toCx={blockFlyup.toCx} toCy={blockFlyup.toCy} color={blockFlyup.color} />}

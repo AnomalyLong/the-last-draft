@@ -24,6 +24,29 @@ export const PICKROLL_DRIVE_RATE   = 0.60;
 // Pick & Roll — 50% C dunks vs shoots after receiving the roll pass
 export const PICKROLL_C_DUNK_RATE  = 0.50;
 
+// Computer (away) play selection — checked cumulatively each possession.
+// Defaults to an even split: 1/3 pick & roll, 1/3 isolation (random target),
+// remainder → motion offense.
+export const AI_PICKROLL_RATE = 1 / 3;
+export const AI_ISO_RATE      = 1 / 3;
+// The five lineup positions, used to pick a random isolation target for the AI.
+export const ROLES = ['PG', 'SG', 'SF', 'PF', 'C'];
+
+// ─── Defense Reads ────────────────────────────────────────────────────────────
+// Credits awarded each time the user picks the defense that counters the play
+// the computer is about to run.
+export const DEFENSE_BONUS_CREDITS = 50;
+// Which offensive play each defense (by picker id) hard-counters:
+//   ZONE  (id 'motion')     → Pick & Roll
+//   MAN   (id 'guard')      → Isolation
+//   PRESS (id 'aggressive') → Motion offense
+// Keyed by defense id → offensive play kind ('pickroll' | 'iso' | 'motion').
+export const DEFENSE_COUNTERS = {
+  motion: 'pickroll',
+  guard: 'iso',
+  aggressive: 'motion',
+};
+
 export const MISS_REBOUND_MIN_FT  = 5;  // grid-ft: nearest rebound lands from basket on a miss
 export const MISS_REBOUND_MAX_FT  = 15; // grid-ft: farthest rebound lands from basket on a miss
 export const BLOCK_REBOUND_MIN_FT = 5;  // grid-ft: nearest rebound lands from basket on a block

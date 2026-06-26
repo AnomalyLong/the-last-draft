@@ -7,6 +7,7 @@ export { HUD, DebugConsole, PlayerPortrait, LP_X, LP_W, RP_X, RP_W } from './HUD
 export { Shadow } from './Shadow.jsx';
 export { PowerBar } from './PowerBar.jsx';
 export { ScorePopup } from './ScorePopup.jsx';
+export { DefenseBonusPopup } from './DefenseBonusPopup.jsx';
 export { CRTOverlay } from './CRTOverlay.jsx';
 export { TitleScreen } from './TitleScreen.jsx';
 export { SplashScreen } from './SplashScreen.jsx';

@@ -4,7 +4,7 @@ import { PixelTextC } from './PixelText.jsx';
 import { playCoin } from '../sound/basketball.js';
 
 const PANEL_W = 370;
-const PANEL_H = 290;
+const PANEL_H = 312; // tall enough for 5 stat rows (added DEFENSE) + bonus + credits
 const PANEL_X_OFF = Math.round((ZOOM_W - PANEL_W) / 2); // 19
 const PANEL_Y = Math.round((TOTAL_H - PANEL_H) / 2);    // 29
 
@@ -17,17 +17,19 @@ const GSCORE_Y    = PANEL_Y + 62;  // game score (home – away) below team name
 const DIV1_Y      = PANEL_Y + 82;
 const STAT_Y_BASE = PANEL_Y + 94;
 const STAT_STEP   = 22;
-const DIV2_Y        = STAT_Y_BASE + 4 * STAT_STEP + 4;
+// Per-stat credit value. Most stats are worth 100; a correct defense read is 50.
+const STAT_ROWS = [
+  { key: 'shots',    label: 'SHOTS',   credit: 100 },
+  { key: 'dunks',    label: 'DUNKS',   credit: 100 },
+  { key: 'blocks',   label: 'BLOCKS',  credit: 100 },
+  { key: 'steals',   label: 'STEALS',  credit: 100 },
+  { key: 'defenses', label: 'DEFENSE', credit: 50  },
+];
+
+const DIV2_Y        = STAT_Y_BASE + STAT_ROWS.length * STAT_STEP + 4;
 const WIN_BONUS_Y   = DIV2_Y + 16;
 const SCORE_Y       = WIN_BONUS_Y + 30;  // below win bonus (scale-3 = 27px + 3px gap)
 const BTN_Y         = PANEL_Y + PANEL_H - 34;
-
-const STAT_ROWS = [
-  { key: 'shots',  label: 'SHOTS' },
-  { key: 'dunks',  label: 'DUNKS' },
-  { key: 'blocks', label: 'BLOCKS' },
-  { key: 'steals', label: 'STEALS' },
-];
 
 // Timing (ticks at ~16ms each)
 const FADE_TICKS       = 12;
@@ -239,7 +241,7 @@ export function QuarterSummary({ quarterSummary, homeTeamName, cameraX, onDismis
       {STAT_ROWS.map((row, i) => {
         const rowStart = STAT_START_TICK + i * (STAT_COUNT_TICKS + STAT_GAP_TICKS);
         if (tick < rowStart - 4) return null;
-        const hVal = countUp(home[row.key] * 100, rowStart, tick, STAT_COUNT_TICKS);
+        const hVal = countUp((home[row.key] ?? 0) * row.credit, rowStart, tick, STAT_COUNT_TICKS);
         const isCounting = tick >= rowStart && tick < rowStart + STAT_COUNT_TICKS;
         const numColor = isCounting ? '#ffe060' : '#e8f4ff';
         const rowAlpha = tick >= rowStart - 4 ? Math.min(1, (tick - (rowStart - 4)) / 6) : 0;
@@ -278,7 +280,8 @@ export function QuarterSummary({ quarterSummary, homeTeamName, cameraX, onDismis
 
       {/* Credits row — totals stats + win bonus */}
       {tick >= SCORE_START && (() => {
-        const hStatCredits = (home.shots + home.dunks + home.blocks + home.steals) * 100 + (quarterSummary.winBonus ?? 0);
+        const hStatCredits = (home.shots + home.dunks + home.blocks + home.steals) * 100
+          + (home.defenses ?? 0) * 50 + (quarterSummary.winBonus ?? 0);
         return (
           <g>
             <PixelTextC text="CREDITS:"

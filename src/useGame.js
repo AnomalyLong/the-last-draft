@@ -5,7 +5,9 @@ import { gridToSvg, svgToGrid, INITIAL_PLAYERS, SHOOT_TARGET_LEFT, SHOOT_TARGET_
   MOTION_MIN_PASSES, MOTION_MAX_PASSES,
   ISO_PASS_RATE, ISO_DUNK_RATE,
   PICKROLL_DRIVE_RATE, PICKROLL_C_DUNK_RATE, NUM_PERIODS, DEFENSE_PICK_MS,
-  GUARD_GAP_FRAC, GUARD_REPOSITION_MIN_MS, GUARD_REPOSITION_MAX_MS } from './constants.js';
+  GUARD_GAP_FRAC, GUARD_REPOSITION_MIN_MS, GUARD_REPOSITION_MAX_MS,
+  AI_PICKROLL_RATE, AI_ISO_RATE, ROLES,
+  DEFENSE_BONUS_CREDITS, DEFENSE_COUNTERS } from './constants.js';
 import { SHOOT_CHAR_FRAMES } from './sprites/index.js';
 import { ABILITIES } from './abilities.js';
 import { runCommand } from './debugCommands.js';
@@ -122,6 +124,15 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     const id = ++hypeIdRef.current;
     setHypePopup({ id, text, color });
     setTimeout(() => setHypePopup(prev => prev?.id === id ? null : prev), 1700);
+  };
+
+  // "DEFENSE BONUS! +50 CREDITS" popup — fired when the user reads the play right.
+  const [defenseBonus, setDefenseBonus] = useState(null);
+  const defenseBonusIdRef = useRef(0);
+  const showDefenseBonus = () => {
+    const id = ++defenseBonusIdRef.current;
+    setDefenseBonus({ id });
+    setTimeout(() => setDefenseBonus(prev => prev?.id === id ? null : prev), 1700);
   };
 
   // Hype text pools
@@ -259,7 +270,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const [playerAlpha, setPlayerAlpha] = useState(1);
 
   // Per-quarter stat counters (refs for closure access)
-  const quarterStatsRef = useRef({ home: { shots: 0, dunks: 0, blocks: 0, steals: 0 }, away: { shots: 0, dunks: 0, blocks: 0, steals: 0 } });
+  const quarterStatsRef = useRef({ home: { shots: 0, dunks: 0, blocks: 0, steals: 0, defenses: 0 }, away: { shots: 0, dunks: 0, blocks: 0, steals: 0, defenses: 0 } });
   const onPlayEventRef = useRef(onPlayEvent);
   onPlayEventRef.current = onPlayEvent;
 
@@ -505,7 +516,8 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     setTimeout(() => {
       const qHome = quarterStatsRef.current.home;
       const winBonus = quarterPointsRef.current.home > quarterPointsRef.current.away ? 500 : 0;
-      totalCreditsRef.current += (qHome.shots + qHome.dunks + qHome.blocks + qHome.steals) * 100 + winBonus;
+      totalCreditsRef.current += (qHome.shots + qHome.dunks + qHome.blocks + qHome.steals) * 100
+        + qHome.defenses * DEFENSE_BONUS_CREDITS + winBonus;
       setTotalCredits(totalCreditsRef.current);
       onPlayEventRef.current?.({ type: 'quarter_end', homePoints: quarterPointsRef.current.home, awayPoints: quarterPointsRef.current.away, quarter: quarterRef.current, t: Date.now() });
       setQuarterSummary({
@@ -2101,24 +2113,50 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     ensurePGHasBall('away', () => {
       if (!gameLoopActiveRef.current) return;
 
+      // Pre-roll the computer's offense BEFORE the picker so the user's defense
+      // choice can be graded against the play that's actually coming.
+      const roll = Math.random();
+      const playKind = roll < AI_PICKROLL_RATE ? 'pickroll'
+        : roll < AI_PICKROLL_RATE + AI_ISO_RATE ? 'iso'
+        : 'motion';
+      const isoRole = ROLES[Math.floor(Math.random() * ROLES.length)];
+
       // Defense picker fires at loop entry — nothing is in motion, so pausing is safe.
-      // The continuation runs after the user picks (or auto-dismiss).
-      showDefensePicker(() => {
+      // The continuation receives the picked defense (null on auto-dismiss).
+      showDefensePicker((def) => {
         if (!gameLoopActiveRef.current) return;
+
+        // Correct read → defense bonus: +50 credits (tallied at quarter end) + popup.
+        if (def && DEFENSE_COUNTERS[def.id] === playKind) {
+          quarterStatsRef.current.home.defenses += 1;
+          addLog(`DEFENSE BONUS! +${DEFENSE_BONUS_CREDITS} credits`);
+          showDefenseBonus();
+          onPlayEventRef.current?.({ type: 'defense', team: 'home', t: Date.now() });
+        }
+
         startWander('away');
         startGuarding('home');
 
-        triggerMotionOffence(() => {
+        const finishMake = () => {
+          if (!gameLoopActiveRef.current || gamePausedRef.current) {
+            resumeAfterPauseRef.current = finishMake;
+            return;
+          }
+          triggerThrowInHome(() => loopHomeRef.current?.());
+        };
+        const afterPlay = () => {
           if (!gameLoopActiveRef.current || gamePausedRef.current) return;
-          const finishMake = () => {
-            if (!gameLoopActiveRef.current || gamePausedRef.current) {
-              resumeAfterPauseRef.current = finishMake;
-              return;
-            }
-            triggerThrowInHome(() => loopHomeRef.current?.());
-          };
           attemptShotRef.current(finishMake);
-        }, onPassSteal);
+        };
+
+        // Run the play we pre-rolled above.
+        if (playKind === 'pickroll') {
+          triggerPickAndRoll(afterPlay, finishMake, onPassSteal);
+        } else if (playKind === 'iso') {
+          triggerIsolation(afterPlay, finishMake, onPassSteal, isoRole);
+        } else {
+          triggerMotionOffence(afterPlay, onPassSteal);
+        }
       });
     });
   };
@@ -2481,7 +2519,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     startTimer(timerSpeedRef.current);
     const cont = afterDefensePickRef.current;
     afterDefensePickRef.current = null;
-    if (cont) setTimeout(cont, 100);
+    if (cont) setTimeout(() => cont(def), 100); // pass the pick so the loop can grade it
   };
   onPickDefenseRef.current = onPickDefense;
 
@@ -2561,7 +2599,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const onDismissQuarterSummary = () => {
     setQuarterSummary(null);
     setQuarterAnnouncement(null);
-    quarterStatsRef.current = { home: { shots: 0, dunks: 0, blocks: 0, steals: 0 }, away: { shots: 0, dunks: 0, blocks: 0, steals: 0 } };
+    quarterStatsRef.current = { home: { shots: 0, dunks: 0, blocks: 0, steals: 0, defenses: 0 }, away: { shots: 0, dunks: 0, blocks: 0, steals: 0, defenses: 0 } };
     quarterPointsRef.current = { home: 0, away: 0 };
     setQuarter(prev => {
       const next = prev + 1;
@@ -2574,5 +2612,5 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     });
   };
 
-  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, hypePopup, netSwish, netDunk, netMiss, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, lastPickedPlayIdRef, defensePickState, onPickDefense, defenseFtueState, onDismissDefenseFtue, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
+  return { players, shot, logs, handleCommand, cameraX, setViewportW, possession, homeScore, awayScore, quarter, time, scorePopup, hypePopup, defenseBonus, netSwish, netDunk, netMiss, levelUpState, onPickLevelUp, onDismissStatUpgrade, playPickState, onPickPlay, lastPickedPlayIdRef, defensePickState, onPickDefense, defenseFtueState, onDismissDefenseFtue, jumpBallWinner, quarterAnnouncement, playerAlpha, xpFlyup, stealFlyup, blockFlyup, quarterSummary, onDismissQuarterSummary, gameOver, totalCredits, abilityOverridesRef, statBonusRef, statBonuses, playerProgressRef };
 }

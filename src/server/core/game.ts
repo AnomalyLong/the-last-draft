@@ -28,7 +28,7 @@ export type GameSummary = {
 };
 
 export type PlayEvent = {
-  type: 'shoot' | 'dunk' | 'block' | 'steal' | 'quarter_end' | 'move' | 'score';
+  type: 'shoot' | 'dunk' | 'block' | 'steal' | 'defense' | 'quarter_end' | 'move' | 'score';
   playerId?: number;
   result?: 'made' | 'missed';
   points?: number;
@@ -52,7 +52,7 @@ const replayPlays = async (gameId: number): Promise<{ score: number; credits: nu
   const raw: any[] = (await redis.zRange(playsKey(gameId), 0, -1)) as any;
   let score = 0;
   let credits = 0;
-  let qStats = { shots: 0, dunks: 0, blocks: 0, steals: 0 };
+  let qStats = { shots: 0, dunks: 0, blocks: 0, steals: 0, defenses: 0 };
   let finalHome = 0;
   let finalAway = 0;
 
@@ -65,11 +65,13 @@ const replayPlays = async (gameId: number): Promise<{ score: number; credits: nu
         else if (play.type === 'dunk') { score += 2; qStats.dunks++; }
         else if (play.type === 'block') { qStats.blocks++; }
         else if (play.type === 'steal') { qStats.steals++; }
+        else if (play.type === 'defense') { qStats.defenses++; } // correct defense read
       }
       if (play.type === 'quarter_end') {
         const winBonus = (play.homePoints ?? 0) > (play.awayPoints ?? 0) ? 500 : 0;
-        credits += (qStats.shots + qStats.dunks + qStats.blocks + qStats.steals) * 100 + winBonus;
-        qStats = { shots: 0, dunks: 0, blocks: 0, steals: 0 };
+        // Defense reads pay 50 each (DEFENSE_BONUS_CREDITS on the client); all other stats pay 100.
+        credits += (qStats.shots + qStats.dunks + qStats.blocks + qStats.steals) * 100 + qStats.defenses * 50 + winBonus;
+        qStats = { shots: 0, dunks: 0, blocks: 0, steals: 0, defenses: 0 };
         // homePoints/awayPoints on quarter_end are PER-QUARTER (the client
         // resets quarterPointsRef each quarter), so accumulate them into the
         // game totals. Overwriting here was the bug behind "won when I lost":
