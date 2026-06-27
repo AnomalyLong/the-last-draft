@@ -262,14 +262,6 @@ export function GameScene({
         {stealFlyup && <StealFlyup key={stealFlyup.id}  fromCx={stealFlyup.fromCx} fromCy={stealFlyup.fromCy} toCx={stealFlyup.toCx} toCy={stealFlyup.toCy} color={stealFlyup.color} />}
         {blockFlyup && <BlockFlyup key={blockFlyup.id}  fromCx={blockFlyup.fromCx} fromCy={blockFlyup.fromCy} toCx={blockFlyup.toCx} toCy={blockFlyup.toCy} color={blockFlyup.color} />}
 
-        {(() => { const ib = players.find(p => p.isIronBlocking); return ib ? <SpecialMoveCard key={`ib-${ib.id}`} player={ib} frames={IRON_BLOCK_FRAMES} label="IRON BLOCK!" jerseyColor={ib.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#CC3333" bgColor="#FFD0D0" anchorX={6} anchorY={17} /> : null; })()}
-        {(() => { const pp = players.find(p => p.isPickPocketing); return pp ? <SpecialMoveCard key={`pp-${pp.id}`} player={pp} frames={PICKPOCKET_FRAMES} label="PICK POCKET!" jerseyColor={pp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={133} accentColor="#00FF44" bgColor="#C8FFD8" anchorX={9} anchorY={17} /> : null; })()}
-        {(() => { const sp = players.find(p => p.isSpinning);   return sp ? <SpecialMoveCard key={`spin-${sp.id}`}  player={sp} frames={SPIN_MOVE_FRAMES} label="SPIN MOVE!"   jerseyColor={sp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#F5C800" bgColor="#F5E6C8" anchorX={21} anchorY={28} /> : null; })()}
-        {(() => { const dp = players.find(p => p.isDashing);    return dp ? <SpecialMoveCard key={`dash-${dp.id}`}  player={dp} frames={DASH_FRAMES}      label="SPEED BURST!" jerseyColor={dp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={60} accentColor="#44AAFF" bgColor="#C8E8FF" anchorX={9}  anchorY={17} /> : null; })()}
-        {(() => { const fp = players.find(p => p.isFadingAway); return fp ? <SpecialMoveCard key={`fade-${fp.id}`} player={fp} frames={FADEAWAY_FRAMES}  label="FADEAWAY!"    jerseyColor={fp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#FF8C00" bgColor="#FFF0CC" anchorX={9}  anchorY={12} /> : null; })()}
-        {(() => { const pk = players.find(p => p.isPicking);    return pk ? <SpecialMoveCard key={`pick-${pk.id}`} player={pk} frames={PICK_FRAMES}      label="SET PICK!"    jerseyColor={pk.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#C060E0" bgColor="#E8D0FF" anchorX={5}  anchorY={8}  /> : null; })()}
-        {(() => { const sd = players.find(p => p.isSpinDunking); return sd ? <SpecialMoveCard key={`sd-${sd.id}`}   player={sd} frames={DUNKSPIN_FRAMES}  label="SPIN DUNK!"   jerseyColor={sd.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={130} accentColor="#FF3399" bgColor="#FFD6E8" spriteScale={3} anchorX={8}  anchorY={14} /> : null; })()}
-
         <g transform={`translate(${cameraX + (isMobile ? Math.round(ZOOM_W * (1 / mobileZoom - 1) / 2) : 0)}, 0)`}>
           <HUD
             homeScore={homeScore} awayScore={awayScore}
@@ -284,6 +276,16 @@ export function GameScene({
             isMobile={isMobile}
           />
         </g>
+
+        {/* Special-move cards render AFTER the HUD so they sit on top of the
+            score / credits / buttons instead of being painted under them. */}
+        {(() => { const ib = players.find(p => p.isIronBlocking); return ib ? <SpecialMoveCard key={`ib-${ib.id}`} player={ib} frames={IRON_BLOCK_FRAMES} label="IRON BLOCK!" jerseyColor={ib.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#CC3333" bgColor="#FFD0D0" anchorX={6} anchorY={17} /> : null; })()}
+        {(() => { const pp = players.find(p => p.isPickPocketing); return pp ? <SpecialMoveCard key={`pp-${pp.id}`} player={pp} frames={PICKPOCKET_FRAMES} label="PICK POCKET!" jerseyColor={pp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={133} accentColor="#00FF44" bgColor="#C8FFD8" anchorX={9} anchorY={17} /> : null; })()}
+        {(() => { const sp = players.find(p => p.isSpinning);   return sp ? <SpecialMoveCard key={`spin-${sp.id}`}  player={sp} frames={SPIN_MOVE_FRAMES} label="SPIN MOVE!"   jerseyColor={sp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#F5C800" bgColor="#F5E6C8" anchorX={21} anchorY={28} /> : null; })()}
+        {(() => { const dp = players.find(p => p.isDashing);    return dp ? <SpecialMoveCard key={`dash-${dp.id}`}  player={dp} frames={DASH_FRAMES}      label="SPEED BURST!" jerseyColor={dp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={60} accentColor="#44AAFF" bgColor="#C8E8FF" anchorX={9}  anchorY={17} /> : null; })()}
+        {(() => { const fp = players.find(p => p.isFadingAway); return fp ? <SpecialMoveCard key={`fade-${fp.id}`} player={fp} frames={FADEAWAY_FRAMES}  label="FADEAWAY!"    jerseyColor={fp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#FF8C00" bgColor="#FFF0CC" anchorX={9}  anchorY={12} /> : null; })()}
+        {(() => { const pk = players.find(p => p.isPicking);    return pk ? <SpecialMoveCard key={`pick-${pk.id}`} player={pk} frames={PICK_FRAMES}      label="SET PICK!"    jerseyColor={pk.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#C060E0" bgColor="#E8D0FF" anchorX={5}  anchorY={8}  /> : null; })()}
+        {(() => { const sd = players.find(p => p.isSpinDunking); return sd ? <SpecialMoveCard key={`sd-${sd.id}`}   player={sd} frames={DUNKSPIN_FRAMES}  label="SPIN DUNK!"   jerseyColor={sd.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={130} accentColor="#FF3399" bgColor="#FFD6E8" spriteScale={3} anchorX={8}  anchorY={14} /> : null; })()}
 
         <QuarterBanner text={quarterAnnouncement} cameraX={cameraX} />
 
