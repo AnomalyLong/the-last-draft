@@ -187,7 +187,10 @@
   justify-content: center;
   gap: 32px;
   perspective: 1800px;
-  padding: 8px 0 16px;
+  /* Top padding matches the bottom so the picked card's 1.06 scale-up
+     (see .draft-card-anim.picked) has equal headroom and isn't clipped
+     by overflow:hidden at the top edge. */
+  padding: 16px 0 16px;
   min-height: 0;
   position: relative;
   /* Stop oversized cards from bleeding into the AVAILABLE PLAYERS
@@ -291,7 +294,11 @@
 }
 
 /* ── Rainbow burst layers ── */
-.burst-stack {
+/* Direct child of .draft-screen and full-page, so the ultra-rare rainbow
+   fills the whole background. The compound selector outranks the generic
+   `.draft-screen > *` rule (position:relative; z-index:1) so the burst
+   stays absolutely positioned behind the cards (.draft-cards z-index:5). */
+.draft-screen > .burst-stack {
   position: absolute;
   inset: 0;
   pointer-events: none;

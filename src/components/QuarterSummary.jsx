@@ -4,7 +4,7 @@ import { PixelTextC } from './PixelText.jsx';
 import { playCoin } from '../sound/basketball.js';
 
 const PANEL_W = 370;
-const PANEL_H = 312; // tall enough for 5 stat rows (added DEFENSE) + bonus + credits
+const PANEL_H = 326; // 5 stat rows (added DEFENSE) + bonus + credits, with clearance above the button
 const PANEL_X_OFF = Math.round((ZOOM_W - PANEL_W) / 2); // 19
 const PANEL_Y = Math.round((TOTAL_H - PANEL_H) / 2);    // 29
 

@@ -1359,23 +1359,25 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
       {/* ── DRAFT PHASE ── */}
       {phase === 'draft' && (
         <>
-          <div className="draft-cards">
-            {/* Burst overlays — rendered first so cards sit on top */}
-            <div className="burst-stack" aria-hidden="true">
-              {cards.map((c,i) => {
-                if (!c.ability || flipTicks[i]==null) return null;
-                const burstStart = flipTicks[i]+FLIP_HALF+BURST_DELAY;
-                return (
-                  <BurstOverlay
-                    key={`${seqKey}-burst-${i}`}
-                    card={c}
-                    originX={burstCenters[i].x} originY={burstCenters[i].y}
-                    startTick={burstStart} tick={tick}
-                  />
-                );
-              })}
-            </div>
+          {/* Burst overlays — full-page so the rainbow fills the whole
+              screen behind the cards (not just the cards section). Sits
+              directly under .draft-screen, below the cards (z-index). */}
+          <div className="burst-stack" aria-hidden="true">
+            {cards.map((c,i) => {
+              if (!c.ability || flipTicks[i]==null) return null;
+              const burstStart = flipTicks[i]+FLIP_HALF+BURST_DELAY;
+              return (
+                <BurstOverlay
+                  key={`${seqKey}-burst-${i}`}
+                  card={c}
+                  originX={burstCenters[i].x} originY={burstCenters[i].y}
+                  startTick={burstStart} tick={tick}
+                />
+              );
+            })}
+          </div>
 
+          <div className="draft-cards">
             {/* Cards */}
             {cards.map((c,i) => {
               const anim = getCardPhase(tick, i, flipTicks[i]);
