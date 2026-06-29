@@ -7,11 +7,25 @@ import { weeklyPeriodKey, recordChallengeCreated } from './missions';
 const postUrl = (postId: string): string =>
   `https://www.reddit.com/r/${context.subredditName}/comments/${postId.replace(/^t3_/, '')}/`;
 
+// Auto-approve the app's own posts so they skip the modqueue / spam filter and
+// are visible immediately. The app account moderates every subreddit it's
+// installed on, so it always has approve rights there. Best-effort: a failed
+// approval must never fail post creation.
+const autoApprove = async (post: { id: string; approve: () => Promise<void> }): Promise<void> => {
+  try {
+    await post.approve();
+  } catch (err) {
+    console.error(`autoApprove failed for ${post.id}`, err);
+  }
+};
+
 // Legacy default post (created on app install / via the menu action).
 export const createPost = async () => {
-  return await reddit.submitCustomPost({
+  const post = await reddit.submitCustomPost({
     title: 'the-last-draft',
   });
+  await autoApprove(post);
+  return post;
 };
 
 // ── Challenge Me posts ───────────────────────────────────────────────────────
@@ -85,6 +99,7 @@ export const createChallengePost = async (
     title: `${username}'s team is open for challenge — r/LastDraftGame`,
   });
   const postId = post.id;
+  await autoApprove(post);
   const now = Date.now();
 
   await Promise.all([
