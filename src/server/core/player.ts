@@ -175,6 +175,7 @@ export type BuiltPlayer = {
   abilities: PlayerAbility[];
   level: number;
   xp: number;
+  palette: number;
   serverId?: number;
 };
 
@@ -217,6 +218,7 @@ export const buildRosterForUser = async (
       abilities: p.abilities ?? [],
       level: p.level,
       xp: p.xp,
+      palette: p.palette ?? 0,
       ...(opts.includeServerId ? { serverId: p.id } : {}),
     });
   }

@@ -45,6 +45,7 @@ function toCardRoster(roster = []) {
       overall: p.overall,
       stats: { spd: p.spd, dex: p.dex, jmp: p.jmp, acc: p.acc },
       abilities,
+      palette: p.palette ?? 0,
     };
   });
 }
