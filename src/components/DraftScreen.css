@@ -187,15 +187,17 @@
   justify-content: center;
   gap: 32px;
   perspective: 1800px;
-  /* Top padding matches the bottom so the picked card's 1.06 scale-up
-     (see .draft-card-anim.picked) has equal headroom and isn't clipped
-     by overflow:hidden at the top edge. */
   padding: 16px 0 16px;
   min-height: 0;
   position: relative;
-  /* Stop oversized cards from bleeding into the AVAILABLE PLAYERS
-     header / FLIP ALL footer when the actions bar takes space */
-  overflow: hidden;
+  /* Clip horizontally only (stops oversized cards bleeding sideways) but
+     allow vertical overflow so the picked card's 1.06 scale-up and the
+     ultra-rare border glow are never cut off at the top/bottom — they
+     spill into the 16px flex gaps above the header / below the actions.
+     `overflow-x: clip` (not hidden) is what keeps `overflow-y: visible`
+     from being forced to `auto`. */
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 /* ── Card slot ── */
