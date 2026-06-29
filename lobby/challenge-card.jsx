@@ -1,10 +1,45 @@
 import React from 'react';
-import idleGif from './assets/idle.gif';
+import { IDLE_FRAMES } from '../src/sprites/index.js';
+import {
+  JERSEY_BASE, JERSEY_HOME, SKIN_PIXEL, HAIR_PIXEL, BEARD_PIXEL, resolvePalette,
+} from '../src/constants.js';
 
 // Challenge Me Card — Reddit-style shareable card where a user invites others
 // to challenge their team. Same shell as BidCard but the right column scrolls
 // through the user's roster (PG → C) and the leaderboard shows previous
 // challenges with W/L outcomes.
+
+// Animated idle sprite painted from the in-game IDLE_FRAMES, recoloured per
+// player so each roster slot shows its real skin/hair/beard (palette index)
+// instead of one shared idle.gif. Mirrors MiniPlayerSVG in DraftScreen.jsx.
+function IdleSprite({ palette, jerseyColor = JERSEY_HOME, className }) {
+  const [tick, setTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 120);
+    return () => clearInterval(id);
+  }, []);
+  const frame = IDLE_FRAMES[tick % IDLE_FRAMES.length];
+  const pal = resolvePalette(palette);
+  const remap = (col) => {
+    if (col === JERSEY_BASE) return jerseyColor;
+    if (col === SKIN_PIXEL)  return pal.skin;
+    if (col === HAIR_PIXEL)  return pal.hair;
+    if (col === BEARD_PIXEL) return pal.beard;
+    return col;
+  };
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 11 16"
+      preserveAspectRatio="xMidYMid meet"
+      shapeRendering="crispEdges"
+    >
+      {frame.map(([px, py, col], i) => (
+        <rect key={i} x={px} y={py} width={1} height={1} fill={remap(col)} />
+      ))}
+    </svg>
+  );
+}
 
 function StatBar({ lbl, val, color }) {
   const v = val ?? 0;
@@ -26,23 +61,23 @@ const POS_COLORS = {
 
 const DEFAULT_ROSTER = [
   { position: 'PG', tier: 'ultra rare', color: '#ffd97a',
-    name: 'KAEL THORNE',  callsign: 'NEON FOX',
+    name: 'KAEL THORNE',  callsign: 'NEON FOX', palette: 0,
     overall: 87, stats: { spd: 84, dex: 78, jmp: 90, acc: 82 },
     abilities: ['SHARPSHOOTER', 'SPEEDY'] },
   { position: 'SG', tier: 'super rare', color: '#a78bfa',
-    name: 'RYU TAKEDA',   callsign: 'BLADE',
+    name: 'RYU TAKEDA',   callsign: 'BLADE', palette: 1,
     overall: 79, stats: { spd: 76, dex: 88, jmp: 72, acc: 84 },
     abilities: ['ANKLE BREAKER'] },
   { position: 'SF', tier: 'ultra rare', color: '#ffd97a',
-    name: 'JAX MORENO',   callsign: 'HAWK',
+    name: 'JAX MORENO',   callsign: 'HAWK', palette: 2,
     overall: 81, stats: { spd: 80, dex: 74, jmp: 86, acc: 78 },
     abilities: ['PLAY MAKER', 'PICK POCKET'] },
   { position: 'PF', tier: 'super rare', color: '#a78bfa',
-    name: 'CYRO IRONS',   callsign: 'WALL',
+    name: 'CYRO IRONS',   callsign: 'WALL', palette: 3,
     overall: 76, stats: { spd: 62, dex: 70, jmp: 82, acc: 68 },
     abilities: ['IRON BLOCK'] },
   { position: 'C',  tier: 'rare', color: '#19e6c4',
-    name: 'BIG TOMO',     callsign: 'TITAN',
+    name: 'BIG TOMO',     callsign: 'TITAN', palette: 4,
     overall: 73, stats: { spd: 58, dex: 64, jmp: 78, acc: 66 },
     abilities: ['DUNK MASTER'] },
 ];
@@ -158,7 +193,7 @@ export default function ChallengeCard({
               <span className="ps-team-ovr-lbl">TEAM AVG OVR</span>
               <span className="ps-team-ovr-val">{avgOvr}</span>
             </div>
-            <img src={idleGif} className="ps-char-sprite" alt="" />
+            <IdleSprite className="ps-char-sprite" palette={player.palette} key={idx} />
             <div className="ps-char-shadow"></div>
             <button className="ps-roster-nav ps-roster-nav-r" onClick={(e) => { e.stopPropagation(); next(); }} aria-label="Next player">▶</button>
           </div>
