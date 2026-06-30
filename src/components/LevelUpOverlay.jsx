@@ -3,6 +3,7 @@ import { ZOOM_W, TOTAL_H, JERSEY_BASE, JERSEY_HOME, JERSEY_AWAY } from '../const
 import { PixelText, PixelTextC } from './PixelText.jsx';
 import { BballTip } from './BballTip.jsx';
 import { CELEBRATION_FRAMES, HEAD_PORTRAIT } from '../sprites/index.js';
+import { useRafTick } from './useRafTick.js';
 
 const RARITY_COLORS = { 1: '#20c8a0', 2: '#c060e0', 3: '#e8c060' };
 
@@ -284,13 +285,7 @@ function AbilityCard({ ability, x, y, onClick }) {
 const N_PARTS = 14;
 
 function AbilityPickerDialog({ abilities, cameraX, onPick }) {
-  const [tick, setTick] = React.useState(0);
-  React.useEffect(() => {
-    let rafId;
-    const loop = () => { setTick(t => t + 1); rafId = requestAnimationFrame(loop); };
-    rafId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafId);
-  }, []);
+  const tick = useRafTick();
 
   const dlgX    = cameraX + Math.round((ZOOM_W - DLG_W) / 2);
   const cardsX0 = dlgX + 14;
@@ -496,14 +491,8 @@ const CEL_TICKS_PER_FRAME = 10; // ~160ms per frame (half speed)
 const CEL_SCALE = 2;
 
 function StatGainDisplay({ statGained, cameraX, onDismiss }) {
-  const [tick, setTick] = React.useState(0);
+  const tick = useRafTick();
   const [hover, setHover] = React.useState(false);
-  React.useEffect(() => {
-    let rafId;
-    const loop = () => { setTick(t => t + 1); rafId = requestAnimationFrame(loop); };
-    rafId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafId);
-  }, []);
 
   const dlgX    = cameraX + Math.round((ZOOM_W - SDLG_W) / 2);
   const panelCX = cameraX + ZOOM_W / 2;

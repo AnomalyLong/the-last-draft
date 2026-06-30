@@ -2,6 +2,7 @@ import React from 'react';
 import { ZOOM_W, TOTAL_H } from '../constants.js';
 import { PixelTextC } from './PixelText.jsx';
 import { playCoin } from '../sound/basketball.js';
+import { useRafTick } from './useRafTick.js';
 
 const PANEL_W = 370;
 const PANEL_H = 326; // 5 stat rows (added DEFENSE) + bonus + credits, with clearance above the button
@@ -55,17 +56,9 @@ function countUp(target, startTick, tick, duration) {
 const N_PARTICLES = 14;
 
 export function QuarterSummary({ quarterSummary, homeTeamName, cameraX, onDismiss }) {
-  const [tick, setTick]       = React.useState(0);
+  const tick = useRafTick(quarterSummary);
   const [btnPulse, setBtnPulse] = React.useState(0);
   const [hover, setHover]     = React.useState(false);
-
-  React.useEffect(() => {
-    setTick(0);
-    let rafId;
-    const loop = () => { setTick(t => t + 1); rafId = requestAnimationFrame(loop); };
-    rafId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafId);
-  }, [quarterSummary]);
 
   React.useEffect(() => {
     const id = setInterval(() => setBtnPulse(t => t + 1), 35);

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ZOOM_W, TOTAL_H } from '../constants.js';
 import { PixelTextC } from './PixelText.jsx';
+import { useRafTick } from './useRafTick.js';
 
 const PLAYS = [
   { id: 'standard', tag: 'MOTION',  name: 'Standard',    desc: ['Motion', 'Offense'], color: '#20c8a0', tint: 'rgba(32,200,160,0.13)' },
@@ -138,15 +139,9 @@ function IsoTargetButton({ tgt, x, y, onClick }) {
 // ─── Picker dialog ────────────────────────────────────────────────────────────
 
 export function PlayPickerOverlay({ cameraX, onPick, disabledPlayId }) {
-  const [tick, setTick] = React.useState(0);
+  const tick = useRafTick();
   // When the ISO card is chosen we switch to a target picker instead of resolving.
   const [isoMode, setIsoMode] = React.useState(false);
-  React.useEffect(() => {
-    let rafId;
-    const loop = () => { setTick(t => t + 1); rafId = requestAnimationFrame(loop); };
-    rafId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafId);
-  }, []);
 
   const dlgX    = cameraX + Math.round((ZOOM_W - DLG_W) / 2);
   const panelCX = cameraX + ZOOM_W / 2;

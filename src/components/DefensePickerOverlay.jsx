@@ -1,6 +1,7 @@
 import React from 'react';
 import { ZOOM_W, TOTAL_H, DEFENSE_PICK_COUNTDOWN_MS } from '../constants.js';
 import { PixelTextC } from './PixelText.jsx';
+import { useRafTick, FRAME_MS } from './useRafTick.js';
 
 const DEFENSES = [
   { id: 'motion',     tag: 'ZONE',   name: 'Motion',     desc: ['Zone',   'Defense'],   color: '#5099ff', tint: 'rgba(80,153,255,0.15)' },
@@ -64,20 +65,8 @@ function DefenseCard({ def, x, y, onClick }) {
 }
 
 export function DefensePickerOverlay({ cameraX, onPick }) {
-  const [tick, setTick] = React.useState(0);
-  const startMsRef = React.useRef(null);
-  const [elapsedMs, setElapsedMs] = React.useState(0);
-  React.useEffect(() => {
-    let rafId;
-    startMsRef.current = performance.now();
-    const loop = () => {
-      setTick(t => t + 1);
-      setElapsedMs(performance.now() - startMsRef.current);
-      rafId = requestAnimationFrame(loop);
-    };
-    rafId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafId);
-  }, []);
+  const tick = useRafTick();
+  const elapsedMs = tick * FRAME_MS;
 
   const dlgX    = cameraX + Math.round((ZOOM_W - DLG_W) / 2);
   const panelCX = cameraX + ZOOM_W / 2;
