@@ -140,7 +140,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const HYPE_FADEAWAY = ['FADEAWAY', 'COLD-BLOODED', 'ICE IN HIS VEINS', 'TOUGH SHOT', 'STEPBACK'];
   const HYPE_DUNK     = ['BOOMSHAKALAKA', 'POSTERIZED', 'JAMS IT HOME', 'OH MY', 'WITH AUTHORITY', 'THROW IT DOWN'];
   const HYPE_MISS     = ['CLANK', 'BRICK', 'AIRBALL', 'OFF THE RIM', 'NO GOOD', 'ROLLS OFF', 'IRON'];
-  const HYPE_BLOCK    = ['REJECTED', 'DENIED', 'GET THAT OUTTA HERE', 'NOT IN MY HOUSE', 'SWATTED', 'BLOCK PARTY'];
+  const HYPE_BLOCK    = ['REJECTED', 'DENIED', 'NOT IN MY HOUSE', 'SWATTED', 'BLOCK PARTY'];
   const [quarter, setQuarter] = useState(1);   // 1–4
   const [time, setTime] = useState(60);          // seconds (1-minute quarters)
   const [levelUpState, setLevelUpState] = useState(null); // { player, abilities } | null
