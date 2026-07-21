@@ -634,6 +634,9 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
 
           // Transfer ball, start steal animation
           const stealerHasPickPocket = hasAbility(stealer, 'PICK POCKET');
+          // The PICK POCKET card occupies the same top-center zone as the
+          // DEFENSE BONUS popup — clear the popup so the two don't overlap.
+          if (stealerHasPickPocket) setDefenseBonus(null);
           playersRef.current = playersRef.current.map(p => {
             if (p.id === receiver.id) return { ...p, hasBall: false };
             if (p.id === stealerId)   return { ...p, hasBall: true, isStealing: !stealerHasPickPocket, isPickPocketing: stealerHasPickPocket };
@@ -1086,6 +1089,9 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     if (!blocker) return null;
     const ironBlock = hasAbility(blocker, 'IRON BLOCK');
     setTimeout(() => {
+      // The IRON BLOCK card shares the top-center zone with the DEFENSE BONUS
+      // popup — clear the popup so the two don't overlap.
+      if (ironBlock) setDefenseBonus(null);
       setPlayers(prev => prev.map(p => p.id === blocker.id ? { ...p, isBlocking: !ironBlock, isIronBlocking: ironBlock } : p));
       setTimeout(() => {
         setPlayers(prev => prev.map(p => p.id === blocker.id ? { ...p, isBlocking: false, isIronBlocking: false } : p));
