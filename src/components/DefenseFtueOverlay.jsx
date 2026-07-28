@@ -22,7 +22,7 @@ export function DefenseFtueOverlay({ cameraX = 0, onDone }) {
   const advance = () => isLast ? onDone() : setPage(p => p + 1);
 
   return (
-    <g>
+    <g data-testid="defense-ftue">
       <rect x={cameraX} y={0} width={ZOOM_W} height={TOTAL_H} fill="#000" opacity={0.55} />
       <BballTip
         text={FTUE_MESSAGES[page]}

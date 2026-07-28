@@ -23,7 +23,7 @@ function DefenseCard({ def, x, y, onClick }) {
   const [hover, setHover] = React.useState(false);
 
   return (
-    <g onClick={onClick} style={{ cursor: 'pointer' }}
+    <g data-testid={`defense-${def.id}`} onClick={onClick} style={{ cursor: 'pointer' }}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
 
       <rect x={x + 2} y={y + 3} width={CARD_W} height={CARD_H} rx={4}
@@ -112,7 +112,7 @@ export function DefensePickerOverlay({ cameraX, onPick }) {
   ];
 
   return (
-    <g opacity={fadeIn}>
+    <g opacity={fadeIn} data-testid="defense-picker">
       <rect x={dlgX - 8} y={DLG_Y - 8} width={DLG_W + 16} height={DLG_H + 16} rx={8}
         fill="#ff6080" opacity={bgGlowOp} shapeRendering="crispEdges" />
 

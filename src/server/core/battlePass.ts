@@ -1,6 +1,7 @@
 import { redis, reddit, context } from '@devvit/web/server';
 import type { Order } from '@devvit/web/shared';
 import { userKey, awardCredits, getUser } from './user';
+import { getFlag } from './featureFlags';
 
 // ── Founder flair ────────────────────────────────────────────
 // Shared flair for both tiers — matches the binary `founder` flag.
@@ -209,6 +210,15 @@ export const fulfillPass = async (
   order: Order,
   username: string,
 ): Promise<FulfillSuccess | { success: false; reason: string }> => {
+  // Admin kill switch. Checked FIRST, before any redis writes or credit
+  // grants: returning success:false makes Devvit reject the order and
+  // refund the user, so a purchase attempted while sales are paused
+  // costs them nothing. adminGrantPass deliberately skips this check —
+  // moderators can still hand out passes while sales are off.
+  if (!(await getFlag('passPurchases'))) {
+    return { success: false, reason: 'Founders Pass sales are temporarily unavailable' };
+  }
+
   if (!isPaid(order.status)) {
     return { success: false, reason: 'Order not in PAID state' };
   }

@@ -923,6 +923,7 @@ export function DebugConsole({ logs, onCommand, showDebug, onToggleDebug }) {
     <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 200, fontFamily: 'monospace', fontSize: '18px' }}>
       {/* DBG toggle */}
       <div
+        data-testid="dbg-toggle"
         onClick={onToggleDebug}
         style={{
           position: 'absolute', top: 4, left: 4,
@@ -935,7 +936,7 @@ export function DebugConsole({ logs, onCommand, showDebug, onToggleDebug }) {
       </div>
       {/* Console panel */}
       {showDebug && (
-        <div style={{
+        <div data-testid="debug-panel" style={{
           position: 'absolute', top: 36, left: 8, width: 400, height: 260,
           display: 'flex', flexDirection: 'column',
           background: 'rgba(8,8,8,0.92)', border: '1px solid #333', borderRadius: 3,

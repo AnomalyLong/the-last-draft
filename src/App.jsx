@@ -181,6 +181,42 @@ export default function App() {
     return trpc.pass.getMine.query().then(setPassState).catch(() => {});
   }, []);
 
+  // Admin kill switches (server: core/featureFlags.ts). `null` = not yet
+  // loaded; we treat unknown as ENABLED so a slow query never flashes a
+  // false "unavailable" state at a legitimate buyer. The server rejects
+  // purchases independently, so an optimistic client here is safe.
+  const [flags, setFlags] = React.useState(null);
+  const refreshFlags = React.useCallback(() => {
+    return trpc.config.getFlags.query().then(setFlags).catch(() => {});
+  }, []);
+  // Shown when someone reaches the battle pass entry point while sales
+  // are paused and they don't already own a pass.
+  const [passLocked, setPassLocked] = React.useState(false);
+
+  // ── Battle pass access gate ─────────────────────────────────────────
+  // Sales off does NOT mean the page is dead for everyone: existing pass
+  // holders reach their seasonal BP missions and claim rewards here, and
+  // locking them out would strand rewards they already paid for. So the
+  // page is blocked only for users with no pass — exactly the people who
+  // could only have come here to buy.
+  const passPurchasesOn = flags?.passPurchases !== false;
+  const ownsPass = (passState?.tier ?? null) !== null;
+  const passPageBlocked = !passPurchasesOn && !ownsPass;
+
+  const openBattlePass = React.useCallback(() => {
+    if (passPageBlocked) { setPassLocked(true); return; }
+    setScene('battlePass');
+  }, [passPageBlocked]);
+
+  // Catches the mid-session case: an admin flips the switch (or the flag
+  // query resolves) while the user is already sitting on the page.
+  React.useEffect(() => {
+    if (scene === 'battlePass' && passPageBlocked) {
+      setScene('title');
+      setPassLocked(true);
+    }
+  }, [scene, passPageBlocked]);
+
   React.useEffect(() => {
     trpc.user.init.query().then((user) => {
       setServerCredits(user.credits);
@@ -192,6 +228,7 @@ export default function App() {
 
     refreshPass();
     refreshBpMissions();
+    refreshFlags();
 
     // Load saved roster + lineup so returning players can skip the draft
     refreshRoster().finally(() => setRosterLoaded(true));
@@ -225,7 +262,7 @@ export default function App() {
 
   const handleTitleCommand = (cmd) => {
     const addTitleLog = (text, type = 'out') => setTitleLogs(prev => [...prev, { text, type }]);
-    runCommand(cmd, { scene: 'title', addLog: addTitleLog, setShowAdminOverlay });
+    runCommand(cmd, { scene: 'title', addLog: addTitleLog, setShowAdminOverlay, closeConsole: () => setShowTitleDebug(false) });
   };
 
   const [gameTip, setGameTip] = React.useState(null);
@@ -286,7 +323,7 @@ export default function App() {
   React.useEffect(() => {
     if (scene === 'draftHub' || scene === 'title') refreshUser();
     if (scene === 'draftHub') refreshDraftCost();
-    if (scene === 'battlePass') refreshBpMissions();
+    if (scene === 'battlePass') { refreshBpMissions(); refreshFlags(); }
     // Collection reads rawRoster — refresh on open so newly minted players
     // (e.g. from a paid draft) always show without a full app reload.
     if (scene === 'collection') refreshRoster();
@@ -363,6 +400,20 @@ export default function App() {
 
   return (
     <div data-testid="game-root"
+      /* NOTE on `lineHeight: 0` below: this is THE source of the inherited
+         zero line-height that every text container in this app has to defend
+         against. It kills the whitespace gap under inline sprites/images, so
+         it is load-bearing for the pixel-art layout, but it is inherited by
+         ALL descendants, giving them zero-height line boxes so stacked labels
+         paint on the same baseline and overlap.
+
+         It is NOT Reddit's doing. Several comments elsewhere in this repo
+         blame "Reddit's host CSS" for forcing line-height:0; that attribution
+         is wrong. Reddit injects zero CSS into Devvit webviews (verified Jul
+         25 by CDP-attaching to the live webview), and the shipped bundle
+         carries this exact inline style, so the collapse is identical in
+         production and in preview. Any container with real text must set its
+         own line-height. (Jul 27) */
       style={{ background: '#111', lineHeight: 0, height: '100vh', position: 'relative', cursor: (isInline && !challengePost) ? 'pointer' : undefined }}
       /* Inline splash: any tap launches. Inline challenge card: the window is
          inert — only the CHALLENGE ME button (via onChallenge) launches, and the
@@ -403,7 +454,7 @@ export default function App() {
             if (isFtue && !ftueIntroSeen) setScene('ftueIntro');
             else setScene('draftHub');
           }}
-          onAuction={() => setScene('battlePass')}
+          onAuction={openBattlePass}
           onOptions={() => setScene('options')}
           onEvents={() => setScene('featuredEvents')}
           onCreateChallenge={() => setChallengeModal('confirm')}
@@ -422,7 +473,7 @@ export default function App() {
             onPlay={() => setScene('title')}
             onCollection={() => setScene('collection')}
             onDraft={() => setScene('draftHub')}
-            onAuction={() => setScene('battlePass')}
+            onAuction={openBattlePass}
             onOptions={() => setScene('options')}
           />
         </ScreenWithStrip>
@@ -434,6 +485,7 @@ export default function App() {
             username={username}
             credits={serverCredits}
             passState={passState}
+            purchasesEnabled={passPurchasesOn}
             bpMissions={serverBpMissions}
             onPassRefresh={async () => {
               await refreshPass();
@@ -719,6 +771,37 @@ export default function App() {
       {showAdminOverlay && <AdminOverlay onClose={() => setShowAdminOverlay(false)} />}
 
       {/* ── CREATE CHALLENGE ME — confirm modal ──────────────── */}
+      {/* ── FOUNDERS PASS UNAVAILABLE — admin kill switch ────────── */}
+      {!isInline && passLocked && (
+        <div
+          data-testid="pass-locked-modal"
+          onClick={() => setPassLocked(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#0d1117', border: '1px solid #ffd97a',
+              padding: '24px 22px', maxWidth: 300, textAlign: 'center', fontFamily: 'monospace',
+              lineHeight: 1.4, // explicit — Reddit forces line-height:0, collapsing/overlapping text
+            }}
+          >
+            <div style={{ color: '#ffd97a', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>FOUNDERS PASS CLOSED</div>
+            <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 20 }}>
+              Founders Pass sales are paused right now. Nothing has been charged — check back soon.
+            </div>
+            <button
+              data-testid="pass-locked-ok"
+              onClick={() => setPassLocked(false)}
+              style={{ background: '#ffd97a', color: '#000', border: 'none', padding: '6px 20px', fontFamily: 'monospace', fontSize: 10, letterSpacing: '0.1em', cursor: 'pointer' }}
+            >GOT IT</button>
+          </div>
+        </div>
+      )}
+
       {!isInline && challengeModal && (
         <div
           data-testid="challenge-modal"

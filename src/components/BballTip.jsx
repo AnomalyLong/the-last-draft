@@ -85,7 +85,7 @@ export function BballTip({ text, charX, charY, scale = 0.30, dlgX, dlgY, dlgW, d
   if (!text) return null;
 
   return (
-    <g onClick={onClick} style={onClick ? { cursor: 'pointer' } : undefined}>
+    <g data-testid="bball-tip" onClick={onClick} style={onClick ? { cursor: 'pointer' } : undefined}>
       <rect x={dlgX} y={dlgY} width={currentW} height={dlgH} rx={rx}
         fill="#0c1018" shapeRendering="crispEdges" />
       <path d={borderPath} fill="none" stroke="#ffffff" strokeWidth={1.5} />

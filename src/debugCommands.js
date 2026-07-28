@@ -69,7 +69,12 @@ const sharedImpls = {
   admin(args, ctx) {
     if (!ctx.setShowAdminOverlay) return;
     trpc.admin.isAdmin.query()
-      .then(result => { if (result.isAdmin) ctx.setShowAdminOverlay(true); })
+      .then(result => {
+        if (!result.isAdmin) return;
+        ctx.setShowAdminOverlay(true);
+        // Admin panel owns the screen — get the console out of the way.
+        ctx.closeConsole?.();
+      })
       .catch(() => {});
   },
 

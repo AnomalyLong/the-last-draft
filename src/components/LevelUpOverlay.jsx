@@ -230,7 +230,7 @@ function AbilityCard({ ability, x, y, onClick }) {
   const glow = ability.rarity === 3 ? (Math.sin(pulse * 0.10) + 1) / 2 : 0;
 
   return (
-    <g onClick={onClick} style={{ cursor: 'pointer' }}
+    <g data-testid={`levelup-ability-${ability.id}`} onClick={onClick} style={{ cursor: 'pointer' }}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
 
       {/* Legendary glow */}
@@ -511,8 +511,9 @@ function StatGainDisplay({ statGained, cameraX, onDismiss }) {
   const feetCy  = SDLG_Y + 80;
   const anchorX = feetCx - 14 * CEL_SCALE;
   const anchorY = feetCy - 32 * CEL_SCALE;
-  const frameIdx = Math.floor(tick / CEL_TICKS_PER_FRAME) % CELEBRATION_FRAMES.length;
-  const frame    = CELEBRATION_FRAMES[frameIdx];
+  const frameCount = CELEBRATION_FRAMES?.length || 0;
+  const frameIdx   = frameCount ? Math.floor(tick / CEL_TICKS_PER_FRAME) % frameCount : 0;
+  const frame      = CELEBRATION_FRAMES?.[frameIdx] ?? [];
 
   const lines = Object.entries(statGained).filter(([, v]) => v > 0);
 
@@ -557,7 +558,7 @@ function StatGainDisplay({ statGained, cameraX, onDismiss }) {
       ))}
 
       {/* OK button */}
-      <g onClick={onDismiss} style={{ cursor: 'pointer' }}
+      <g data-testid="levelup-ok" onClick={onDismiss} style={{ cursor: 'pointer' }}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
         <rect x={dlgX + 50} y={SDLG_Y + SDLG_H - 26} width={SDLG_W - 100} height={20} rx={3}
           fill={hover ? '#20c8e0' : '#1a3060'} shapeRendering="crispEdges" />

@@ -199,7 +199,7 @@
   font-size: 13px;
   letter-spacing: 0.12em;
 }
-.lb2-ts-bell {
+.lb2-ts-bell, .lb2-ts-mute {
   position: relative;
   background: none;
   border: none;
@@ -207,10 +207,11 @@
   padding: 0;
   font-size: 14px;
   line-height: 1;
-  opacity: 0.6;
+  /* Full brightness by default so the icons stay legible; the slashed
+     mute glyph (🔇) already signals the muted state. */
+  opacity: 1;
   transition: opacity 150ms;
 }
-.lb2-ts-bell:hover, .lb2-ts-bell.active { opacity: 1; }
 .lb2-ts-bell-dot {
   position: absolute;
   top: -1px; right: -1px;
@@ -243,6 +244,44 @@
   z-index: 150;
   box-shadow: 0 8px 24px rgba(0,0,0,0.6);
 }
+
+/* Push on/off row, pinned under the notification list in the bell dropdown.
+   Only rendered once the user has opted in at least once (see TitleStrip →
+   NotifOptToggle), so it never competes with the first-time ENABLE prompt on
+   the featured mission. */
+.lb2-notif-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.03);
+}
+.lb2-notif-foot-label {
+  font-family: var(--f-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  color: var(--c-ink-dim);
+  white-space: nowrap;
+}
+.lb2-notif-opt {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.22);
+  color: var(--c-ink-dim);
+  font-family: var(--f-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 150ms, color 150ms, border-color 150ms;
+}
+.lb2-notif-opt:hover:not(:disabled) { background: rgba(255,255,255,0.1); color: #fff; }
+.lb2-notif-opt.on { border-color: rgba(255,61,160,0.5); color: #ff8dc9; }
+.lb2-notif-opt.on:hover:not(:disabled) { background: rgba(255,61,160,0.15); color: #ffd6ef; }
+.lb2-notif-opt:disabled { opacity: 0.5; cursor: default; }
 
 /* ── Daily missions ── */
 .lb2-missions { display: flex; flex-direction: column; gap: 10px; flex: none; }
@@ -979,6 +1018,13 @@
   white-space: nowrap;
   padding: 2px 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
+}
+/* In the mission list this column holds the CTA / CLAIM buttons (not a
+   timestamp), so the bordered chip reads as a stray grey box around the
+   buttons — drop it here. The notification dropdown keeps its time chip. */
+.lb2-ft-news .lb2-ft-news-time {
+  border: 0;
+  padding: 0;
 }
 
 /* ── Section header ── */

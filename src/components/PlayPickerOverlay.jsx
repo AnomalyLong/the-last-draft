@@ -38,7 +38,8 @@ function PlayCard({ play, x, y, onClick, disabled }) {
   const [hover, setHover] = React.useState(false);
 
   return (
-    <g onClick={disabled ? undefined : onClick} style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
+    <g data-testid={`play-${play.id}`} data-disabled={disabled ? '1' : '0'}
+      onClick={disabled ? undefined : onClick} style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
       onMouseEnter={() => !disabled && setHover(true)} onMouseLeave={() => setHover(false)}>
     <g opacity={disabled ? 0.38 : 1}>
 
@@ -106,7 +107,8 @@ function IsoTargetButton({ tgt, x, y, onClick }) {
   const [hover, setHover] = React.useState(false);
 
   return (
-    <g onClick={onClick} style={{ cursor: 'pointer' }}
+    <g data-testid={`iso-target-${tgt.role}`}
+      onClick={onClick} style={{ cursor: 'pointer' }}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
 
       {/* Shadow */}
@@ -186,7 +188,7 @@ export function PlayPickerOverlay({ cameraX, onPick, disabledPlayId }) {
   ];
 
   return (
-    <g opacity={fadeIn}>
+    <g opacity={fadeIn} data-testid="play-picker" data-iso-mode={isoMode ? '1' : '0'}>
       {/* Outer golden aura */}
       <rect x={dlgX - 8} y={DLG_Y - 8} width={DLG_W + 16} height={DLG_H + 16} rx={8}
         fill="#ffe060" opacity={bgGlowOp} shapeRendering="crispEdges" />
@@ -246,7 +248,7 @@ export function PlayPickerOverlay({ cameraX, onPick, disabledPlayId }) {
 
       {/* Back button (target picker only) */}
       {isoMode && (
-        <g onClick={() => setIsoMode(false)} style={{ cursor: 'pointer' }}>
+        <g data-testid="iso-back" onClick={() => setIsoMode(false)} style={{ cursor: 'pointer' }}>
           <rect x={dlgX + 5} y={DLG_Y + 6} width={30} height={13} rx={2}
             fill="#1a3060" opacity={0.5} shapeRendering="crispEdges" />
           <rect x={dlgX + 5} y={DLG_Y + 6} width={30} height={13} rx={2}

@@ -11,6 +11,9 @@
     "dev": "devvit playtest",
     "dev:tools": "vite --config vite.devtools.config.ts",
     "build:tools": "vite build --config vite.devtools.config.ts",
+    "story": "vite --config vite.story.config.ts",
+    "build:story": "vite build --config vite.story.config.ts",
+    "farnsworth:devvit": "bash scripts/farnsworth-devvit.sh",
     "launch": "npm run deploy && devvit publish",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "login": "devvit login",
@@ -22,6 +25,7 @@
     "node": ">=22.2.0"
   },
   "dependencies": {
+    "@devvit/notifications": "^0.13.4",
     "@devvit/start": "^0.13.4",
     "@devvit/test": "^0.13.4",
     "@devvit/web": "^0.13.4",

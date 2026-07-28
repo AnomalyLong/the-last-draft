@@ -1,6 +1,9 @@
 import React from 'react';
 import '../styles/lobby.css';
 import { trpc } from '../trpc.js';
+import { toggleMute, isMuted } from '../sound/basketball.js';
+import { playCursor, playSelect } from '../sound/ui.js';
+import { useNotifStatus, optIn as notifOptIn, optOut as notifOptOut } from '../notifStatus.js';
 
 // ── Global title strip ────────────────────────────────────
 // The slim header from the lobby (dot · THE LAST DRAFT · EVENTS · credits ·
@@ -36,6 +39,54 @@ export function useAnnouncements(limit = 10) {
   return items;
 }
 
+// Push on/off, pinned to the bottom of the bell dropdown.
+//
+// Deliberately hidden until the user has opted in at least once (sticky
+// `everOptedIn`): first-timers are asked to enable via the `wnotify` featured
+// mission, which pays them credits for it, and putting a second competing
+// prompt in the bell would undercut that. Once they've enabled, this becomes
+// the permanent home for the setting — including turning it back ON after an
+// opt-out, which is why the flag never clears.
+function NotifOptToggle() {
+  const { optedIn, everOptedIn, supported, loaded } = useNotifStatus();
+  const [busy, setBusy] = React.useState(false);
+
+  if (!loaded || !everOptedIn || !supported) return null;
+
+  const handleToggle = async e => {
+    e.stopPropagation(); // never let the row-level onSelect navigation fire
+    if (busy) return;
+    playSelect();
+    setBusy(true);
+    try {
+      await (optedIn ? notifOptOut() : notifOptIn());
+    } catch {
+      // Reddit declined — leave the button as it was so the user can retry.
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="lb2-notif-foot" data-testid="notif-opt-row">
+      <span className="lb2-notif-foot-label">
+        PUSH ALERTS · {optedIn ? 'ON' : 'OFF'}
+      </span>
+      <button
+        type="button"
+        className={`lb2-notif-opt${optedIn ? ' on' : ''}`}
+        onClick={handleToggle}
+        onMouseEnter={() => playCursor()}
+        disabled={busy}
+        aria-pressed={optedIn}
+        data-testid="notif-opt-toggle"
+      >
+        {busy ? '···' : optedIn ? 'TURN OFF' : 'TURN ON'}
+      </button>
+    </div>
+  );
+}
+
 function NotifDropdown({ announcements, onSelect }) {
   const rows = announcements.length
     ? announcements.map(a => ({ key: a.id, tag: a.tag, accent: a.accent, title: a.title, sub: a.sub, time: timeAgo(a.createdAt) }))
@@ -57,6 +108,7 @@ function NotifDropdown({ announcements, onSelect }) {
           <div className="lb2-ft-news-time">{n.time}</div>
         </div>
       ))}
+      <NotifOptToggle />
     </div>
   );
 }
@@ -84,6 +136,15 @@ export function TitleStrip({ credits = 0, onEvents }) {
     });
   };
 
+  // Global sound mute — backed by the shared audioSettings singleton so the
+  // toggle is session-wide regardless of which screen's strip is mounted.
+  const [muted, setMuted] = React.useState(() => isMuted());
+  const handleToggleMute = () => {
+    const next = toggleMute();
+    setMuted(next);
+    if (!next) playCursor(); // audible confirmation only when turning sound back on
+  };
+
   return (
     <div className="lb2-title-strip">
       <span className="lb2-ts-dot" />
@@ -97,6 +158,15 @@ export function TitleStrip({ credits = 0, onEvents }) {
       </button>
       <div className="lb2-ts-right">
         <span className="lb2-ts-time">{(credits ?? 0).toLocaleString()} CR</span>
+        <button
+          className={`lb2-ts-mute${muted ? ' active' : ''}`}
+          onClick={handleToggleMute}
+          aria-label={muted ? 'Unmute sound' : 'Mute sound'}
+          aria-pressed={muted}
+          data-testid="sound-mute"
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
         <button
           className={`lb2-ts-bell${showNotifs ? ' active' : ''}`}
           onClick={toggleNotifs}

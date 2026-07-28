@@ -17,14 +17,14 @@ import levelUpSound    from './levelup.wav';
 import fanfareSound    from './fanfare.wav';
 import blockSound      from './block.wav';
 import pickSound       from './basketball/pick.wav';
-import { audioSettings } from './audioSettings.js';
+import { audioSettings, musicVolume, sfxVolume } from './audioSettings.js';
 
 function makeSound(src, baseVol = 0.8) {
   const proto = new Audio(src);
   proto.preload = 'auto';
   return () => {
     const a = proto.cloneNode();
-    a.volume = baseVol * audioSettings.sfx;
+    a.volume = baseVol * sfxVolume();
     a.play().catch(() => {});
   };
 }
@@ -56,7 +56,7 @@ export const bounceBall = {
     _bounce.pause();
     _bounce.currentTime = 0;
   },
-  applyVolume() { _bounce.volume = BOUNCE_BASE * audioSettings.sfx; },
+  applyVolume() { _bounce.volume = BOUNCE_BASE * sfxVolume(); },
 };
 
 const BG_BASE = 0.35;
@@ -66,7 +66,7 @@ _bgMusic.volume = BG_BASE;
 export const bgMusic = {
   start() { _bgMusic.play().catch(() => {}); },
   stop()  { _bgMusic.pause(); _bgMusic.currentTime = 0; },
-  applyVolume() { _bgMusic.volume = BG_BASE * audioSettings.music; },
+  applyVolume() { _bgMusic.volume = BG_BASE * musicVolume(); },
 };
 
 const TITLE_BASE = 0.40;
@@ -98,8 +98,24 @@ export const titleMusic = {
     _titleMusic.pause();
     _titleMusic.currentTime = 0;
   },
-  applyVolume() { _titleMusic.volume = TITLE_BASE * audioSettings.music; },
+  applyVolume() { _titleMusic.volume = TITLE_BASE * musicVolume(); },
 };
+
+// ── Global mute ──────────────────────────────────────────────────────────
+// Flips audioSettings.muted (the effective-volume override read by every
+// sound at play time) and re-applies the looping channels immediately so
+// already-playing music goes silent/returns without waiting for a restart.
+// One-shot SFX pick up the new state on their next play. Session-only — no
+// browser storage in the Devvit iframe.
+export function setMuted(m) {
+  audioSettings.muted = !!m;
+  _bounce.volume   = BOUNCE_BASE * sfxVolume();
+  _bgMusic.volume  = BG_BASE     * musicVolume();
+  _titleMusic.volume = TITLE_BASE * musicVolume();
+  return audioSettings.muted;
+}
+export function toggleMute() { return setMuted(!audioSettings.muted); }
+export function isMuted() { return audioSettings.muted; }
 
 export const playShot       = makeSound(shotSound, 0.8);
 export const playMiss       = makeSound(missSound,       0.7);

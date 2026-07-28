@@ -7,10 +7,17 @@ const GAME_REVIEWS_KEY = 'game:reviews';
 
 // Hardcoded creator admin(s) — always treated as admin regardless of the
 // Redis admins hash. Reddit usernames are case-insensitive; normalize on match.
-const CREATOR_ADMINS = new Set(['afternoonno3552']);
+const CREATOR_ADMINS = new Set(['afternoonno3552', 'bob']);
+
+// Reddit usernames are case-insensitive. The Devvit emulator returns the
+// current username WITH a "u/" prefix (e.g. "u/bob"), while production Reddit
+// returns the bare handle ("bob"). Normalize both to a bare lowercase handle
+// so the creator-admin check works identically in local preview and prod.
+const normalizeUsername = (username: string): string =>
+  username.replace(/^u\//i, '').toLowerCase();
 
 export const isCreatorAdmin = (username: string): boolean =>
-  CREATOR_ADMINS.has(username.toLowerCase());
+  CREATOR_ADMINS.has(normalizeUsername(username));
 
 export const isAdmin = async (username: string): Promise<boolean> => {
   if (isCreatorAdmin(username)) return true;

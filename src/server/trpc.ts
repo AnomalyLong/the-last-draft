@@ -10,6 +10,15 @@ import { SKIN_PALETTES } from '../shared/palettes';
 import { createChallengePost, canCreateChallengePost, getChallengePost, listChallengeResults, getMyChallenge, challengePostKey } from './core/post';
 import { freeDraft, creditDraft, buyDraftPick, getNextDraftCost } from './core/draft';
 import { createAnnouncement, listAnnouncements, deleteAnnouncement, hasUnreadAnnouncements, markAnnouncementsSeen } from './core/announcements';
+import {
+  optInCurrentUser as notifOptIn,
+  optOutCurrentUser as notifOptOut,
+  getStatus as getNotifStatus,
+  listOptedIn as listNotifOptedIn,
+  resolveUsernames as resolveNotifUsernames,
+  send as sendNotifications,
+  listSendLog as listNotifSendLog,
+} from './core/notifications';
 import { startGame, recordPlay, endGame, getGame, type PlayEvent } from './core/game';
 import {
   listMissions,
@@ -27,6 +36,7 @@ import {
   claimBpMission,
   adminCompleteBpMission,
   BP_MISSIONS,
+  recordNotificationsEnabled,
   type MissionDef,
 } from './core/missions';
 import {
@@ -54,6 +64,7 @@ import {
 } from './core/auction';
 import { countDecrement, countGet, countIncrement } from './core/count';
 import { getMyPass, adminGrantPass, adminRevokePass, retryFounderFlair } from './core/battlePass';
+import { getFlags, setFlag, getFlagLog, isFlagName, FLAG_DEFAULTS } from './core/featureFlags';
 
 const t = initTRPC.context<Context>().create({ transformer });
 export const router = t.router;
@@ -361,7 +372,7 @@ export const appRouter = t.router({
         token: z.string(),
         sequence: z.number().int().min(0),
         play: z.object({
-          type: z.enum(['shoot', 'dunk', 'block', 'steal', 'quarter_end', 'move', 'score']),
+          type: z.enum(['shoot', 'dunk', 'block', 'steal', 'defense', 'quarter_end', 'move', 'score']),
           playerId: z.number().int().optional(),
           result: z.enum(['made', 'missed']).optional(),
           points: z.number().int().optional(),
@@ -559,6 +570,34 @@ export const appRouter = t.router({
     }),
   }),
 
+  // ── Push notifications ───────────────────────────────────────────────────
+  // Opt-in/out is per-current-user (the plugin has no admin setter). Sends are
+  // admin-only and live under `admin.*` below.
+  notifications: t.router({
+    status: publicProcedure.query(async () => {
+      const username = await requireUsername();
+      const currentUser = await reddit.getCurrentUser();
+      const status = await getNotifStatus(username, currentUser?.id ?? '');
+      // Re-tick the weekly "keep notifications on" mission — see
+      // recordNotificationsEnabled for why this lives on the read path.
+      if (status.optedIn) await recordNotificationsEnabled(username);
+      return status;
+    }),
+
+    optIn: publicProcedure.mutation(async () => {
+      const username = await requireUsername();
+      const currentUser = await reddit.getCurrentUser();
+      const status = await notifOptIn(username, currentUser?.id ?? '');
+      await recordNotificationsEnabled(username);
+      return status;
+    }),
+
+    optOut: publicProcedure.mutation(async () => {
+      const username = await requireUsername();
+      return await notifOptOut(username);
+    }),
+  }),
+
   // ── Founders Pass ────────────────────────────────────────────────────────
   // The actual purchase flow is server-to-server via Devvit Payments
   // (handlers in src/server/index.ts → src/server/core/battlePass.ts). This
@@ -572,6 +611,17 @@ export const appRouter = t.router({
     }),
   }),
 
+  // ── Runtime config ───────────────────────────────────────────────────────
+  // Public read of the admin kill switches. The client fetches this on
+  // boot (and on entering a gated screen) to hide/disable features that
+  // an operator has switched off. Purely advisory for the UI — every
+  // flag is independently enforced server-side at its mutation point.
+  config: t.router({
+    getFlags: publicProcedure.query(async () => {
+      return await getFlags();
+    }),
+  }),
+
   // ── Admin ────────────────────────────────────────────────────────────────
   admin: t.router({
     isAdmin: publicProcedure.query(async () => {
@@ -579,6 +629,24 @@ export const appRouter = t.router({
       const admin = await isAdmin(username);
       return { isAdmin: admin };
     }),
+
+    // ── Feature flags ──────────────────────────────────────────────────
+    getFlags: adminProcedure.query(async () => {
+      const [flags, log] = await Promise.all([getFlags(), getFlagLog(20)]);
+      return { flags, log, defaults: FLAG_DEFAULTS };
+    }),
+
+    setFlag: adminProcedure
+      .input(z.object({
+        flag: z.string().min(1).max(40),
+        enabled: z.boolean(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (!isFlagName(input.flag)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `Unknown flag: ${input.flag}` });
+        }
+        return await setFlag(input.flag, input.enabled, ctx.adminUsername);
+      }),
 
     createAnnouncement: adminProcedure
       .input(z.object({
@@ -604,6 +672,76 @@ export const appRouter = t.router({
         const removed = await deleteAnnouncement(input.id);
         if (!removed) throw new TRPCError({ code: 'NOT_FOUND', message: 'Announcement not found' });
         return { ok: true };
+      }),
+
+    // ── Push notifications (admin) ─────────────────────────────────────────
+    // Audience table + send. Note the platform rules this UI has to respect:
+    // an UNPUBLISHED app may only notify the developer themselves, published
+    // apps are capped at 2/user/day and 25K/app/day.
+    notifyAudience: adminProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(500).optional() }).optional())
+      .query(async ({ input }) => {
+        return await listNotifOptedIn(input?.limit ?? 200);
+      }),
+
+    notifySend: adminProcedure
+      .input(z.object({
+        title: z.string().min(1).max(120),
+        body: z.string().min(1).max(300),
+        // Blank → core/notifications falls back to context.postId.
+        link: z.string().max(32).optional(),
+        audience: z.enum(['all', 'usernames', 'self']),
+        usernames: z.array(z.string().min(1)).max(500).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const by = ctx.adminUsername;
+        let recipients: { username: string; userId: string }[] = [];
+        let unknown: string[] = [];
+
+        if (input.audience === 'self') {
+          const currentUser = await reddit.getCurrentUser();
+          const userId = currentUser?.id ?? '';
+          if (!userId) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Could not resolve your Reddit user id' });
+          recipients = [{ username: by, userId }];
+        } else if (input.audience === 'usernames') {
+          const names = (input.usernames ?? []).map(n => n.trim()).filter(Boolean);
+          if (!names.length) throw new TRPCError({ code: 'BAD_REQUEST', message: 'No usernames given' });
+          const resolved = await resolveNotifUsernames(names);
+          recipients = resolved.recipients;
+          unknown = resolved.unknown;
+        } else {
+          const { users } = await listNotifOptedIn(500);
+          recipients = users.filter(u => u.userId).map(u => ({ username: u.username, userId: u.userId }));
+        }
+
+        if (!recipients.length) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: unknown.length
+              ? `No known users among: ${unknown.join(', ')}`
+              : 'No recipients — nobody has opted in yet',
+          });
+        }
+
+        try {
+          const entry = await sendNotifications({
+            title: input.title,
+            body: input.body,
+            link: input.link?.trim() || undefined,
+            recipients,
+            audience: input.audience,
+            by,
+          });
+          return { ...entry, unknown };
+        } catch (e: any) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: e?.message ?? 'Send failed' });
+        }
+      }),
+
+    notifySendLog: adminProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(25).optional() }).optional())
+      .query(async ({ input }) => {
+        return await listNotifSendLog(input?.limit ?? 10);
       }),
 
     getUser: adminProcedure

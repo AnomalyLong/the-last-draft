@@ -2,13 +2,47 @@ import React, { useState, useEffect } from 'react';
 import { trpc } from '../trpc';
 
 const S = {
-  backdrop: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'monospace' },
-  panel: { background: '#0d1220', border: '1px solid #2a3a58', borderRadius: 6, width: 560, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  // lineHeight is REQUIRED here, not cosmetic. The app root
+  // (App.jsx, `[data-testid="game-root"]`) sets an inline `lineHeight: 0`,
+  // which every descendant inherits — including this overlay. With 0, each
+  // text div gets a zero-height line box, so stacked labels (mission name /
+  // id+reward / description) all paint on the same baseline and overlap.
+  // This is NOT caused by Reddit: the shipped bundle carries the same inline
+  // style, so the collapse is identical in production and in the Farnsworth
+  // preview. Fix it here rather than at the root, because the root's 0 is
+  // load-bearing for the sprite/pixel-art layout. (Jul 27)
+
+  // Top-anchored (flex-start), NOT centered. Panel height varies hugely by tab
+  // (measured 216px on Games up to 717px on Missions/Notify). Because the panel
+  // was centered, that made the tab bar jump ~215px vertically between tabs — on
+  // mobile the bar relocates under your thumb mid-tap, causing mis-taps.
+  // Anchoring the top pins the bar to one Y for every tab (verified: spread 0)
+  // while still letting short panels shrink to fit, so we don't pad out a tall
+  // empty frame. Guard: .farnsworth/devvit-tests/admin-tabs-mobile-layout.json
+  backdrop: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 8px 8px', boxSizing: 'border-box', fontFamily: 'monospace', lineHeight: 1.4, overflowY: 'auto' },
+  panel: { background: '#0d1220', border: '1px solid #2a3a58', borderRadius: 6, width: 560, maxWidth: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
   header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #1e2e48', background: '#0a0f1c' },
   title: { color: '#3a8fd4', fontSize: 14, fontWeight: 'bold', letterSpacing: 1 },
   close: { background: 'none', border: 'none', color: '#555', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 4px' },
-  tabs: { display: 'flex', borderBottom: '1px solid #1e2e48' },
-  tab: (active) => ({ padding: '8px 20px', cursor: 'pointer', fontSize: 12, color: active ? '#e0e0e0' : '#555', borderBottom: active ? '2px solid #3a8fd4' : '2px solid transparent', background: 'none', border: 'none', borderBottom: active ? '2px solid #3a8fd4' : '2px solid transparent', fontFamily: 'monospace' }),
+  // An auto-fit grid, NOT a scroll strip. `repeat(auto-fit, minmax(70px, 1fr))`
+  // packs as many equal-width cells as fit and wraps the rest, so the tab bar
+  // is responsive with no media query, no measurement, and no overflow:
+  //   · 560px panel  → 7 cells fit on one row (unchanged desktop look)
+  //   · 374px mobile → 4 + 3 across two rows, every tab visible and tappable
+  // The previous overflowX:auto left a native scrollbar over the tabs and could
+  // scroll the ACTIVE tab out of sight — you couldn't tell which tab you were on.
+  tabs: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(70px, 1fr))', gap: 4, padding: '8px 10px', borderBottom: '1px solid #1e2e48', background: '#0a0f1c' },
+  // Active state is a filled pill, not a bottom border. A border-bottom reads as
+  // "underline the bar" and becomes ambiguous once the bar wraps to two rows.
+  tab: (active) => ({
+    padding: '7px 6px', minWidth: 0, cursor: 'pointer', fontSize: 11,
+    fontFamily: 'monospace', letterSpacing: 0.5, borderRadius: 4, textAlign: 'center',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    background: active ? '#17325a' : '#0d1424',
+    border: `1px solid ${active ? '#3a8fd4' : '#1e2e48'}`,
+    color: active ? '#e8f2ff' : '#6b7a90',
+    fontWeight: active ? 700 : 400,
+  }),
   body: { flex: 1, overflowY: 'auto', padding: 20 },
   heading: { color: '#666', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 },
   row: { display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' },
@@ -823,7 +857,292 @@ function AnnouncementsPanel() {
   );
 }
 
-const TABS = ['User', 'Games', 'Missions', 'Announce', 'Admins'];
+// ── Push notifications ────────────────────────────────────
+// Compose + send a push notification via @devvit/notifications, and inspect
+// who has opted in. Platform rules worth remembering while using this:
+//   · unpublished app → you can ONLY notify yourself ("Just me" audience)
+//   · published app   → 2 per user per day, 25K per app per day
+//   · title/body accept Mustache; {{name}} is filled with each recipient's
+//     username automatically (see core/notifications.ts → send()).
+const NOTIF_AUDIENCES = [
+  { id: 'all',       label: 'All opted-in' },
+  { id: 'usernames', label: 'Specific users' },
+  { id: 'self',      label: 'Just me (test)' },
+];
+
+function NotificationsPanel() {
+  const [aud, setAud] = useState(null);        // { users, total, pluginCount, error }
+  const [log, setLog] = useState([]);
+  const [audience, setAudience] = useState('self');
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [link, setLink] = useState('');
+  const [names, setNames] = useState('');
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [result, setResult] = useState(null);
+  const { busy, msg, wrap, setMsg } = useWrap();
+  const { users } = useUsernames();
+
+  const load = () => {
+    trpc.admin.notifyAudience.query({ limit: 200 }).then(setAud).catch(() => {});
+    trpc.admin.notifySendLog.query({ limit: 10 }).then(setLog).catch(() => {});
+  };
+  useEffect(() => { load(); }, []);
+
+  const parsedNames = names.split(/[\s,]+/).map(n => n.trim().replace(/^u\//i, '')).filter(Boolean);
+  const recipientCount = audience === 'self'
+    ? 1
+    : audience === 'usernames'
+      ? parsedNames.length
+      : (aud?.users?.filter(u => u.userId).length ?? 0);
+
+  const send = () => {
+    // Sending to the whole opted-in list is irreversible and rate-limited —
+    // make it a two-press action.
+    if (audience === 'all' && !confirmAll) { setConfirmAll(true); return; }
+    setConfirmAll(false);
+    wrap(async () => {
+      setResult(null);
+      const res = await trpc.admin.notifySend.mutate({
+        title: title.trim(),
+        body: body.trim(),
+        link: link.trim() || undefined,
+        audience,
+        usernames: audience === 'usernames' ? parsedNames : undefined,
+      });
+      setResult(res);
+      setMsg({
+        text: `Queued ${res.successCount}/${res.requested}${res.failureCount ? ` · ${res.failureCount} failed` : ''}.`,
+        ok: res.failureCount === 0,
+      });
+      load();
+    });
+  };
+
+  const fmt = (ts) => ts ? new Date(ts).toLocaleString() : '—';
+  const canSend = !!title.trim() && !!body.trim() && recipientCount > 0;
+
+  return (
+    <div>
+      <div style={S.heading}>Audience</div>
+      <table style={{ ...S.table, marginBottom: 10 }}>
+        <tbody>
+          <tr>
+            <td style={S.tdKey}>Opted in (tracked)</td>
+            <td style={S.td}>{aud ? aud.total : '…'}</td>
+          </tr>
+          <tr>
+            <td style={S.tdKey}>Opted in (Reddit)</td>
+            <td style={S.td}>
+              {aud?.pluginCount != null
+                ? aud.pluginCount
+                : <span style={{ color: '#e0a030' }}>unavailable{aud?.error ? ` — ${aud.error}` : ''}</span>}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {aud && aud.pluginCount != null && aud.pluginCount !== aud.total && (
+        <div style={{ color: '#e0a030', fontSize: 11, marginBottom: 8 }}>
+          ⚠ Counts differ — users opted in via Reddit settings (or before this
+          feature shipped) aren't in our username map and can't be targeted by name.
+        </div>
+      )}
+      {aud?.users?.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 10, maxHeight: 90, overflowY: 'auto', padding: 2 }}>
+          {aud.users.map(u => (
+            <span key={u.username} title={`${u.userId || 'no id'} · ${fmt(u.optedInAt)}`}
+              style={{
+                background: '#0a1220', border: `1px solid ${u.userId ? '#2a3a58' : '#4a3a1a'}`,
+                color: u.userId ? '#778' : '#e0a030', padding: '3px 10px', borderRadius: 12, fontSize: 11,
+              }}>
+              {u.username}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <hr style={S.divider} />
+      <div style={S.heading}>New push notification</div>
+      <div style={S.row}>
+        {NOTIF_AUDIENCES.map(a => (
+          <button key={a.id} onClick={() => { setAudience(a.id); setConfirmAll(false); }} disabled={busy}
+            style={{
+              background: audience === a.id ? '#10203a' : '#0a1220',
+              border: `1px solid ${audience === a.id ? '#3a8fd4' : '#2a3a58'}`,
+              color: audience === a.id ? '#cde' : '#778', padding: '5px 12px', borderRadius: 4,
+              cursor: 'pointer', fontFamily: 'monospace', fontSize: 11,
+            }}>
+            {a.label}{a.id === 'all' && aud ? ` (${aud.total})` : ''}
+          </button>
+        ))}
+      </div>
+      {audience === 'usernames' && (<>
+        <UsernameDatalist id="admin-notify-usernames" users={users} />
+        <div style={S.row}>
+          <textarea style={{ ...S.input, width: '100%', boxSizing: 'border-box', minHeight: 48, resize: 'vertical' }}
+            placeholder="usernames, comma or space separated"
+            value={names} onChange={e => setNames(e.target.value)} />
+        </div>
+      </>)}
+      <div style={S.row}>
+        <input style={{ ...S.input, width: '100%', boxSizing: 'border-box' }}
+          placeholder="Title — Mustache ok, e.g. Hello {{name}}!"
+          maxLength={120} value={title} onChange={e => setTitle(e.target.value)} />
+      </div>
+      <div style={S.row}>
+        <textarea style={{ ...S.input, width: '100%', boxSizing: 'border-box', minHeight: 56, resize: 'vertical' }}
+          placeholder="Body — e.g. Your challenge got 3 new plays"
+          maxLength={300} value={body} onChange={e => setBody(e.target.value)} />
+      </div>
+      <div style={S.row}>
+        <input style={{ ...S.input, width: 220 }} placeholder="Link t3_… (default: this post)"
+          value={link} onChange={e => setLink(e.target.value)} />
+        <span style={{ color: '#445', fontSize: 11 }}>{recipientCount} recipient{recipientCount !== 1 ? 's' : ''}</span>
+      </div>
+      <div style={S.row}>
+        {confirmAll
+          ? <>
+              <button style={{ ...S.danger, background: '#8a1010', color: '#fff', fontWeight: 'bold' }}
+                onClick={send} disabled={busy}>CONFIRM SEND TO {recipientCount}</button>
+              <button style={S.btn()} onClick={() => setConfirmAll(false)}>Cancel</button>
+            </>
+          : <button style={S.btn('#1a4a2a')} onClick={send} disabled={busy || !canSend}>
+              {busy ? 'Sending…' : 'Send notification'}
+            </button>
+        }
+      </div>
+      {msg && <div style={msg.ok ? S.success : S.error}>{msg.text}</div>}
+      {result?.unknown?.length > 0 && (
+        <div style={{ color: '#e0a030', fontSize: 11, marginTop: 4 }}>
+          Skipped (unknown to this app): {result.unknown.join(', ')}
+        </div>
+      )}
+      {result?.error && (
+        <div style={{ ...S.error, fontSize: 11 }}>{result.error}</div>
+      )}
+
+      <hr style={S.divider} />
+      <div style={S.heading}>Recent sends ({log.length})</div>
+      {log.length === 0 && <div style={{ color: '#556', fontSize: 12 }}>None yet.</div>}
+      {log.map(e => (
+        <div key={e.id} style={S.gameRow}>
+          <span style={S.tag(e.failureCount ? '#5a1a1a' : '#1a4a2a')}>
+            {e.successCount}/{e.requested}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: '#dde', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</div>
+            <div style={{ color: '#667', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {e.audience} · by {e.by} · {e.link}
+            </div>
+            {e.error && <div style={{ color: '#f06060', fontSize: 10 }}>{e.error}</div>}
+          </div>
+          <span style={{ color: '#445', fontSize: 10, flex: 'none' }}>{fmt(e.sentAt)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Human-readable copy for each flag in core/featureFlags.ts FLAG_DEFAULTS.
+// `on`/`off` describe the player-facing effect so an operator knows what
+// flipping the switch actually does before they flip it.
+const FLAG_META = {
+  passPurchases: {
+    label: 'Founders Pass purchases',
+    on: 'Battle pass page open; Basic + Premium buyable.',
+    off: 'Page blocked for non-owners; purchases rejected and refunded server-side. Existing owners keep access to their missions.',
+  },
+};
+
+function ConfigPanel() {
+  const { busy, msg, wrap, setMsg } = useWrap();
+  const [flags, setFlags] = useState(null);
+  const [log, setLog] = useState([]);
+
+  const load = () => trpc.admin.getFlags.query()
+    .then(d => { setFlags(d.flags); setLog(d.log || []); })
+    .catch(e => setMsg({ text: e.message, ok: false }));
+
+  useEffect(() => { load(); }, []);
+
+  const toggle = (flag, next) => wrap(async () => {
+    await trpc.admin.setFlag.mutate({ flag, enabled: next });
+    await load();
+    setMsg({ text: `${FLAG_META[flag]?.label || flag} ${next ? 'ENABLED' : 'DISABLED'}`, ok: true });
+  });
+
+  // Surface load failures. Previously this returned a bare "loading flags…"
+  // on error too: `msg` is only rendered in the main return below, which a
+  // failed load never reaches — so an error looked like a permanent spinner.
+  if (!flags) return (
+    <div data-testid="admin-config-loading" style={{ fontSize: 12 }}>
+      {msg && !msg.ok
+        ? <div style={S.error}>Failed to load flags: {msg.text}</div>
+        : <span style={{ color: '#556' }}>loading flags…</span>}
+    </div>
+  );
+
+  const names = Object.keys(flags);
+
+  return (
+    <div data-testid="admin-config-panel">
+      <div style={S.heading}>Feature flags — {names.length} flag{names.length !== 1 ? 's' : ''}</div>
+      <div style={{ color: '#445', fontSize: 11, marginBottom: 14 }}>
+        Takes effect immediately — no redeploy. Enforced server-side, so disabling
+        cannot be bypassed by a stale client.
+      </div>
+
+      {names.map(name => {
+        const on = flags[name];
+        const meta = FLAG_META[name] || { label: name, on: '', off: '' };
+        return (
+          <div key={name} style={{ border: '1px solid #1a2030', borderRadius: 6, padding: 12, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <span
+                data-testid={`flag-state-${name}`}
+                data-on={on ? '1' : '0'}
+                style={S.tag(on ? '#1c5c2c' : '#5c1c1c')}
+              >
+                {on ? 'ON' : 'OFF'}
+              </span>
+              <span style={{ color: '#ccd', fontSize: 12 }}>{meta.label}</span>
+              <code style={{ color: '#445', fontSize: 10 }}>{name}</code>
+              <div style={{ flex: 1 }} />
+              <button
+                data-testid={`flag-toggle-${name}`}
+                disabled={busy}
+                onClick={() => toggle(name, !on)}
+                style={on ? S.danger : S.btn('#1c5c2c')}
+              >
+                {on ? 'Turn OFF' : 'Turn ON'}
+              </button>
+            </div>
+            <div style={{ color: on ? '#6a8' : '#a76', fontSize: 11, lineHeight: 1.4 }}>
+              {on ? meta.on : meta.off}
+            </div>
+          </div>
+        );
+      })}
+
+      {msg && <div style={msg.ok ? S.success : S.error}>{msg.text}</div>}
+
+      <hr style={S.divider} />
+      <div style={S.heading}>Change log</div>
+      {log.length === 0 && <div style={{ color: '#334', fontSize: 11 }}>no changes recorded</div>}
+      {log.map((e, i) => (
+        <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11, color: '#667', padding: '3px 0', borderBottom: '1px solid #14141f' }}>
+          <span style={{ color: e.enabled ? '#6a8' : '#a66', width: 34 }}>{e.enabled ? 'ON' : 'OFF'}</span>
+          <span style={{ color: '#889' }}>{FLAG_META[e.flag]?.label || e.flag}</span>
+          <div style={{ flex: 1 }} />
+          <span>u/{String(e.admin).replace(/^u\//, '')}</span>
+          <span style={{ color: '#445' }}>{new Date(e.at).toLocaleString()}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const TABS = ['User', 'Games', 'Missions', 'Announce', 'Notify', 'Admins', 'Config'];
 
 export function AdminOverlay({ onClose }) {
   const [tab, setTab] = useState(0);
@@ -835,7 +1154,7 @@ export function AdminOverlay({ onClose }) {
   }, [onClose]);
 
   return (
-    <div style={S.backdrop} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div data-testid="admin-overlay" style={S.backdrop} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={S.panel}>
         <div style={S.header}>
           <span style={S.title}>ADMIN PANEL</span>
@@ -843,7 +1162,7 @@ export function AdminOverlay({ onClose }) {
         </div>
         <div style={S.tabs}>
           {TABS.map((t, i) => (
-            <button key={t} style={S.tab(tab === i)} onClick={() => setTab(i)}>{t}</button>
+            <button key={t} data-testid={`admin-tab-${t.toLowerCase()}`} style={S.tab(tab === i)} onClick={() => setTab(i)}>{t}</button>
           ))}
         </div>
         <div style={S.body}>
@@ -851,7 +1170,9 @@ export function AdminOverlay({ onClose }) {
           {tab === 1 && <GamesPanel />}
           {tab === 2 && <MissionsPanel />}
           {tab === 3 && <AnnouncementsPanel />}
-          {tab === 4 && <AdminsPanel />}
+          {tab === 4 && <NotificationsPanel />}
+          {tab === 5 && <AdminsPanel />}
+          {tab === 6 && <ConfigPanel />}
         </div>
       </div>
     </div>

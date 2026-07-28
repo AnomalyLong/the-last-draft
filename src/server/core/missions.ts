@@ -47,6 +47,7 @@ export const DEFAULT_MISSION_CATALOG: MissionCatalog = {
   ],
   weekly: [
     { id: 'wchallenge', label: 'CREATE A CHALLENGE ME', sub: 'Post your roster on r/LastDraftGame', reward: 200, total: 1, accent: 'gold', featured: true },
+    { id: 'wnotify', label: 'TURN ON NOTIFICATIONS', sub: 'Get pinged for challenges + drops', reward: 100, total: 1, accent: 'magenta', featured: true },
     { id: 'wwin5',   label: 'WIN 5 GAMES',     sub: 'Any mode',                reward: 300, total: 5, accent: 'cyan' },
     { id: 'wdraft',  label: 'DRAFT 3 PLAYERS', sub: 'Free or credit drafts',   reward: 150, total: 3, accent: 'magenta' },
     // wranked: PLAY RANKED — disabled until ranked mode ships. Re-add when
@@ -416,6 +417,25 @@ export const recordChallengeCreated = async (
     ]);
   } catch {
     // Mission tracking must not break post creation.
+  }
+};
+
+// Having push notifications ON ticks the featured weekly `wnotify` mission.
+//
+// Called from BOTH the opt-in mutation and the status query, on purpose: the
+// mission is weekly, but opting in is a one-time act, so a user who turned
+// notifications on in week 1 would stare at a permanently 0/1 mission every
+// week after. Re-ticking on the status read (the lobby fires it on mount)
+// makes it a "keep notifications on" reward instead of a one-shot. The
+// hSetNX completion guard in incrementMission keeps it idempotent per period.
+export const recordNotificationsEnabled = async (
+  username: string,
+): Promise<void> => {
+  try {
+    const catalog = await getMissionCatalog();
+    await (tickById(catalog, username, 'wnotify', 1) ?? Promise.resolve());
+  } catch {
+    // Mission tracking must not break the notification toggle.
   }
 };
 

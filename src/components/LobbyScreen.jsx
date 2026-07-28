@@ -6,6 +6,7 @@ import { BballTip } from './BballTip.jsx';
 import { TitleStrip } from './TitleStrip.jsx';
 import { playSelect, playCancel, playCursor, playMenuSelect2 } from '../sound/ui.js';
 import { trpc } from '../trpc';
+import { useNotifStatus, optIn as notifOptIn } from '../notifStatus.js';
 
 const POS_COLORS = { PG: '#3ea6ff', SG: '#a855f7', SF: '#19e6c4', PF: '#ff7a3c', C: '#ffc94a' };
 const RARITY_COLORS = { common: '#b0b8c8', rare: '#b0b8c8', super_rare: '#30c0e0', ultra_rare: '#ffc94a' };
@@ -332,7 +333,12 @@ function formatResetCountdown(type, now = Date.now()) {
   return `${h}h ${m}m`;
 }
 
-function DailyMissionsSection({ missions, onClaim, onCreateChallenge, challengeActive, onViewChallenge }) {
+// Featured mission IDs that disappear from the daily featured strip once their
+// reward is claimed. See the `featured` filter below for why this is a narrow
+// allowlist rather than a blanket `claimed` check.
+const RETIRE_ON_CLAIM = new Set(['wnotify']);
+
+function DailyMissionsSection({ missions, onClaim, onCreateChallenge, challengeActive, onViewChallenge, notifsOn, onEnableNotifs }) {
   const [tab, setTab] = React.useState('daily');
   const [, forceTick] = React.useState(0);
   // Re-render once a minute so the reset countdown stays current.
@@ -346,7 +352,16 @@ function DailyMissionsSection({ missions, onClaim, onCreateChallenge, challengeA
   // tab they're already present in the list, so we don't double them up.
   // Each row is tagged with its source `type` so the claim mutation can route
   // to the correct period hash regardless of which display tab is active.
-  const featured = (missions?.weekly ?? []).filter(m => m.featured).map(m => ({ ...m, type: 'weekly' }));
+  // Featured CTAs whose usefulness ends the moment the reward is banked: the
+  // row is pure clutter afterwards, so it retires from the featured strip.
+  // wchallenge is deliberately NOT in here — its "✓ VIEW" link stays useful
+  // after claiming, so hiding it would cost the user their post shortcut.
+  // (Retired rows still appear on the WEEKLY tab as a normal claimed row —
+  // that list is the week's record, not a CTA surface.)
+  const featured = (missions?.weekly ?? [])
+    .filter(m => m.featured)
+    .filter(m => !(RETIRE_ON_CLAIM.has(m.id) && m.claimed))
+    .map(m => ({ ...m, type: 'weekly' }));
   const baseRows = (missions?.[tab] ?? []).map(m => ({ ...m, type: tab }));
   const rows = tab === 'daily' ? [...featured, ...baseRows] : baseRows;
   const resetLabel = `RESETS IN ${formatResetCountdown(tab)}`;
@@ -364,6 +379,38 @@ function DailyMissionsSection({ missions, onClaim, onCreateChallenge, challengeA
       <div className="lb2-ft-news">
         {rows.map(m => {
           const claimable = m.completed && !m.claimed;
+          // Featured rows get a call-to-action button instead of a plain
+          // progress counter, keyed by mission ID — `featured` itself only
+          // controls whether the row is surfaced in both tabs, so a second
+          // featured mission must not inherit the challenge CTA.
+          const cta = m.id === 'wchallenge'
+            ? {
+                testid: 'mission-create-challenge',
+                // Driven by whether a live challenge post exists, not by
+                // mission progress — so a deleted post (challengeActive=false)
+                // flips back to POST NOW even though the weekly mission
+                // already credited.
+                label: challengeActive ? '✓ VIEW' : 'POST NOW ▸',
+                onClick: () => { challengeActive ? onViewChallenge?.() : onCreateChallenge?.(); },
+                accent: 'gold',
+              }
+            : m.id === 'wnotify'
+              // Once claimed the mission is done with: the row retires from the
+              // featured strip entirely, and the leftover WEEKLY-tab row drops
+              // its CTA. Ongoing on/off control lives in the bell dropdown from
+              // here on, so a "✓ ON" badge here would just be a dead duplicate.
+              ? (m.claimed
+                ? null
+                : {
+                    testid: 'mission-enable-notifs',
+                    // notifsOn comes from the live opt-in status, not mission
+                    // progress: turning notifications back off should flip this
+                    // to ENABLE even in a week the mission already credited.
+                    label: notifsOn ? '✓ ON' : 'ENABLE ▸',
+                    onClick: () => { if (!notifsOn) onEnableNotifs?.(); },
+                    accent: 'magenta',
+                  })
+              : null;
           return (
             <div key={m.id} className={`lb2-ft-news-row accent-${m.accent}${m.claimed ? ' done' : ''}`}>
               <div className="lb2-ft-news-tag" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
@@ -378,28 +425,26 @@ function DailyMissionsSection({ missions, onClaim, onCreateChallenge, challengeA
                 </div>
               </div>
               <div className="lb2-ft-news-time">
-                {m.featured ? (
-                  // CTA is driven by whether a live challenge post exists, not by
-                  // mission progress — so a deleted post (challengeActive=false)
-                  // flips back to POST NOW even though the weekly mission already
-                  // credited. challengeActive → VIEW (open results), else POST NOW.
+                {cta ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                     <button
                       className="lb2-mission-cta"
-                      data-testid="mission-create-challenge"
-                      onClick={(e) => { e.stopPropagation(); playSelect(); challengeActive ? onViewChallenge?.() : onCreateChallenge?.(); }}
+                      data-testid={cta.testid}
+                      onClick={(e) => { e.stopPropagation(); playSelect(); cta.onClick(); }}
                       onMouseEnter={() => playCursor()}
                       style={{
-                        background: 'linear-gradient(180deg,#ffe9bb,#ffd97a 55%,#d6a155)',
-                        color: '#2a1a04',
-                        border: '1px solid #ffe9bb',
+                        background: cta.accent === 'gold'
+                          ? 'linear-gradient(180deg,#ffe9bb,#ffd97a 55%,#d6a155)'
+                          : 'linear-gradient(180deg,#ffd6ef,#ff3da0 55%,#a81e66)',
+                        color: cta.accent === 'gold' ? '#2a1a04' : '#2a0418',
+                        border: `1px solid ${cta.accent === 'gold' ? '#ffe9bb' : '#ffd6ef'}`,
                         borderRadius: 4,
                         padding: '5px 10px',
                         fontFamily: 'inherit', fontSize: 9, fontWeight: 900, letterSpacing: '0.08em',
                         cursor: 'pointer', whiteSpace: 'nowrap',
                       }}
                     >
-                      {challengeActive ? '✓ VIEW' : 'POST NOW ▸'}
+                      {cta.label}
                     </button>
                     {claimable && (
                       <button className="lb2-mission-claim-btn" onClick={(e) => { e.stopPropagation(); onClaim?.(m); }} onMouseEnter={() => playCursor()}>
@@ -579,6 +624,33 @@ export default function LobbyScreen({ username, credits, homeRoster, missions, i
     }
   };
 
+  // ── Push notifications ──────────────────────────────────
+  // Drives the featured `wnotify` mission CTA. Status is read once on mount;
+  // the server re-ticks the weekly mission on that same read (see
+  // core/missions.ts -> recordNotificationsEnabled), so just visiting the lobby
+  // with notifications still on keeps the mission credited each week.
+  //
+  // Failures are swallowed on purpose: @devvit/notifications is experimental
+  // and may be absent from the local playtest emulator, in which case the CTA
+  // simply stays on ENABLE rather than breaking the missions panel.
+  //
+  // Status is shared with the bell dropdown's on/off toggle rather than held
+  // locally, so toggling push off there flips this row back to ENABLE without
+  // a remount. See notifStatus.js. Guests have nobody to opt in, so they skip
+  // the fetch entirely.
+  const { optedIn: notifsOn } = useNotifStatus({ enabled: !!username });
+
+  const handleEnableNotifs = async () => {
+    try {
+      await notifOptIn();
+      // onClaim is App's refreshMissions - repurposed here so the wnotify row
+      // flips to 1/1 + CLAIM immediately instead of on the next lobby mount.
+      onClaim?.();
+    } catch {
+      // Reddit declined, or the plugin is unavailable - leave the CTA as ENABLE.
+    }
+  };
+
   const handlePlay = () => {
     if (isFtue || !homeRoster.length) {
       onDraft();
@@ -622,7 +694,7 @@ export default function LobbyScreen({ username, credits, homeRoster, missions, i
         </div>
 
         {/* Daily missions */}
-        <DailyMissionsSection missions={missions} onClaim={handleClaimMission} onCreateChallenge={onCreateChallenge} challengeActive={challengeActive} onViewChallenge={onViewChallenge} />
+        <DailyMissionsSection missions={missions} onClaim={handleClaimMission} onCreateChallenge={onCreateChallenge} challengeActive={challengeActive} onViewChallenge={onViewChallenge} notifsOn={notifsOn} onEnableNotifs={handleEnableNotifs} />
 
         {/* Queue selector */}
         <div className="lb2-section-h">

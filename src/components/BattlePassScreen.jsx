@@ -23,7 +23,8 @@ function ProgressBar({ current, max }) {
         <div className="bpp-fill" style={{ width: `${pct}%` }} />
       </div>
       <div className="bpp-meta">
-        <span className="bppm-val">{current} / {max}</span>
+        {/* Count lives in the labeled "MISSIONS COMPLETED" row below — show
+            only the percentage here to avoid duplicating it. */}
         <span className="bppm-pct">{Math.round(pct)}%</span>
       </div>
     </div>
@@ -36,6 +37,11 @@ export default function BattlePassScreen({
   // Server-truth pass state: { tier: 'basic' | 'premium' | null, purchasedAt, founder }.
   // Defaults below cover the dev-story case where the prop isn't provided.
   passState = { tier: null, purchasedAt: 0, founder: false },
+  // Admin kill switch (config.getFlags → passPurchases). When false the
+  // CTAs go inert. Non-owners never get this far — App.jsx blocks the
+  // whole screen for them — but a Basic owner can still be here looking
+  // at the Premium upgrade, so the buttons must reflect the pause.
+  purchasesEnabled = true,
   // BP-exclusive seasonal missions. Non-empty only for pass holders.
   bpMissions = [],
   onPassRefresh,
@@ -81,6 +87,13 @@ export default function BattlePassScreen({
   };
 
   const handleBuy = async (sku) => {
+    // Belt-and-braces: the buttons are already disabled when sales are
+    // paused, but never open Reddit's payment sheet for an order the
+    // server is guaranteed to reject.
+    if (!purchasesEnabled) {
+      setError('Founders Pass sales are paused right now. Check back soon.');
+      return;
+    }
     if (busy) return;
     playSelect();
     setError(null);
@@ -143,16 +156,21 @@ export default function BattlePassScreen({
     </svg>
   );
 
-  const basicDisabled = isBasic || isPremium || busy;
-  const premiumDisabled = isPremium || busy;
+  const salesPaused = !purchasesEnabled;
+  const basicDisabled = isBasic || isPremium || busy || salesPaused;
+  const premiumDisabled = isPremium || busy || salesPaused;
   const basicLabel = isBasic || isPremium
     ? <>OWNED</>
-    : <>BASIC · {goldStar} 50</>;
+    : salesPaused
+      ? <>UNAVAILABLE</>
+      : <>BASIC · {goldStar} 50</>;
   const premiumLabel = isPremium
     ? <>OWNED</>
-    : isBasic
-      ? <>UPGRADE · {goldStar} 250</>
-      : <>PREMIUM · {goldStar} 250</>;
+    : salesPaused
+      ? <>UNAVAILABLE</>
+      : isBasic
+        ? <>UPGRADE · {goldStar} 250</>
+        : <>PREMIUM · {goldStar} 250</>;
 
   return (
     <div className="battle-pass" data-testid="battle-pass-screen">
@@ -252,6 +270,12 @@ export default function BattlePassScreen({
                     <span className="bpf-disc-mark">⚠</span>
                     <span>Initial Credits will be Credited with more features coming soon.</span>
                   </div>
+
+                  {salesPaused && (
+                    <div className="bpf-purchase-error" data-testid="bp-sales-paused" role="status">
+                      Founders Pass sales are paused right now. Check back soon.
+                    </div>
+                  )}
 
                   <div className="bpf-cta-row">
                     <button
