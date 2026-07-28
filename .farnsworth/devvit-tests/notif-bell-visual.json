@@ -1,0 +1,13 @@
+{
+  "name": "notif-bell-visual",
+  "description": "Leave the bell dropdown open in the opted-in state for a visual canvas check",
+  "steps": [
+    { "action": "reload", "waitMs": 5000 },
+    { "action": "waitFor", "selector": "[data-testid=notif-bell]", "timeout": 15000 },
+    { "action": "sleep", "ms": 1000 },
+    { "action": "eval", "expression": "(() => { window.__notifStatus.set({ loaded:true, supported:true, everOptedIn:true, optedIn:true }); return 'on'; })()" },
+    { "action": "click", "selector": "[data-testid=notif-bell]" },
+    { "action": "waitFor", "selector": "[data-testid=notif-opt-toggle]", "timeout": 6000 },
+    { "action": "sleep", "ms": 600 }
+  ]
+}

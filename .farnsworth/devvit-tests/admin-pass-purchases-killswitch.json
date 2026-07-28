@@ -1,0 +1,314 @@
+{
+  "name": "admin kill switch: u/bob disables Founders Pass purchases → u/carol (no pass) is blocked from the battle pass page → restore → access returns",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "bob",
+      "_comment": "bob is an admin. Also restarts the dev server, which is REQUIRED to pick up new tRPC routes (config.getFlags / admin.setFlag)"
+    },
+    {
+      "action": "reload",
+      "waitMs": 3500
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=DBG",
+      "timeout": 8000,
+      "_comment": "DBG toggle is admin-only — its presence confirms bob still has admin"
+    },
+    {
+      "action": "if",
+      "condition": "!document.querySelector('[data-testid=debug-input]')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "text=DBG"
+        },
+        {
+          "action": "waitFor",
+          "selector": "[data-testid=debug-input]",
+          "timeout": 5000
+        }
+      ]
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=debug-input]",
+      "text": "admin"
+    },
+    {
+      "action": "sleep",
+      "ms": 200
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); if (!el) return 'ERR: no debug input'; if (el.value !== 'admin') { const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'admin'); el.dispatchEvent(new Event('input', { bubbles: true })); } el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); return 'submitted'; })()",
+      "name": "press Enter on 'admin'"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=ADMIN PANEL",
+      "timeout": 8000
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=\"admin-tab-config\"]'); if (!el) return 'missing'; el.scrollIntoView({ block: 'nearest', inline: 'center' }); const r = el.getBoundingClientRect(); return JSON.stringify({ cx: Math.round(r.x + r.width/2), vw: window.innerWidth, inView: r.x >= 0 && r.right <= window.innerWidth }); })()",
+      "name": "scroll Config tab into view (7 tabs overflow a 374px panel)"
+    },
+    {
+      "action": "sleep",
+      "ms": 300
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='admin-tab-config']",
+      "_comment": "New Config tab (TABS index 6)"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='admin-config-panel']",
+      "timeout": 8000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='flag-state-passPurchases']",
+      "timeout": 8000,
+      "_comment": "Flag row rendered — proves admin.getFlags resolved"
+    },
+    {
+      "action": "extract",
+      "expression": "document.querySelector('[data-testid=\"flag-state-passPurchases\"]')?.getAttribute('data-on')",
+      "into": "stateBefore",
+      "_comment": "Expect '1' (default ON)"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/flag-01-config-tab.png"
+    },
+    {
+      "action": "if",
+      "condition": "document.querySelector('[data-testid=\"flag-state-passPurchases\"]')?.getAttribute('data-on') === '1'",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "[data-testid='flag-toggle-passPurchases']"
+        }
+      ],
+      "_comment": "Turn OFF only if currently on — keeps the test idempotent"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='flag-state-passPurchases'][data-on='0']",
+      "timeout": 8000,
+      "_comment": "Server round-trip completed and the panel reloaded as OFF"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/flag-02-disabled.png"
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const l = document.querySelectorAll('[data-testid=\"admin-config-panel\"] div'); return Array.from(l).map(d => d.textContent).find(t => t && t.includes('DISABLED')) ? 'log-shows-disabled' : 'no-log-line'; })()",
+      "into": "auditLine"
+    },
+    {
+      "action": "switchUser",
+      "username": "carol",
+      "_comment": "carol: not an admin, tier=null (owns no pass) — verified by zz-flag-diagnose"
+    },
+    {
+      "action": "reload",
+      "waitMs": 3500
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "if",
+      "condition": "!!document.querySelector('.lb2-coach')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": ".lb2-coach"
+        },
+        {
+          "action": "sleep",
+          "ms": 400
+        }
+      ]
+    },
+    {
+      "action": "sleep",
+      "ms": 1200,
+      "_comment": "Let config.getFlags resolve — the client defaults to ENABLED while loading so it never false-locks"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='bnav-battlepass']",
+      "_comment": "BP nav → should NOT navigate"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='pass-locked-modal']",
+      "timeout": 8000,
+      "_comment": "THE ASSERTION: page access refused with an explanatory modal"
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({ modal: !!document.querySelector('[data-testid=\"pass-locked-modal\"]'), bpScreen: !!document.querySelector('[data-testid=\"battle-pass-screen\"]'), stillLobby: !!document.querySelector('[data-testid=\"lobby-screen\"]') })",
+      "into": "blockedState",
+      "_comment": "Expect modal:true, bpScreen:false, stillLobby:true"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/flag-03-carol-blocked.png"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='pass-locked-ok']"
+    },
+    {
+      "action": "sleep",
+      "ms": 400
+    },
+    {
+      "action": "switchUser",
+      "username": "bob",
+      "_comment": "Restore the flag so this test leaves no side effects"
+    },
+    {
+      "action": "reload",
+      "waitMs": 3500
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "if",
+      "condition": "!document.querySelector('[data-testid=debug-input]')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "text=DBG"
+        },
+        {
+          "action": "waitFor",
+          "selector": "[data-testid=debug-input]",
+          "timeout": 5000
+        }
+      ]
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=debug-input]",
+      "text": "admin"
+    },
+    {
+      "action": "sleep",
+      "ms": 200
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'admin'); el.dispatchEvent(new Event('input', { bubbles: true })); el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); return 'submitted'; })()",
+      "name": "reopen admin panel"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=ADMIN PANEL",
+      "timeout": 8000
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=\"admin-tab-config\"]'); if (!el) return 'missing'; el.scrollIntoView({ block: 'nearest', inline: 'center' }); const r = el.getBoundingClientRect(); return JSON.stringify({ cx: Math.round(r.x + r.width/2), vw: window.innerWidth, inView: r.x >= 0 && r.right <= window.innerWidth }); })()",
+      "name": "scroll Config tab into view (7 tabs overflow a 374px panel)"
+    },
+    {
+      "action": "sleep",
+      "ms": 300
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='admin-tab-config']"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='flag-state-passPurchases'][data-on='0']",
+      "timeout": 8000,
+      "_comment": "Flag PERSISTED across a dev-server restart and a user switch — it's in redis, not memory"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='flag-toggle-passPurchases']"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='flag-state-passPurchases'][data-on='1']",
+      "timeout": 8000
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/flag-04-restored.png"
+    },
+    {
+      "action": "switchUser",
+      "username": "carol",
+      "_comment": "Confirm access is genuinely restored — not permanently broken by the gate"
+    },
+    {
+      "action": "reload",
+      "waitMs": 3500
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "if",
+      "condition": "!!document.querySelector('.lb2-coach')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": ".lb2-coach"
+        },
+        {
+          "action": "sleep",
+          "ms": 400
+        }
+      ]
+    },
+    {
+      "action": "sleep",
+      "ms": 1200
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='bnav-battlepass']"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='battle-pass-screen']",
+      "timeout": 8000,
+      "_comment": "Page opens again with purchases live"
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({ bpScreen: true, salesPausedNotice: !!document.querySelector('[data-testid=\"bp-sales-paused\"]'), basicLabel: document.querySelector('[data-testid=\"bp-cta-basic\"]')?.textContent?.trim(), basicDisabled: document.querySelector('[data-testid=\"bp-cta-basic\"]')?.disabled })",
+      "into": "restoredState",
+      "_comment": "Expect salesPausedNotice:false, basicDisabled:false, label showing the price"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/flag-05-carol-access-restored.png"
+    }
+  ]
+}

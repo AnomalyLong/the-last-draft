@@ -1,0 +1,9 @@
+{
+  "name": "Assign bob's lineup via the real AUTO ASSIGN button",
+  "steps": [
+    {"action": "extract", "expression": "JSON.stringify(Array.from(document.querySelector('.assign-actions').children).map((e,i)=>({i:i+1, cls:String(e.className).slice(0,30), txt:e.textContent.trim(), dis:!!e.disabled})))", "into": "actionKids"},
+    {"action": "eval", "expression": "(() => { const kids = Array.from(document.querySelector('.assign-actions').children); const btn = kids.find(k => /AUTO ASSIGN/i.test(k.textContent||'')); if (!btn) return 'not-found'; btn.click(); return 'clicked:' + btn.className; })()", "into": "clickResult"},
+    {"action": "sleep", "ms": 1800},
+    {"action": "extract", "expression": "JSON.stringify({assigned: Array.from(document.querySelectorAll('*')).filter(e=>{const t=(e.textContent||'').trim(); return t.length<20 && /^ASSIGNED/i.test(t);}).map(e=>e.textContent.trim()), empties: document.querySelectorAll('.assign-slot').length ? Array.from(document.querySelectorAll('.assign-slot')).map(s=>s.textContent.trim().slice(0,14)) : 'no-slots'})", "into": "afterAssign"}
+  ]
+}

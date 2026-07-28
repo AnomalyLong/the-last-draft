@@ -1,0 +1,55 @@
+{
+  "name": "open-admin-panel",
+  "description": "Open the debug console (if closed), type the 'admin' command, press Enter, and verify the ADMIN PANEL overlay launches",
+  "steps": [
+    {
+      "action": "waitFor",
+      "selector": "text=DBG",
+      "timeout": 8000,
+      "_comment": "DBG toggle - admins only (App.jsx:613 gates on isAdmin)"
+    },
+    {
+      "action": "if",
+      "condition": "!document.querySelector('[data-testid=debug-input]')",
+      "steps": [
+        {"action": "click", "selector": "text=DBG", "_comment": "Open console only if not already open"},
+        {"action": "waitFor", "selector": "[data-testid=debug-input]", "timeout": 5000}
+      ]
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=debug-input]",
+      "text": "admin",
+      "_comment": "DebugConsole input is controlled React state (HUD.jsx:953)"
+    },
+    {
+      "action": "sleep",
+      "ms": 200
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); if (!el) return 'ERR: no debug input'; if (el.value !== 'admin') { const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'admin'); el.dispatchEvent(new Event('input', { bubbles: true })); } el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); return 'submitted value=' + JSON.stringify(el.value); })()",
+      "name": "press Enter on 'admin'",
+      "_comment": "handleKey fires onCommand(input) on Enter; native setter keeps React state in sync if type() bypassed it"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=ADMIN PANEL",
+      "timeout": 8000,
+      "_comment": "AdminOverlay header (AdminOverlay.jsx:841) - no testid, match by text"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify({tabs: Array.from(document.querySelectorAll('button')).map(b => b.textContent.trim()).filter(Boolean).slice(0, 12), logs: Array.from(document.querySelectorAll('[data-testid^=log-entry]')).map(l => l.textContent.trim()).slice(-4)})",
+      "name": "admin overlay state"
+    },
+    {
+      "action": "sleep",
+      "ms": 500
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/open-admin-panel.png"
+    }
+  ]
+}

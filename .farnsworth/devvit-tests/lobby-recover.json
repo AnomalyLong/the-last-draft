@@ -1,0 +1,15 @@
+{
+  "name": "lobby-recover",
+  "description": "Get back to the lobby without touching the bottom nav, and report what actually rendered",
+  "steps": [
+    { "action": "reload", "waitMs": 5000, "_comment": "Drop the casual match" },
+    { "action": "clickIfPresent", "selector": ".lobby2-ftue svg", "_comment": "Dismiss FTUE if present" },
+    { "action": "sleep", "ms": 1200 },
+    {
+      "action": "eval",
+      "expression": "(() => { const q = s => !!document.querySelector(s); return JSON.stringify({ inMatch: q('.bnav-play') ? false : true, bell: q('[data-testid=notif-bell]'), missions: q('[data-testid=missions]'), ftue: q('.lobby2-ftue'), bodyStart: document.body.innerText.trim().slice(0,120).replace(/\\s+/g,' ') }); })()",
+      "name": "where are we"
+    },
+    { "action": "screenshot", "path": "/tmp/lobby-recover.png" }
+  ]
+}

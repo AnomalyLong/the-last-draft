@@ -1,0 +1,32 @@
+{
+  "name": "open-debug-console",
+  "description": "Click the DBG toggle in the top-left HUD corner to open the debug console, and verify the command input appears",
+  "steps": [
+    {
+      "action": "waitFor",
+      "selector": "text=DBG",
+      "timeout": 8000,
+      "_comment": "DBG toggle lives in DebugConsole (src/components/HUD.jsx) - inline styles only, so match by text"
+    },
+    {
+      "action": "click",
+      "selector": "text=DBG",
+      "_comment": "Toggle showDebug -> renders the console panel"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='debug-input']",
+      "timeout": 5000,
+      "_comment": "Console panel open when the command input is present"
+    },
+    {
+      "action": "sleep",
+      "ms": 400,
+      "_comment": "Let the panel paint"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/open-debug-console.png"
+    }
+  ]
+}

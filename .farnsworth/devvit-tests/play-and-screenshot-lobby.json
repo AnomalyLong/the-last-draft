@@ -1,0 +1,12 @@
+{
+  "name": "play-and-screenshot-lobby",
+  "description": "Load the game, click PLAY, dismiss FTUE if present, and screenshot the lobby",
+  "steps": [
+    { "action": "reload", "waitMs": 2000, "_comment": "Reset state so the test is idempotent" },
+    { "action": "waitFor", "selector": ".bnav-play", "timeout": 8000, "_comment": "Game rendered, bottom nav present" },
+    { "action": "clickIfPresent", "selector": ".lobby2-ftue svg", "_comment": "Dismiss welcome modal if present" },
+    { "action": "click", "selector": ".bnav-play", "_comment": "Open the PLAY tab" },
+    { "action": "sleep", "ms": 1500, "_comment": "Let the lobby settle" },
+    { "action": "screenshot", "path": "/tmp/play-and-screenshot-lobby.png", "_comment": "Lobby snapshot" }
+  ]
+}

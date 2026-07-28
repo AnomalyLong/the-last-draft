@@ -1,0 +1,63 @@
+{
+  "name": "FTUE (lobby coach + intro video) → team setup → 5 picks picking rarest → auto-assign → start",
+  "steps": [
+    {"action": "reload", "waitMs": 3000, "_comment": "Reset state, wait for app to fully load"},
+    {"action": "waitFor", "selector": ".fw-stage--desktop", "timeout": 8000, "_comment": "Canvas rendered"},
+    {"action": "if", "condition": "!!document.querySelector('.lb2-coach')", "steps": [
+      {"action": "click", "selector": ".lb2-coach", "_comment": "FTUE coach page 1 (Howdy! Welcome to the MBA!)"},
+      {"action": "waitFor", "selector": ".lb2-coach", "timeout": 3000},
+      {"action": "click", "selector": ".lb2-coach", "_comment": "FTUE coach page 2 (Tap the PLAY button...) → dismisses coach"}
+    ], "_comment": "Walk through lobby FTUE coach if present (FTUE user)"},
+    {"action": "click", "selector": ".bnav-play", "_comment": "PLAY → draftHub, ftueIntro, or directly to draft"},
+    {"action": "waitFor", "selector": "[data-testid='ftue-intro-video'], .dh-btn.primary, .tsetup, .draft-start-btn", "timeout": 15000, "_comment": "One of ftueIntro, draft hub, team setup, or draft"},
+    {"action": "if", "condition": "!!document.querySelector(\"[data-testid='ftue-intro-video']\")", "steps": [
+      {"action": "click", "selector": "[data-testid='ftue-intro-video']", "_comment": "ftueIntro tap 1: unmute + start video"},
+      {"action": "waitFor", "selector": "[data-testid='ftue-intro-video']", "timeout": 1500},
+      {"action": "sleep", "ms": 1500, "_comment": "Wait 1.5s for canSkip to enable"},
+      {"action": "click", "selector": "[data-testid='ftue-intro-video']", "_comment": "ftueIntro tap 2: ask to skip"},
+      {"action": "waitFor", "selector": "[data-testid='ftue-intro-video']", "timeout": 1500},
+      {"action": "click", "selector": "[data-testid='ftue-intro-video']", "_comment": "ftueIntro tap 3: confirm skip → done"}
+    ], "_comment": "Skip ftueIntro video (3 taps with timing)"},
+    {"action": "waitFor", "selector": ".dh-btn.primary, .tsetup, .draft-start-btn", "timeout": 15000, "_comment": "After FTUE intro, wait for next scene"},
+    {"action": "if", "condition": "!!document.querySelector('.dh-btn.primary')", "steps": [
+      {"action": "click", "selector": ".dh-btn.primary", "_comment": "USE A PICK · START DRAFT"},
+      {"action": "waitFor", "selector": ".tsetup, .draft-start-btn", "timeout": 10000}
+    ], "_comment": "If on draft hub, click USE A PICK"},
+    {"action": "if", "condition": "!!document.querySelector('.tsetup') && !!document.querySelector('.ts-name-input')", "steps": [
+      {"action": "type", "selector": ".ts-name-input", "text": "Cthulhu", "_comment": "Step 1: type team name"},
+      {"action": "click", "selector": "text=CONFIRM", "_comment": "Step 1 → step 2 (UNIFORM)"},
+      {"action": "waitFor", "selector": "text=UNIFORM", "timeout": 5000},
+      {"action": "click", "selector": "text=CONFIRM", "_comment": "Step 2 → step 3 (TEAM LOGO)"},
+      {"action": "waitFor", "selector": "text=TEAM LOGO", "timeout": 5000},
+      {"action": "click", "selector": "text=CONTINUE TO DRAFT", "_comment": "Step 3 → draft screen"}
+    ], "_comment": "Step through 3-step TeamSetupView wizard"},
+    {"action": "waitFor", "selector": ".draft-start-btn", "timeout": 20000, "_comment": "INITIATE DRAFT SEQUENCE button"},
+    {"action": "click", "selector": ".draft-start-btn", "_comment": "Begin anomaly scan + draft"},
+    {"action": "if", "condition": "!!document.querySelector('.draft-coach')", "steps": [
+      {"action": "click", "selector": ".draft-coach", "_comment": "Coach page 1"},
+      {"action": "waitFor", "selector": ".draft-coach", "timeout": 2000},
+      {"action": "click", "selector": ".draft-coach", "_comment": "Coach page 2"},
+      {"action": "waitFor", "selector": ".draft-coach", "timeout": 2000},
+      {"action": "click", "selector": ".draft-coach", "_comment": "Coach page 3 → scan starts"}
+    ], "_comment": "Draft FTUE coach (3 pages) before scan begins"},
+    {"action": "while", "max": 10, "until": "window.__pickCount >= 5 || !!document.querySelector('.da-btn.primary.big')", "steps": [
+      {"action": "if", "condition": "!document.querySelector('.draft-card-slot .dc-tier-label') || Array.from(document.querySelectorAll('.draft-card-slot .dc-tier-label')).some(l => !l.textContent.trim())", "steps": [
+        {"action": "waitFor", "selector": ".draft-coach", "timeout": 30000, "_comment": "Wait for initial coach (round 1: shown after intro scan)"},
+        {"action": "click", "selector": ".draft-coach", "_comment": "Dismiss coach for face-down stage (round 1 only)"},
+        {"action": "click", "selector": ".draft-card-slot:nth-child(1) .draft-card-anim", "_comment": "Click first card to flip all 3 face-up"},
+        {"action": "sleep", "ms": 7500, "_comment": "Wait ~7s for staggered flip animation"},
+        {"action": "waitFor", "selector": ".draft-card-slot .dc-tier-label", "timeout": 15000}
+      ], "_comment": "Cards face-down — wait for coach (if round 1), dismiss, flip"},
+      {"action": "waitFor", "selector": ".draft-coach", "timeout": 15000, "_comment": "Coach reappears after flip (revealed stage)"},
+      {"action": "click", "selector": ".draft-coach", "_comment": "Dismiss revealed-stage coach"},
+      {"action": "extract", "expression": "(() => { const slots = document.querySelectorAll('.draft-card-slot'); const m = {'COMMON':0,'UNCOMMON':0,'RARE':1,'ULTRA RARE':2}; let best = 0, br = -1; slots.forEach((s, i) => { const l = s.querySelector('.dc-tier-label'); const r = l ? (m[l.textContent.trim()] ?? 0) : 0; if (r > br) { br = r; best = i + 1; } }); window.__pickCount = (window.__pickCount ?? 0) + 1; return best; })()", "into": "bestN", "_comment": "Pick the rarest of 3 cards; store slot index in $bestN"},
+      {"action": "click", "selector": ".draft-card-slot:nth-child(${bestN}) .draft-card-anim", "_comment": "Click the rarest card to pick"},
+      {"action": "waitFor", "selector": ".draft-card-anim.picked", "timeout": 8000, "_comment": "Confirm pick registered"},
+      {"action": "waitForNotVisible", "selector": ".draft-card-anim.picked", "timeout": 30000, "_comment": "Wait for next round to start"}
+    ], "_comment": "Pick 5 players picking rarest (waits for coach at right stage transitions)"},
+    {"action": "waitFor", "selector": ".da-btn.primary.big", "timeout": 15000, "_comment": "Assign phase loaded"},
+    {"action": "click", "selector": "text=AUTO ASSIGN", "_comment": "Auto-fill lineup"},
+    {"action": "click", "selector": ".da-btn.primary.big", "_comment": "START GAME"},
+    {"action": "screenshot", "path": "/tmp/draft-test-final.png", "_comment": "Final state"}
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "diagnose: admin status + pass ownership + flag state for current user",
+  "steps": [
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { window.__d = {}; const get = (p) => fetch('/api/trpc/' + p + '?input=%7B%7D').then(r => r.json()).then(j => j?.result?.data?.json ?? j?.error?.json?.message ?? 'unknown'); Promise.all([get('admin.isAdmin'), get('pass.getMine'), get('config.getFlags')]).then(([a,p2,f]) => { window.__d = {admin:a?.isAdmin, tier:p2?.tier ?? null, founder:p2?.founder, flags:f}; }).catch(e => { window.__d = {err:String(e.message)}; }); return 'fired'; })()",
+      "into": "fired"
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "extract",
+      "expression": "'admin=' + JSON.stringify(window.__d.admin) + ' tier=' + JSON.stringify(window.__d.tier) + ' flags=' + JSON.stringify(window.__d.flags) + ' err=' + JSON.stringify(window.__d.err)",
+      "into": "diag"
+    }
+  ]
+}

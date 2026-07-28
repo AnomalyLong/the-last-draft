@@ -1,0 +1,51 @@
+{
+  "name": "UI-only smoke test — dismiss welcome, click PLAY tab (idempotent)",
+  "steps": [
+    {
+      "action": "reload",
+      "waitMs": 2000,
+      "name": "reload to reset state"
+    },
+    {
+      "action": "waitFor",
+      "selector": ".fw-stage--desktop",
+      "timeout": 5000,
+      "name": "stage rendered"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify({welcomePresent: !!document.querySelector('.fw-stage--desktop .lobby2-ftue svg'), stageSize: document.querySelector('.fw-stage--desktop').offsetWidth + 'x' + document.querySelector('.fw-stage--desktop').offsetHeight})",
+      "name": "initial state"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/farnsworth-test-1-initial.png",
+      "name": "screenshot: initial with welcome modal"
+    },
+    {
+      "action": "clickIfPresent",
+      "selector": ".fw-stage--desktop .lobby2-ftue svg",
+      "name": "dismiss welcome modal (if present)"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/farnsworth-test-2-after-dismiss.png",
+      "name": "screenshot: after dismiss"
+    },
+    {
+      "action": "click",
+      "selector": ".bnav-play",
+      "name": "click PLAY tab"
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify({activeTab: Array.from(document.querySelectorAll('.bnav-item, .bnav-play')).map(b => ({class: b.className, text: b.textContent.trim()})), rankedVisible: !!document.querySelector('.lb2-qbtn')})",
+      "name": "post-click state"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/farnsworth-test-3-after-play.png",
+      "name": "screenshot: after PLAY tab"
+    }
+  ]
+}

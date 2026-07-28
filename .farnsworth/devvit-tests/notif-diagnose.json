@@ -1,0 +1,30 @@
+{
+  "name": "notif-diagnose",
+  "description": "Ask the server directly what notifications.status returns and what optIn does, to find which gate (loaded/everOptedIn/supported) is hiding the bell toggle. Runner has no evalAsync, so fetches stash onto window and a later eval reads them.",
+  "steps": [
+    { "action": "reload", "waitMs": 5000 },
+    { "action": "waitFor", "selector": "[data-testid=notif-bell]", "timeout": 15000 },
+    { "action": "sleep", "ms": 1200 },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__d = {}; fetch('/api/trpc/notifications.status').then(r => r.text()).then(t => { window.__d.before = t.slice(0,500); }).catch(e => { window.__d.before = 'ERR ' + e.message; }); return 'kicked off'; })()",
+      "name": "1a - fire status BEFORE"
+    },
+    { "action": "sleep", "ms": 2000 },
+    { "action": "eval", "expression": "window.__d.before || 'pending'", "name": "1b - status BEFORE opt-in" },
+    {
+      "action": "eval",
+      "expression": "(() => { fetch('/api/trpc/notifications.optIn', { method:'POST', headers:{'content-type':'application/json'}, body:'{}' }).then(r => r.text().then(t => { window.__d.optin = r.status + ' ' + t.slice(0,450); })).catch(e => { window.__d.optin = 'ERR ' + e.message; }); return 'kicked off'; })()",
+      "name": "2a - fire optIn"
+    },
+    { "action": "sleep", "ms": 3000 },
+    { "action": "eval", "expression": "window.__d.optin || 'pending'", "name": "2b - optIn raw result" },
+    {
+      "action": "eval",
+      "expression": "(() => { fetch('/api/trpc/notifications.status').then(r => r.text()).then(t => { window.__d.after = t.slice(0,500); }).catch(e => { window.__d.after = 'ERR ' + e.message; }); return 'kicked off'; })()",
+      "name": "3a - fire status AFTER"
+    },
+    { "action": "sleep", "ms": 2000 },
+    { "action": "eval", "expression": "window.__d.after || 'pending'", "name": "3b - status AFTER opt-in" }
+  ]
+}

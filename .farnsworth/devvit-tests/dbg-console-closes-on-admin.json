@@ -1,0 +1,104 @@
+{
+  "name": "DBG console auto-closes when the admin panel opens (bob = admin)",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "bob",
+      "_comment": "bob is an admin (verified by zz-flag-diagnose). Also restarts the dev server if not already active."
+    },
+    {
+      "action": "reload"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 20000
+    },
+    {
+      "action": "clickIfPresent",
+      "selector": "[data-testid='coach-continue']",
+      "_comment": "FTUE coach overlay can sit on top of the lobby"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='dbg-toggle']",
+      "timeout": 8000,
+      "_comment": "DBG chip only renders for admins \u2014 its presence double-confirms bob is admin"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='dbg-toggle']"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='debug-panel']",
+      "timeout": 5000,
+      "_comment": "PRECONDITION: console panel is genuinely open before we test that it closes"
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({panel: !!document.querySelector('[data-testid=debug-panel]'), overlay: !!document.querySelector('[data-testid=admin-overlay]')})",
+      "into": "beforeCmd"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/dbg-01-console-open.png"
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=debug-input]",
+      "text": "admin"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'enter-sent'; })()",
+      "_comment": "DebugConsole submits on Enter keydown (HUD.jsx handleKey)"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='admin-overlay']",
+      "timeout": 10000,
+      "_comment": "admin cmd is async (trpc admin.isAdmin) \u2014 overlay appears only after it resolves"
+    },
+    {
+      "action": "waitForNotVisible",
+      "selector": "[data-testid='debug-panel']",
+      "timeout": 5000,
+      "_comment": "THE ASSERTION: console chat closed itself once the admin panel opened"
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({panel: !!document.querySelector('[data-testid=debug-panel]'), overlay: !!document.querySelector('[data-testid=admin-overlay]'), dbgChip: !!document.querySelector('[data-testid=dbg-toggle]')})",
+      "into": "afterCmd"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/dbg-02-admin-open-console-closed.png"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const t = document.querySelector('[data-testid=admin-tab-config]'); if (!t) return 'no-tab'; t.scrollIntoView({inline:'center', block:'nearest'}); const r = t.getBoundingClientRect(); return 'x=' + Math.round(r.x) + ' vw=' + window.innerWidth; })()",
+      "into": "tabPos",
+      "_comment": "Records the Config tab position. The tab bar is now an auto-fit grid that wraps (no horizontal scroll), so every tab is already in view and the scrollIntoView here is a harmless no-op kept only for the x/vw readout."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='admin-tab-config']"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='admin-config-panel']",
+      "timeout": 8000,
+      "_comment": "Sanity: the admin panel is actually interactive, not just mounted behind a dead console"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/dbg-03-config-reachable.png"
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({configPanel: !!document.querySelector('[data-testid=admin-config-panel]'), panelStillClosed: !document.querySelector('[data-testid=debug-panel]')})",
+      "into": "configCheck"
+    }
+  ]
+}

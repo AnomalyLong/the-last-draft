@@ -3,11 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dev Tools — The Last Draft</title>
+    <title>Dev Tools (real game) — The Last Draft</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;800;900&family=Saira:wght@400;500;600&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { background: #0d0d0d; color: #e0e0e0; font-family: monospace; }
+      html, body { height: 100%; }
+      body { background: #111; color: #e0e0e0; font-family: monospace; overflow: hidden; }
+      #root { height: 100%; overflow: hidden; }
+
+      /* Farnsworth canvas view mode (?view=): fill the iframe exactly, no
+         scrollbars. `fw-view` is set on <html> by main.jsx below when a
+         ?view= param is present. */
+      html.fw-view, html.fw-view body, html.fw-view #root { height: 100%; overflow: hidden; }
+      /* Canvas view mode must match production `game.html`, whose only body
+         rule is `body { background:#111; overflow:hidden }`. Without this the
+         dev shell's `color` + `font-family: monospace` above are inherited by
+         the real game and change text metrics: the ★ glyph resolved to
+         monospace (4.8px wide) here vs the UA default Times (8px) on Reddit,
+         so .stars / .squad-ovr measured differently in preview than in
+         production. `inherit` reproduces production exactly, because there
+         body inherits both from <html>. (Jul 25) */
+      html.fw-view body { color: inherit; font-family: inherit; }
+      .fw-stage { width: 100%; height: 100%; overflow: hidden; position: relative; }
+      .fw-stage > * { width: 100%; height: 100%; }
+      /* App.jsx roots use height:100vh; inside the iframe that must be 100%. */
+      .fw-stage .min-h-screen { min-height: 0 !important; }
     </style>
+    <script type="module">
+      // Add fw-view to <html> as early as possible when the canvas loads a
+      // specific frame, so the fill CSS applies before React mounts.
+      try {
+        const v = new URLSearchParams(location.search).get('view');
+        if (v === 'post' || v === 'mobile' || v === 'desktop' || v === 'fullscreen') {
+          document.documentElement.classList.add('fw-view');
+        }
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

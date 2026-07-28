@@ -1,0 +1,41 @@
+{
+  "name": "play-and-dismiss",
+  "description": "Reload the game, open the Play tab, dismiss the FTUE modal when present, and capture the lobby",
+  "steps": [
+    {
+      "action": "reload",
+      "waitMs": 2000,
+      "_comment": "Reset the app and wait for rendering"
+    },
+    {
+      "action": "waitFor",
+      "selector": ".bnav-play",
+      "timeout": 8000,
+      "_comment": "Wait for the bottom navigation instead of a desktop-only wrapper"
+    },
+    {
+      "action": "click",
+      "selector": ".bnav-play",
+      "_comment": "Open the Play tab"
+    },
+    {
+      "action": "sleep",
+      "ms": 750,
+      "_comment": "Allow the lobby and optional FTUE to render"
+    },
+    {
+      "action": "clickIfPresent",
+      "selector": ".lobby2-ftue svg",
+      "_comment": "Dismiss the FTUE modal if it appears"
+    },
+    {
+      "action": "sleep",
+      "ms": 750,
+      "_comment": "Allow dismissal animation to finish"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/play-and-dismiss.png"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dev Tools — The Last Draft</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; }
+      body { background: #0d0d0d; color: #e0e0e0; font-family: monospace; }
+      /* Farnsworth canvas view mode (?view=): fill the iframe, no scrollbars.
+         `fw-view` is set on <html> by main.jsx when a ?view= param is present. */
+      html.fw-view, html.fw-view body, html.fw-view #root { height: 100%; overflow: hidden; }
+      .fw-stage { width: 100%; height: 100%; overflow: hidden; }
+      .fw-stage > * { height: 100%; }
+      /* Neutralise Tailwind min-h-screen (100vh) inside the iframe stage. */
+      .fw-stage .min-h-screen { min-height: 0 !important; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.jsx"></script>
+  </body>
+</html>

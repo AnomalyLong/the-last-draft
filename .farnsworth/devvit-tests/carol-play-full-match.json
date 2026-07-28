@@ -1,0 +1,255 @@
+{
+  "name": "u/carol: lobby \u2192 PLAY \u2192 5s countdown \u2192 TAP TO START \u2192 play possessions via play/defense pickers",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "carol",
+      "_comment": "Restarts dev server + re-attaches"
+    },
+    {
+      "action": "reload",
+      "waitMs": 3500,
+      "_comment": "Fresh app boot as carol"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "if",
+      "condition": "!!document.querySelector('.lb2-coach')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": ".lb2-coach"
+        },
+        {
+          "action": "sleep",
+          "ms": 400
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('.lb2-coach')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": ".lb2-coach"
+            }
+          ]
+        }
+      ],
+      "_comment": "Dismiss lobby FTUE coach if carol ever gets reset to FTUE"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='bnav-play']",
+      "_comment": "PLAY \u2192 casual matchmaking (NOT queue-btn-training, which is INSTANT and skips the countdown)"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='matchmaking-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='matchmaking-screen'][data-state='vs']",
+      "timeout": 20000,
+      "_comment": "Opponent locked; TIP-OFF countdown begins at 5"
+    },
+    {
+      "action": "extract",
+      "expression": "document.querySelector('.launch-bar .count')?.textContent?.trim() ?? 'none'",
+      "into": "countStart"
+    },
+    {
+      "action": "sleep",
+      "ms": 2000
+    },
+    {
+      "action": "extract",
+      "expression": "document.querySelector('.launch-bar .count')?.textContent?.trim() ?? 'none'",
+      "into": "countMid",
+      "_comment": "Must be lower than countStart \u2014 proves the countdown ticks"
+    },
+    {
+      "action": "waitFor",
+      "selector": ".launch-bar.tap-to-start",
+      "timeout": 15000,
+      "_comment": "Countdown hit 0 \u2192 phase 'ready'"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/carol-01-tap-to-start.png"
+    },
+    {
+      "action": "click",
+      "selector": ".launch-bar.tap-to-start",
+      "_comment": "LAUNCH GAME"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='score-home']",
+      "timeout": 20000,
+      "_comment": "GameScene HUD mounted"
+    },
+    {
+      "action": "while",
+      "max": 150,
+      "until": "!!document.querySelector('[data-testid=\"game-over-screen\"]')",
+      "steps": [
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"levelup-ok\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='levelup-ok']",
+              "_comment": "STAT UPGRADE modal \u2014 blocks all play until dismissed"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid^=\"levelup-ability-\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const a = document.querySelector('[data-testid^=\"levelup-ability-\"]'); window.__ups = (window.__ups ?? 0) + 1; return a ? a.getAttribute('data-testid') : ''; })()",
+              "into": "abilityPick"
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${abilityPick}']",
+              "_comment": "CHOOSE AN UPGRADE \u2192 take the first ability"
+            },
+            {
+              "action": "sleep",
+              "ms": 400
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"bball-tip\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='bball-tip']",
+              "_comment": "Mascot dialogue \u2192 dismiss"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"defense-ftue\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='defense-ftue']"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"quarter-summary-continue\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='quarter-summary-continue']",
+              "_comment": "End-of-quarter recap \u2192 continue"
+            },
+            {
+              "action": "sleep",
+              "ms": 500
+            }
+          ],
+          "_comment": "Gate on the CONTINUE button itself \u2014 the summary root renders first, the button only after BTN_TICK frames"
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"play-picker\"][data-iso-mode=\"1\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='iso-target-PG']",
+              "_comment": "ISO submenu open \u2192 PG keeps the ball"
+            },
+            {
+              "action": "sleep",
+              "ms": 400
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"play-picker\"][data-iso-mode=\"0\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const all = [...document.querySelectorAll('[data-testid^=\"play-\"]')].filter(e => e.getAttribute('data-testid') !== 'play-picker'); const ok = all.filter(e => e.getAttribute('data-disabled') === '0' && e.getAttribute('data-testid') !== 'play-iso'); const p = ok[0] || all.find(e => e.getAttribute('data-disabled') === '0') || all[0]; window.__plays = (window.__plays ?? 0) + 1; return p ? p.getAttribute('data-testid') : ''; })()",
+              "into": "playPick",
+              "_comment": "First enabled non-ISO play (last pick is disabled each possession)"
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${playPick}']",
+              "_comment": "CALL A PLAY"
+            },
+            {
+              "action": "sleep",
+              "ms": 450
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"defense-picker\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const d = document.querySelector('[data-testid=\"defense-motion\"], [data-testid=\"defense-guard\"], [data-testid=\"defense-aggressive\"]'); window.__defs = (window.__defs ?? 0) + 1; return d ? d.getAttribute('data-testid') : ''; })()",
+              "into": "defPick"
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${defPick}']",
+              "_comment": "CALL A DEFENSE"
+            },
+            {
+              "action": "sleep",
+              "ms": 450
+            }
+          ]
+        },
+        {
+          "action": "sleep",
+          "ms": 450,
+          "_comment": "Let the possession animate out"
+        }
+      ],
+      "_comment": "Play the game: answer every dialogue until the final buzzer"
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({plays: window.__plays ?? 0, defenses: window.__defs ?? 0, upgrades: window.__ups ?? 0, q: document.querySelector('[data-testid=\"quarter\"]')?.textContent, time: document.querySelector('[data-testid=\"timer\"]')?.textContent, home: document.querySelector('[data-testid=\"score-home\"]')?.textContent, away: document.querySelector('[data-testid=\"score-away\"]')?.textContent, gameOver: !!document.querySelector('[data-testid=\"game-over-screen\"]')})",
+      "into": "finalState"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/carol-02-final.png"
+    }
+  ]
+}

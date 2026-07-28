@@ -1,0 +1,88 @@
+{
+  "name": "bob drafts his first team: FTUE → team setup (Bobcats) → 5 picks (rarest of 3) → auto-assign lineup",
+  "_note": "Must run start-to-finish in ONE run: draft progress does NOT persist mid-draft (an interrupted run resets roster to 0/5 and team name to default). Timing lessons: (1) each round is dealt ASYNCHRONOUSLY after the previous pick animates out; (2) the coach bubble renders AFTER the deal and SWALLOWS card taps — tapping before it appears silently does nothing; (3) so the flip is a retry loop keyed on .phase-back disappearing, not a blind sleep.",
+  "steps": [
+    {"action": "switchUser", "username": "bob"},
+    {"action": "waitFor", "selector": "[data-testid='lobby-screen']", "timeout": 30000},
+    {"action": "eval", "expression": "(() => { window.__pickCount = 0; window.__picks = []; return 'reset'; })()"},
+
+    {"action": "while", "max": 5, "until": "!document.querySelector('.lb2-coach')", "steps": [
+      {"action": "click", "selector": ".lb2-coach"},
+      {"action": "sleep", "ms": 700}
+    ]},
+
+    {"action": "extract", "expression": "JSON.stringify({roster: (document.querySelector('[data-testid=roster-strip-empty]') ? 'empty' : 'has-players')})", "into": "preDraft"},
+
+    {"action": "click", "selector": "[data-testid='bnav-draft']"},
+    {"action": "waitFor", "selector": "[data-testid='ftue-intro-video'], .dh-btn.primary, .tsetup, .draft-start-btn", "timeout": 20000},
+
+    {"action": "if", "condition": "!!document.querySelector(\"[data-testid='ftue-intro-video']\")", "steps": [
+      {"action": "click", "selector": "[data-testid='ftue-intro-video']"},
+      {"action": "sleep", "ms": 1800},
+      {"action": "click", "selector": "[data-testid='ftue-intro-video']"},
+      {"action": "sleep", "ms": 600},
+      {"action": "click", "selector": "[data-testid='ftue-intro-video']"},
+      {"action": "sleep", "ms": 1000}
+    ]},
+
+    {"action": "waitFor", "selector": ".dh-btn.primary, .tsetup, .draft-start-btn", "timeout": 20000},
+    {"action": "if", "condition": "!!document.querySelector('.dh-btn.primary')", "steps": [
+      {"action": "click", "selector": ".dh-btn.primary"},
+      {"action": "waitFor", "selector": ".tsetup, .draft-start-btn", "timeout": 15000}
+    ]},
+
+    {"action": "if", "condition": "!!document.querySelector('.ts-name-input')", "steps": [
+      {"action": "type", "selector": ".ts-name-input", "text": "Bobcats"},
+      {"action": "click", "selector": "text=CONFIRM"},
+      {"action": "sleep", "ms": 900},
+      {"action": "clickIfPresent", "selector": "text=CONFIRM"},
+      {"action": "sleep", "ms": 900},
+      {"action": "clickIfPresent", "selector": "text=CONFIRM"},
+      {"action": "sleep", "ms": 900},
+      {"action": "clickIfPresent", "selector": "text=CONTINUE TO DRAFT"}
+    ]},
+
+    {"action": "waitFor", "selector": ".draft-start-btn", "timeout": 25000},
+    {"action": "click", "selector": ".draft-start-btn"},
+
+    {"action": "while", "max": 5, "until": "!document.querySelector('.draft-coach')", "steps": [
+      {"action": "click", "selector": ".draft-coach"},
+      {"action": "sleep", "ms": 700}
+    ]},
+
+    {"action": "while", "max": 14, "until": "window.__pickCount >= 5 || !!document.querySelector('.da-btn.primary.big')", "steps": [
+      {"action": "waitFor", "selector": ".draft-coach, .draft-card-slot.phase-back, .draft-card-slot .dc-tier-label, .da-btn.primary.big", "timeout": 40000},
+
+      {"action": "if", "condition": "!document.querySelector('.da-btn.primary.big')", "steps": [
+        {"action": "sleep", "ms": 2200, "_comment": "let the round's coach bubble render before we touch anything"},
+        {"action": "while", "max": 5, "until": "!document.querySelector('.draft-coach')", "steps": [
+          {"action": "click", "selector": ".draft-coach"},
+          {"action": "sleep", "ms": 600}
+        ]},
+
+        {"action": "while", "max": 6, "until": "!document.querySelector('.draft-card-slot.phase-back')", "steps": [
+          {"action": "clickIfPresent", "selector": ".draft-coach"},
+          {"action": "click", "selector": ".draft-card-slot:nth-child(1) .draft-card-anim"},
+          {"action": "sleep", "ms": 3500}
+        ], "_comment": "RETRY the flip until no slot is face-down — a tap eaten by a late coach is invisible otherwise"},
+
+        {"action": "while", "max": 5, "until": "!document.querySelector('.draft-coach')", "steps": [
+          {"action": "click", "selector": ".draft-coach"},
+          {"action": "sleep", "ms": 600}
+        ], "_comment": "post-flip coach"},
+
+        {"action": "waitFor", "selector": ".draft-card-slot .dc-tier-label", "timeout": 25000},
+        {"action": "extract", "expression": "(() => { const slots = document.querySelectorAll('.draft-card-slot'); const m = {'COMMON':0,'UNCOMMON':1,'RARE':2,'ULTRA RARE':3}; let best = 1, br = -1; slots.forEach((s, i) => { const l = s.querySelector('.dc-tier-label'); const r = l ? (m[l.textContent.trim()] ?? 0) : 0; if (r > br) { br = r; best = i + 1; } }); window.__pickCount = (window.__pickCount ?? 0) + 1; const c = slots[best-1]; window.__picks.push({rd: window.__pickCount, took: c?.querySelector('.dc-tier-label')?.textContent.trim(), offered: Array.from(slots).map(s=>s.querySelector('.dc-tier-label')?.textContent.trim())}); return best; })()", "into": "bestN", "_comment": "Rarest of 3. NOTE: draft-5-picks-rarest maps UNCOMMON:0 (same as COMMON) — a bug; corrected to 1 here."},
+        {"action": "click", "selector": ".draft-card-slot:nth-child(${bestN}) .draft-card-anim"},
+        {"action": "waitFor", "selector": ".draft-card-anim.picked", "timeout": 12000},
+        {"action": "waitForNotVisible", "selector": ".draft-card-anim.picked", "timeout": 40000}
+      ]}
+    ]},
+
+    {"action": "extract", "expression": "JSON.stringify(window.__picks || [])", "into": "picksMade"},
+    {"action": "waitFor", "selector": ".da-btn.primary.big", "timeout": 25000},
+    {"action": "clickIfPresent", "selector": "text=AUTO ASSIGN"},
+    {"action": "sleep", "ms": 1500},
+    {"action": "extract", "expression": "JSON.stringify({primaryLabel: document.querySelector('.da-btn.primary.big')?.textContent.trim(), picks: (window.__picks||[]).length})", "into": "assignState", "_comment": "STOP before the primary CTA — the ask was to draft a team, not play a match"}
+  ]
+}

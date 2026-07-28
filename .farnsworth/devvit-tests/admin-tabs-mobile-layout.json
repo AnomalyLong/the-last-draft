@@ -1,0 +1,80 @@
+{
+  "name": "Admin tabs fit the mobile viewport (no scroll strip, active tab visible, bar never shifts)",
+  "_note": "Guards three separate mobile bugs: (1) panel width:560 overflowed the viewport, (2) overflowX:auto put a native scrollbar over the tabs and could hide the active tab, (3) vertical centering made the tab bar jump up to 215px between tabs. eval does NOT await promises - keep expressions synchronous.",
+  "steps": [
+    { "action": "switchUser", "username": "bob", "_comment": "bob is an admin; DBG chip + admin cmd require it" },
+    { "action": "reload" },
+    { "action": "waitFor", "selector": "[data-testid='lobby-screen']", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']" },
+    { "action": "waitFor", "selector": "[data-testid='dbg-toggle']", "timeout": 8000 },
+    { "action": "click", "selector": "[data-testid='dbg-toggle']" },
+    { "action": "waitFor", "selector": "[data-testid='debug-panel']", "timeout": 5000 },
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "admin" },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'enter-sent'; })()"
+    },
+    { "action": "waitFor", "selector": "[data-testid='admin-overlay']", "timeout": 10000 },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__barY = []; window.__snapBar = () => { const b = document.querySelector('[data-testid=admin-tab-user]').parentElement.getBoundingClientRect(); const p = document.querySelector('[data-testid=admin-overlay] > div').getBoundingClientRect(); window.__barY.push({barY: Math.round(b.y), panelH: Math.round(p.height)}); return window.__barY.length; }; return 'helper-installed'; })()",
+      "_comment": "Stash a sampler on window so we can compare tab-bar Y across tab switches."
+    },
+
+    {
+      "action": "extract",
+      "expression": "JSON.stringify((() => { const vw = window.innerWidth; const pr = document.querySelector('[data-testid=admin-overlay] > div').getBoundingClientRect(); return { vw, panelW: Math.round(pr.width), panelLeft: Math.round(pr.left), panelRight: Math.round(pr.right), PASS_panelFits: pr.left >= -0.5 && pr.right <= vw + 0.5 }; })())",
+      "into": "panelFit",
+      "_comment": "BUG 1: panel was width:560 with no maxWidth, wider than a 374px viewport."
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify((() => { const bar = document.querySelector('[data-testid=admin-tab-user]').parentElement; return { scrollW: bar.scrollWidth, clientW: bar.clientWidth, PASS_noHorizontalScroll: bar.scrollWidth <= bar.clientWidth + 1 }; })())",
+      "into": "scrollCheck",
+      "_comment": "BUG 2: the reported complaint - a native horizontal scrollbar over the tab strip."
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify((() => { const vw = window.innerWidth; const ids=['user','games','missions','announce','notify','admins','config']; const out = ids.map(id => { const r = document.querySelector('[data-testid=admin-tab-'+id+']').getBoundingClientRect(); return { id, x: Math.round(r.x), right: Math.round(r.right), y: Math.round(r.y), w: Math.round(r.width), inView: r.x >= -0.5 && r.right <= vw + 0.5 }; }); return { vw, rows: [...new Set(out.map(t => t.y))].length, PASS_allInView: out.every(t => t.inView), offscreen: out.filter(t => !t.inView).map(t => t.id), tabs: out }; })())",
+      "into": "tabGeometry",
+      "_comment": "All 7 tabs fully inside the viewport; rows=2 confirms the auto-fit grid wrapped instead of scrolling."
+    },
+    { "action": "eval", "expression": "window.__snapBar()" },
+    { "action": "screenshot", "path": "/tmp/admin-tabs-01-mobile-user.png" },
+
+    {
+      "action": "click",
+      "selector": "[data-testid='admin-tab-config']",
+      "_comment": "DELIBERATELY no scrollIntoView. Previously this tab sat past the viewport edge and the click reported OK without landing."
+    },
+    { "action": "waitFor", "selector": "[data-testid='admin-config-panel']", "timeout": 8000 },
+    { "action": "eval", "expression": "window.__snapBar()" },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify((() => { const el = document.querySelector('[data-testid=admin-tab-config]'); const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return { PASS_reachedWithoutScrolling: !!document.querySelector('[data-testid=admin-config-panel]'), activeX: Math.round(r.x), activeRight: Math.round(r.right), vw: window.innerWidth, PASS_activeTabVisible: r.x >= -0.5 && r.right <= window.innerWidth + 0.5, activeBg: cs.backgroundColor, activeWeight: cs.fontWeight }; })())",
+      "into": "activeTabCheck"
+    },
+    { "action": "screenshot", "path": "/tmp/admin-tabs-02-mobile-config-active.png" },
+
+    { "action": "click", "selector": "[data-testid='admin-tab-games']", "_comment": "Games has the SHORTEST body (216px) - worst case for a centered panel" },
+    { "action": "sleep", "duration": 700 },
+    { "action": "eval", "expression": "window.__snapBar()" },
+
+    { "action": "click", "selector": "[data-testid='admin-tab-notify']", "_comment": "Notify has one of the TALLEST bodies (644px)" },
+    { "action": "sleep", "duration": 700 },
+    { "action": "eval", "expression": "window.__snapBar()" },
+    { "action": "screenshot", "path": "/tmp/admin-tabs-03-mobile-notify-active.png" },
+
+    {
+      "action": "extract",
+      "expression": "JSON.stringify((() => { const ys = window.__barY.map(s => s.barY); const spread = Math.max.apply(null, ys) - Math.min.apply(null, ys); return { samples: window.__barY, barYspread: spread, PASS_barNeverMoves: spread === 0, PASS_panelsStillShrinkToFit: new Set(window.__barY.map(s => s.panelH)).size > 1 }; })())",
+      "into": "barStability",
+      "_comment": "BUG 3: tab bar must sit at an identical Y on every tab (spread 0), while panel heights still differ - proving we fixed the jump by top-anchoring, not by padding out a fixed-height frame."
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify((() => { const on = document.querySelector('[data-testid=admin-tab-notify]'); const off = document.querySelector('[data-testid=admin-tab-user]'); return { activeBg: getComputedStyle(on).backgroundColor, inactiveBg: getComputedStyle(off).backgroundColor, PASS_visuallyDistinct: getComputedStyle(on).backgroundColor !== getComputedStyle(off).backgroundColor }; })())",
+      "into": "distinctCheck"
+    }
+  ]
+}

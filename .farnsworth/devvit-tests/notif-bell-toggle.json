@@ -1,0 +1,33 @@
+{
+  "name": "notif-bell-toggle",
+  "description": "Bell dropdown push toggle: absent until first opt-in, present as TURN OFF once opted in, and STAYS present as TURN ON after opting out. Drives state through the dev-only window.__notifStatus seam because @devvit/notifications cannot initialise under the vite dev server (optIn returns 500 'Devvit config is not available'), so supported:false makes the real states unreachable locally. Never clicks .bnav-play - on the already-active PLAY tab that launches a casual match and leaves the lobby, the only page the bell exists on.",
+  "steps": [
+    { "action": "reload", "waitMs": 5000 },
+    { "action": "waitFor", "selector": "[data-testid=notif-bell]", "timeout": 15000 },
+    { "action": "clickIfPresent", "selector": ".lobby2-ftue svg" },
+    { "action": "sleep", "ms": 1000 },
+    { "action": "eval", "expression": "typeof window.__notifStatus === 'object' ? 'seam present' : 'SEAM MISSING - dev bridge did not load'", "name": "0 - dev seam available" },
+
+    { "action": "eval", "expression": "(() => { window.__notifStatus.set({ loaded:true, supported:true, everOptedIn:false, optedIn:false }); return JSON.stringify(window.__notifStatus.get()); })()", "name": "A - state: never opted in" },
+    { "action": "click", "selector": "[data-testid=notif-bell]" },
+    { "action": "waitFor", "selector": "[data-testid=notif-dropdown]", "timeout": 5000 },
+    { "action": "sleep", "ms": 400 },
+    { "action": "eval", "expression": "(() => { const btn = document.querySelector('[data-testid=notif-opt-toggle]'); return JSON.stringify({ togglePresent: !!btn, PASS: !btn, expected: 'absent' }); })()", "name": "B - toggle HIDDEN before first opt-in" },
+    { "action": "screenshot", "path": "/tmp/notif-bell-before.png" },
+
+    { "action": "eval", "expression": "(() => { window.__notifStatus.set({ loaded:true, supported:true, everOptedIn:true, optedIn:true }); return JSON.stringify(window.__notifStatus.get()); })()", "name": "C - state: opted in" },
+    { "action": "waitFor", "selector": "[data-testid=notif-opt-toggle]", "timeout": 6000, "_comment": "CORE ASSERTION: toggle appears once the user has opted in" },
+    { "action": "sleep", "ms": 400 },
+    { "action": "eval", "expression": "(() => { const row = document.querySelector('[data-testid=notif-opt-row]'); const btn = document.querySelector('[data-testid=notif-opt-toggle]'); const label = btn?.textContent.trim() ?? null; return JSON.stringify({ toggleLabel: label, ariaPressed: btn?.getAttribute('aria-pressed') ?? null, footLabel: row?.querySelector('.lb2-notif-foot-label')?.textContent.trim() ?? null, PASS: !!label && label.includes('TURN OFF') }); })()", "name": "D - toggle shows TURN OFF while ON" },
+    { "action": "screenshot", "path": "/tmp/notif-bell-on.png" },
+
+    { "action": "eval", "expression": "(() => { window.__notifStatus.set({ loaded:true, supported:true, everOptedIn:true, optedIn:false }); return JSON.stringify(window.__notifStatus.get()); })()", "name": "E - state: opted out (everOptedIn sticky)" },
+    { "action": "sleep", "ms": 600 },
+    { "action": "eval", "expression": "(() => { const row = document.querySelector('[data-testid=notif-opt-row]'); const btn = document.querySelector('[data-testid=notif-opt-toggle]'); const label = btn?.textContent.trim() ?? null; return JSON.stringify({ toggleStillPresent: !!btn, toggleLabel: label, footLabel: row?.querySelector('.lb2-notif-foot-label')?.textContent.trim() ?? null, PASS: !!label && label.includes('TURN ON'), expected: 'stays visible as TURN ON - opt-out must NOT hide it' }); })()", "name": "F - toggle SURVIVES opt-out as TURN ON" },
+    { "action": "screenshot", "path": "/tmp/notif-bell-off.png" },
+
+    { "action": "eval", "expression": "(() => { window.__notifStatus.set({ loaded:true, supported:false, everOptedIn:true, optedIn:false }); return 'set unsupported'; })()", "name": "G - state: plugin unsupported" },
+    { "action": "sleep", "ms": 600 },
+    { "action": "eval", "expression": "(() => { const btn = document.querySelector('[data-testid=notif-opt-toggle]'); return JSON.stringify({ togglePresent: !!btn, PASS: !btn, expected: 'absent - no controls when plugin unavailable' }); })()", "name": "H - toggle hidden when plugin unsupported" }
+  ]
+}

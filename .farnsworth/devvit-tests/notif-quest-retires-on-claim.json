@@ -1,0 +1,95 @@
+{
+  "name": "notif-quest-retires-on-claim",
+  "description": "The featured wnotify quest (TURN ON NOTIFICATIONS) must disappear from the DAILY featured strip once its reward is claimed, while remaining on the WEEKLY tab as a normal claimed row. Drives the claim through the admin.completeMission tRPC endpoint (which force-completes AND auto-claims) because push opt-in cannot run under the vite dev server - notifications.optIn returns 500 'Devvit config is not available'. Requires the current emulator user to be an admin (u/bob - note usernames are stored WITH the 'u/' prefix; passing 'bob' returns 404 User not found). SIDE EFFECT: permanently marks wnotify claimed for bob for the current weekly period (~21d TTL). Never clicks .bnav-play - on the already-active PLAY tab that launches a casual match and leaves the lobby.",
+  "steps": [
+    {
+      "action": "reload",
+      "waitMs": 5000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=missions]",
+      "timeout": 15000
+    },
+    {
+      "action": "clickIfPresent",
+      "selector": ".lobby2-ftue svg"
+    },
+    {
+      "action": "sleep",
+      "ms": 800
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const rows = [...document.querySelectorAll('.lb2-ft-news-row')].map(r => r.querySelector('.lb2-ft-news-title')?.textContent.trim()); return JSON.stringify({ tab: 'daily', rows }); })()",
+      "name": "A - daily rows BEFORE claim"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/quest-before-claim.png"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__claimRes='PENDING'; fetch('/api/trpc/admin.completeMission',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({json:{username:'u/bob',type:'weekly',missionId:'wnotify'}})}).then(async r => { window.__claimRes = 'HTTP '+r.status+' '+(await r.text()).slice(0,400); }).catch(e => { window.__claimRes = 'THREW '+e.message; }); return 'fetch dispatched'; })()",
+      "name": "B1 - dispatch admin force-claim"
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "eval",
+      "expression": "window.__claimRes",
+      "name": "B2 - claim HTTP result"
+    },
+    {
+      "action": "reload",
+      "waitMs": 5000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=missions]",
+      "timeout": 15000
+    },
+    {
+      "action": "clickIfPresent",
+      "selector": ".lobby2-ftue svg"
+    },
+    {
+      "action": "sleep",
+      "ms": 1000
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const rows = [...document.querySelectorAll('.lb2-ft-news-row')].map(r => r.querySelector('.lb2-ft-news-title')?.textContent.trim()); const hasNotify = rows.some(t => (t||'').includes('NOTIFICATIONS')); const cta = !!document.querySelector('[data-testid=mission-enable-notifs]'); return JSON.stringify({ tab:'daily', rows, hasNotifyRow: hasNotify, hasEnableCta: cta, PASS: !hasNotify && !cta, expected:'quest gone from daily featured strip' }); })()",
+      "name": "C - CORE: quest GONE from daily after claim"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/quest-after-claim-daily.png"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const t = [...document.querySelectorAll('.lb2-ft-news-row')].map(r => r.querySelector('.lb2-ft-news-title')?.textContent.trim()); const hasChallenge = t.some(x => (x||'').includes('CHALLENGE')); return JSON.stringify({ rows:t, wchallengeStillFeatured: hasChallenge, PASS: hasChallenge, expected:'wchallenge must NOT be collateral damage' }); })()",
+      "name": "D - wchallenge still on daily strip"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const b = [...document.querySelectorAll('.lb2-mission-tab')].find(x => x.textContent.trim() === 'WEEKLY'); if (!b) return 'WEEKLY tab button not found'; b.click(); return 'clicked WEEKLY'; })()",
+      "name": "E - switch to WEEKLY tab"
+    },
+    {
+      "action": "sleep",
+      "ms": 900
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const rows = [...document.querySelectorAll('.lb2-ft-news-row')]; const row = rows.find(r => (r.querySelector('.lb2-ft-news-title')?.textContent || '').includes('NOTIFICATIONS')); const cta = !!document.querySelector('[data-testid=mission-enable-notifs]'); return JSON.stringify({ rows: rows.map(r => r.querySelector('.lb2-ft-news-title')?.textContent.trim()), notifyRowPresent: !!row, markedDone: !!row && row.className.includes('done'), hasDeadCta: cta, PASS: !!row && row.className.includes('done') && !cta, expected:'present + .done + no leftover CTA (control lives in the bell now)' }); })()",
+      "name": "F - CORE: still on WEEKLY as a claimed/done row"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/quest-after-claim-weekly.png"
+    }
+  ]
+}

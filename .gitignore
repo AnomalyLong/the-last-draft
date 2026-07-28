@@ -12,3 +12,6 @@ coverage
 .claude/settings.local.json
 
 .vercel
+test-results/
+tmp/
+.farnsworth-clipboard/

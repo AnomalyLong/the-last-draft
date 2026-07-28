@@ -1,0 +1,80 @@
+{
+  "name": "notif-quest-optin",
+  "description": "Verify the new featured weekly mission 'TURN ON NOTIFICATIONS' (wnotify) renders in the lobby missions panel with an ENABLE CTA, click it, and report the opt-in result",
+  "steps": [
+    {
+      "action": "reload",
+      "waitMs": 5000,
+      "_comment": "Dev server restarted after the code change; give the bundle time"
+    },
+    {
+      "action": "waitFor",
+      "selector": ".bnav-play",
+      "timeout": 15000,
+      "_comment": "Game rendered past splash"
+    },
+    {
+      "action": "clickIfPresent",
+      "selector": ".lobby2-ftue svg",
+      "_comment": "Dismiss FTUE welcome modal if present"
+    },
+    {
+      "action": "click",
+      "selector": ".bnav-play",
+      "_comment": "Open the PLAY tab where the missions panel lives"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=missions]",
+      "timeout": 8000
+    },
+    {
+      "action": "sleep",
+      "ms": 800
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const rows = Array.from(document.querySelectorAll('.lb2-ft-news-row')).map(r => ({ title: r.querySelector('.lb2-ft-news-title')?.textContent.trim(), sub: r.querySelector('.lb2-ft-news-sub')?.textContent.trim(), cta: r.querySelector('.lb2-mission-cta')?.textContent.trim() || null })); const notif = document.querySelector('[data-testid=mission-enable-notifs]'); if (notif) notif.scrollIntoView({block:'center'}); return JSON.stringify({ rowCount: rows.length, rows, notifCtaPresent: !!notif, notifCtaLabel: notif?.textContent.trim() ?? null }); })()",
+      "name": "missions panel rows + wnotify CTA"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=mission-enable-notifs]",
+      "timeout": 5000,
+      "_comment": "The new CTA from the wnotify branch in DailyMissionsSection"
+    },
+    {
+      "action": "sleep",
+      "ms": 300
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/notif-quest-before.png",
+      "_comment": "Mission row before opting in"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=mission-enable-notifs]",
+      "_comment": "Fires trpc notifications.optIn"
+    },
+    {
+      "action": "sleep",
+      "ms": 2500,
+      "_comment": "Let the mutation + refreshMissions round-trip finish"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const notif = document.querySelector('[data-testid=mission-enable-notifs]'); const row = notif?.closest('.lb2-ft-news-row'); if (row) row.scrollIntoView({block:'center'}); return JSON.stringify({ ctaLabel: notif?.textContent.trim() ?? null, optedIn: notif?.textContent.includes('ON') ?? false, rowClass: row?.className ?? null, barWidth: row?.querySelector('.lb2-mission-bar-fill')?.style.width ?? null, claimVisible: !!row?.querySelector('.lb2-mission-claim-btn') })()",
+      "name": "wnotify CTA state after opt-in click"
+    },
+    {
+      "action": "sleep",
+      "ms": 300
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/notif-quest-after.png",
+      "_comment": "Mission row after opting in"
+    }
+  ]
+}
