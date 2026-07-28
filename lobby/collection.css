@@ -162,6 +162,14 @@
   height: 124px;
   display: flex;
   flex-direction: column;
+  /* Explicit, because the UA stylesheet sets `align-items: flex-start` on
+     <button> and this is a column flex container — so the cross axis is the
+     WIDTH. Without this, .squad-portrait shrink-wraps to the sprite (28px)
+     instead of filling the slot (114px), leaving the card mostly black.
+     Chromium removed that UA rule somewhere between 126 and 150, so current
+     Chrome looked correct while Electron 31 (Chromium 126) and WebKit did
+     not. Don't rely on the UA default here. (Jul 25) */
+  align-items: stretch;
   overflow: visible;
   color: var(--c-ink);
   font: inherit;

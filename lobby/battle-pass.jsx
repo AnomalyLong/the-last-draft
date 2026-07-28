@@ -206,22 +206,6 @@ function BattlePassView({ onBack }) {
           </section>
         )}
 
-        {/* Upgrade CTA */}
-        {!isPremium && false && (
-          <section className="bp-section bp-upgrade-sec">
-            <div className="bp-upgrade-card">
-              <div className="bpuc-icon">★★★</div>
-              <div className="bpuc-title">UNLOCK PREMIUM TRACK</div>
-              <div className="bpuc-desc">Access 25 exclusive cosmetics and premium rewards</div>
-              <button className="bpuc-btn" onClick={handleUpgrade}>
-                <span className="coin">◉</span>
-                <span>980 CREDITS</span>
-              </button>
-              <div className="bpuc-hint">Or skip individual tiers for 100 credits each</div>
-            </div>
-          </section>
-        )}
-
         {/* Tier display */}
         <section className="bp-section bp-tiers-sec">
           <div className="bps-head">
