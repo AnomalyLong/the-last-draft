@@ -36,10 +36,36 @@ URL="http://localhost:${PORT}"
 SERVER_URL="http://localhost:${SERVER_PORT}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Resolve the Farnsworth-side server-runner.mjs. Override with
-# FARNSWORTH_DEVVIT_RUNNER for testing a different runner build.
+# Resolve the Farnsworth-side server-runner.mjs.
+#
+# Search order (Jul 28 — this used to be a single hardcoded dev-tree path,
+# which meant the runner was only ever found on the one machine Farnsworth
+# is developed on; everywhere else you got "server-runner not found
+# (skipping)" and a game with no backend):
+#   1. FARNSWORTH_DEVVIT_RUNNER — set by Farnsworth's dev:farnsworth:boot IPC,
+#      which knows its own layout. Authoritative when booting from the app.
+#   2. The installed .app (this is the normal case for most users). The runner
+#      lives in app.asar.unpacked because a plain node process can't read
+#      inside an asar.
+#   3. A local Farnsworth dev tree, for people hacking on Farnsworth itself.
+SERVER_RUNNER=""
 FARNSWORTH_DIR="${FARNSWORTH_DIR:-$HOME/Documents/Farnsworth}"
-SERVER_RUNNER="${FARNSWORTH_DEVVIT_RUNNER:-$FARNSWORTH_DIR/app/devvit-emulator/server-runner.mjs}"
+for CANDIDATE in \
+  "$FARNSWORTH_DEVVIT_RUNNER" \
+  "/Applications/Farnsworth.app/Contents/Resources/app.asar.unpacked/devvit-emulator/server-runner.mjs" \
+  "$HOME/Applications/Farnsworth.app/Contents/Resources/app.asar.unpacked/devvit-emulator/server-runner.mjs" \
+  "$FARNSWORTH_DIR/app/devvit-emulator/server-runner.mjs" \
+; do
+  if [ -n "$CANDIDATE" ] && [ -f "$CANDIDATE" ]; then
+    SERVER_RUNNER="$CANDIDATE"
+    break
+  fi
+done
+
+# node lives wherever it lives — /opt/homebrew/bin was hardcoded below, which
+# breaks on Intel Macs (/usr/local) and nvm installs.
+NODE_BIN="$(command -v node || true)"
+[ -n "$NODE_BIN" ] || NODE_BIN=/opt/homebrew/bin/node
 
 mkdir -p "$CACHE_DIR"
 
@@ -86,9 +112,10 @@ disown
 # If the runner fails to start (e.g. missing esbuild), we log it but don't
 # block Vite — the iframe game can still load without server-side data.
 SERVER_PID=""
-if [ -f "$SERVER_RUNNER" ]; then
+if [ -n "$SERVER_RUNNER" ] && [ -f "$SERVER_RUNNER" ]; then
   echo "starting ${APP_TYPE} emulator server-runner on $SERVER_URL..."
-  nohup /opt/homebrew/bin/node "$SERVER_RUNNER" "$REPO_ROOT" \
+  echo "  runner: $SERVER_RUNNER"
+  nohup "$NODE_BIN" "$SERVER_RUNNER" "$REPO_ROOT" \
     > "$SERVER_LOG_FILE" 2>&1 </dev/null &
   SERVER_PID=$!
   disown
@@ -99,13 +126,19 @@ fi
 
 # 5. Write metadata so the Farnsworth main process can find us. pids are an
 # object {vite, server} so renderer-side code can stop either independently.
+# SERVER_PID is empty when the runner wasn't found. Interpolating an empty
+# string straight into JS produced `serverPid: ,` -> "SyntaxError: Unexpected
+# token ','", which killed the whole script AFTER vite had already been
+# spawned: no meta file, so Farnsworth couldn't find the dev server at all,
+# and the error pointed at [eval] rather than at the real problem (a missing
+# server-runner). Default to null. (Jul 28)
 node -e "
 const fs = require('fs');
 const meta = {
   type: '$APP_TYPE',
   url: '$URL',
   pid: $VITE_PID,
-  serverPid: $SERVER_PID,
+  serverPid: ${SERVER_PID:-null},
   serverUrl: '$SERVER_URL',
   startedAt: new Date().toISOString(),
   log: '$LOG_FILE',
