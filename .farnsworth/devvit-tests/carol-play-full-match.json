@@ -1,5 +1,5 @@
 {
-  "name": "u/carol: lobby \u2192 PLAY \u2192 5s countdown \u2192 TAP TO START \u2192 play possessions via play/defense pickers",
+  "name": "u/carol: lobby → PLAY → 5s countdown → TAP TO START → play possessions via play/defense pickers",
   "steps": [
     {
       "action": "switchUser",
@@ -44,7 +44,7 @@
     {
       "action": "click",
       "selector": "[data-testid='bnav-play']",
-      "_comment": "PLAY \u2192 casual matchmaking (NOT queue-btn-training, which is INSTANT and skips the countdown)"
+      "_comment": "PLAY → casual matchmaking (NOT queue-btn-training, which is INSTANT and skips the countdown)"
     },
     {
       "action": "waitFor",
@@ -70,13 +70,13 @@
       "action": "extract",
       "expression": "document.querySelector('.launch-bar .count')?.textContent?.trim() ?? 'none'",
       "into": "countMid",
-      "_comment": "Must be lower than countStart \u2014 proves the countdown ticks"
+      "_comment": "Must be lower than countStart — proves the countdown ticks"
     },
     {
       "action": "waitFor",
       "selector": ".launch-bar.tap-to-start",
       "timeout": 15000,
-      "_comment": "Countdown hit 0 \u2192 phase 'ready'"
+      "_comment": "Countdown hit 0 → phase 'ready'"
     },
     {
       "action": "screenshot",
@@ -95,7 +95,7 @@
     },
     {
       "action": "while",
-      "max": 150,
+      "max": 260,
       "until": "!!document.querySelector('[data-testid=\"game-over-screen\"]')",
       "steps": [
         {
@@ -105,7 +105,7 @@
             {
               "action": "click",
               "selector": "[data-testid='levelup-ok']",
-              "_comment": "STAT UPGRADE modal \u2014 blocks all play until dismissed"
+              "_comment": "STAT UPGRADE modal — blocks all play until dismissed"
             },
             {
               "action": "sleep",
@@ -125,7 +125,7 @@
             {
               "action": "click",
               "selector": "[data-testid='${abilityPick}']",
-              "_comment": "CHOOSE AN UPGRADE \u2192 take the first ability"
+              "_comment": "CHOOSE AN UPGRADE → take the first ability"
             },
             {
               "action": "sleep",
@@ -140,7 +140,7 @@
             {
               "action": "click",
               "selector": "[data-testid='bball-tip']",
-              "_comment": "Mascot dialogue \u2192 dismiss"
+              "_comment": "Mascot dialogue → dismiss"
             },
             {
               "action": "sleep",
@@ -169,14 +169,14 @@
             {
               "action": "click",
               "selector": "[data-testid='quarter-summary-continue']",
-              "_comment": "End-of-quarter recap \u2192 continue"
+              "_comment": "End-of-quarter recap → continue"
             },
             {
               "action": "sleep",
               "ms": 500
             }
           ],
-          "_comment": "Gate on the CONTINUE button itself \u2014 the summary root renders first, the button only after BTN_TICK frames"
+          "_comment": "Gate on the CONTINUE button itself — the summary root renders first, the button only after BTN_TICK frames"
         },
         {
           "action": "if",
@@ -185,7 +185,7 @@
             {
               "action": "click",
               "selector": "[data-testid='iso-target-PG']",
-              "_comment": "ISO submenu open \u2192 PG keeps the ball"
+              "_comment": "ISO submenu open → PG keeps the ball"
             },
             {
               "action": "sleep",
@@ -250,6 +250,43 @@
     {
       "action": "screenshot",
       "path": "/tmp/carol-02-final.png"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='game-over-screen']",
+      "timeout": 20000,
+      "_comment": "ASSERT: loop must have exited via game-over, not by exhausting max. Placed AFTER extract+screenshot so diagnostics are captured even when this fails."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='game-over-claim-btn']",
+      "timeout": 20000,
+      "_comment": "Button is gated behind {tick >= BTN_TICK} (GameOverScreen.jsx:212) - renders only after the credits count-up finishes, so the root appearing is NOT enough."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='game-over-claim-btn']",
+      "_comment": "CLAIM CREDITS -> fires onDismissGameOver -> game.end (credits + missions + roster XP). Without this the run never commits."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 20000,
+      "_comment": "ASSERT: claim returns to lobby"
+    },
+    {
+      "action": "sleep",
+      "ms": 2500,
+      "_comment": "let refreshUser() settle after game.end"
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({credits: document.querySelector('.lb2-ts-credits')?.textContent?.trim() ?? '?', energy: document.querySelector('.lb2-ts-energy')?.textContent?.trim() ?? '?'})",
+      "into": "postGameLobby"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/carol-03-lobby-after.png"
     }
   ]
 }

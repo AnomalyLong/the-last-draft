@@ -1,0 +1,22 @@
+{
+  "name": "u/carol: dismiss assign-phase coach → AUTO ASSIGN → assert lineup actually filled 5/5",
+  "_note": "No reload — operates on the live assign screen. The assign-phase coach (DraftScreen.jsx:893) renders a fixed inset:0 zIndex:19 overlay (line 1641) that swallows the AUTO ASSIGN tap, which is why a bare click reports OK but does nothing. Retries dismiss+click until .dp-val reads 5/5, then asserts via waitForNotVisible on the button (it only renders while !canStart).",
+  "steps": [
+    {"action": "waitFor", "selector": ".da-btn.primary.big", "timeout": 15000},
+    {"action": "extract", "expression": "JSON.stringify({phase: document.querySelector('.dp-lbl')?.textContent?.trim(), count: document.querySelector('.dp-val')?.textContent?.trim(), coach: !!document.querySelector('.draft-coach'), autoBtn: !!Array.from(document.querySelectorAll('.da-btn.ghost span')).find(s => s.textContent.trim() === 'AUTO ASSIGN')})", "into": "beforeState"},
+
+    {"action": "while", "max": 4, "until": "document.querySelector('.dp-val')?.textContent?.trim() === '5/5'", "steps": [
+      {"action": "while", "max": 5, "until": "!document.querySelector('.draft-coach')", "steps": [
+        {"action": "click", "selector": ".draft-coach"},
+        {"action": "sleep", "ms": 600}
+      ], "_comment": "MUST clear the fixed inset:0 overlay before any tap can land"},
+      {"action": "sleep", "ms": 300},
+      {"action": "clickIfPresent", "selector": "text=AUTO ASSIGN"},
+      {"action": "sleep", "ms": 800}
+    ]},
+
+    {"action": "waitForNotVisible", "selector": "text=AUTO ASSIGN", "timeout": 8000, "_comment": "ASSERTION: button unmounts only when canStart flips true"},
+    {"action": "extract", "expression": "JSON.stringify({count: document.querySelector('.dp-val')?.textContent?.trim(), slots: Array.from(document.querySelectorAll('.ap-slot, .assign-slot')).map(s => s.textContent.trim().slice(0,24))})", "into": "afterState"},
+    {"action": "screenshot", "path": "/tmp/carol-assigned.png"}
+  ]
+}

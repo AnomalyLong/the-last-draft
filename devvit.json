@@ -24,7 +24,7 @@
     "items": [
       {
         "label": "Create a new post",
-        "description": "the-last-draft",
+        "description": "The Last Draft",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-create"

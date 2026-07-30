@@ -261,7 +261,14 @@ export default function App() {
         if (result?.gameId) {
           gameSessionRef.current = { gameId: result.gameId, token: result.token, seq: 0 };
         } else {
+          // Resolved-with-error (not a rejection) — almost always "Not enough
+          // energy" from a client/server disagreement. Back out of the game
+          // rather than let it play on and award nothing.
           console.error('game.start returned no gameId', result);
+          gameSessionRef.current = null;
+          setScene('title');
+          setEnergyBlock(true);
+          refreshUser();
         }
       })
       .catch(err => console.error('game.start failed', err));
@@ -296,6 +303,9 @@ export default function App() {
   const [myChallengeOpen, setMyChallengeOpen] = React.useState(false);
   // Deep-link block messaging (expanded boot): own post / no roster.
   const [challengeBlock, setChallengeBlock] = React.useState(null); // null|'self'|'noRoster'
+  // Out-of-energy gate. Set by the lobby PLAY gate, the challenge deep-link
+  // route, and as a fallback when the server refuses game.start.
+  const [energyBlock, setEnergyBlock] = React.useState(false);
 
   React.useEffect(() => {
     trpc.post.getChallenge.query().then(setChallengePost).catch(() => setChallengePost(null));
@@ -353,6 +363,7 @@ export default function App() {
   React.useEffect(() => {
     if (isInline || challengeRoutedRef.current) return;
     if (challengePost === undefined || !rosterLoaded) return; // wait for both
+    if (serverEnergy === null) return;                        // energy unknown — don't latch the ref yet
     if (scene !== 'title') return;                            // let loading → lobby settle first
     challengeRoutedRef.current = true;
     if (!challengePost) return;                            // not a challenge post
@@ -364,9 +375,13 @@ export default function App() {
       setChallengeBlock('noRoster');                       // explain + offer to draft
       return;
     }
+    if (serverEnergy <= 0) {                               // accepting a challenge costs energy too
+      setEnergyBlock(true);                                // stay on the lobby, explain why
+      return;
+    }
     setAwayTeam({ name: challengePost.team, username: challengePost.owner, players: toAwayPlayers(challengePost.roster), isChallenge: true });
     setScene('matchmaking');
-  }, [isInline, challengePost, rosterLoaded, scene, homeRoster.length, username, homeTeamName]);
+  }, [isInline, challengePost, rosterLoaded, scene, homeRoster.length, username, homeTeamName, serverEnergy]);
 
   const gameSessionRef = React.useRef(null); // { gameId, token, seq }
   const clientScoreRef = React.useRef(0);    // tracks only post-session-ready makes
@@ -446,8 +461,13 @@ export default function App() {
             // play() invoked from a direct gesture handler).
             titleMusic.start();
             const hasTeam = homeTeamName && homeTeamName !== 'HOME';
+            // Energy is only spent entering a game. Drafting and team-select
+            // are free, so the gate wraps the matchmaking branches only.
+            const noEnergy = serverEnergy != null && serverEnergy <= 0;
             if (isFtue && !ftueIntroSeen) {
               setScene('ftueIntro');
+            } else if (homeRoster.length === 5 && noEnergy) {
+              setEnergyBlock(true);
             } else if (isFtue && homeRoster.length === 5) {
               // FTUE user already drafted but quit before completing their
               // first game — skip the draft hub and drop them into the game.
@@ -725,6 +745,10 @@ export default function App() {
                 gameSessionRef.current = { gameId: result.gameId, token: result.token, seq: 0 };
               } else {
                 console.error('game.start returned no gameId', result);
+                gameSessionRef.current = null;
+                setScene('title');
+                setEnergyBlock(true);
+                refreshUser();
               }
             }).catch(err => console.error('game.start failed', err));
             gameState.handleCommand('testGamePlay');
@@ -971,6 +995,37 @@ export default function App() {
                 <button onClick={() => { const hasTeam = homeTeamName && homeTeamName !== 'HOME'; setChallengeBlock(null); setScene(hasTeam ? 'draft' : 'teamSelect'); }} style={{ background: 'linear-gradient(180deg,#ffe9bb,#ffd97a 55%,#d6a155)', color: '#2a1a04', border: 'none', padding: '6px 16px', fontFamily: 'monospace', fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', cursor: 'pointer' }}>DRAFT MY TEAM ▸</button>
               </div>
             </>)}
+          </div>
+        </div>
+      )}
+
+      {/* ── OUT OF ENERGY ─────────────────────────────────────── */}
+      {!isInline && energyBlock && (
+        <div
+          data-testid="energy-block-modal"
+          onClick={() => setEnergyBlock(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#0d1117', border: '1px solid #ffd97a',
+              padding: '24px 22px', maxWidth: 300, textAlign: 'center', fontFamily: 'monospace',
+              lineHeight: 1.4, // explicit — Reddit forces line-height:0, collapsing/overlapping text
+            }}
+          >
+            <div style={{ color: '#ffd97a', fontSize: 11, letterSpacing: '0.1em', marginBottom: 10 }}>OUT OF ENERGY</div>
+            <div style={{ color: '#8899aa', fontSize: 10, lineHeight: 1.6, marginBottom: 20 }}>
+              You're out of energy. You earn 1 energy every hour, up to {serverMaxEnergy} — come back soon and pick up where you left off.
+            </div>
+            <button
+              data-testid="energy-block-dismiss"
+              onClick={() => setEnergyBlock(false)}
+              style={{ background: '#ffd97a', color: '#000', border: 'none', padding: '6px 20px', fontFamily: 'monospace', fontSize: 10, fontWeight: 900, letterSpacing: '0.1em', cursor: 'pointer' }}
+            >BACK TO LOBBY</button>
           </div>
         </div>
       )}

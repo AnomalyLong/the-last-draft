@@ -22,7 +22,7 @@ const autoApprove = async (post: { id: string; approve: () => Promise<void> }): 
 // Legacy default post (created on app install / via the menu action).
 export const createPost = async () => {
   const post = await reddit.submitCustomPost({
-    title: 'the-last-draft',
+    title: 'The Last Draft',
   });
   await autoApprove(post);
   return post;
