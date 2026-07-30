@@ -966,7 +966,7 @@ export function DebugConsole({ logs, onCommand, showDebug, onToggleDebug }) {
 export function HUD({ homeScore, awayScore, homeTeamName = 'HOME', quarter, time, players, possession, awayTeamName = 'AWAY', homeRoster = [], awayRoster = [], onOptions, showTeams = false, onShowTeams, showDebug = false, totalCredits = 0, username = '', isMobile = false }) {
   const mins = Math.floor(time / 60), secs = time % 60;
   const timeStr = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
-  const qStr    = `Q${quarter}`;
+  const qStr    = `H${quarter}`;
   const hStr    = String(homeScore);
   const aStr    = String(awayScore);
 

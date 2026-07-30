@@ -87,8 +87,8 @@ export function QuarterSummary({ quarterSummary, homeTeamName, cameraX, onDismis
   const hFlash     = Math.floor(tick / 10) % 2 === 0 ? '#ffe060' : '#ffffff';
   const borderPulse = (Math.sin(tick * 0.05) + 1) / 2;
 
-  const qNames = ['', '1ST QUARTER', '2ND QUARTER', '3RD QUARTER', '4TH QUARTER'];
-  const qLabel = qNames[quarter] ?? `Q${quarter}`;
+  const qNames = ['', '1ST HALF', '2ND HALF'];
+  const qLabel = qNames[quarter] ?? `H${quarter}`;
 
   // Floating cyan particles
   const particles = Array.from({ length: N_PARTICLES }, (_, i) => {

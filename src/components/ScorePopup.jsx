@@ -8,7 +8,7 @@ const OUTLINE_DIRS = [
   [-1, -1], [1, -1], [-1, 1], [1, 1],
 ];
 
-export function ScorePopup({ text, cameraX }) {
+export function ScorePopup({ text, cameraX, viewW = ZOOM_W }) {
   const [opacity, setOpacity] = React.useState(1);
   const [yOff, setYOff] = React.useState(0);
   const rafRef = React.useRef(null);
@@ -54,7 +54,9 @@ export function ScorePopup({ text, cameraX }) {
   }, [text]);
 
   const textW  = text.length * MONOGRAM_CELL_W * SCALE;
-  const startX = Math.round(cameraX + (ZOOM_W - textW) / 2);
+  // Center on the visible viewport, not ZOOM_W (see HypePopup) — mobile's
+  // viewBox is narrower, so ZOOM_W centering skewed this right of center.
+  const startX = Math.round(cameraX + (viewW - textW) / 2);
   const startY = Math.round(TOTAL_H / 2 - (MONOGRAM_GLYPH_H * SCALE) / 2);
 
   return (

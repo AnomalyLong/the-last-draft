@@ -2,7 +2,12 @@ import React from 'react';
 import { ZOOM_W, TOTAL_H } from '../constants.js';
 import { pixelTextPixels, MONOGRAM_CELL_W, MONOGRAM_GLYPH_H } from '../sprites/monogram.js';
 
-const SCALE = 4;
+// Pixel scale is chosen per-phrase so long lines ("ICE IN HIS VEINS", 16 chars)
+// still fit the narrower mobile viewport. MAX_SCALE keeps desktop identical to
+// what it has always been; MIN_SCALE is a floor so text never turns to mush.
+const MAX_SCALE = 4;
+const MIN_SCALE = 2;
+const H_MARGIN  = 12; // game-space breathing room on each side
 const OUTLINE_DIRS = [
   [-1, 0], [1, 0], [0, -1], [0, 1],
   [-1, -1], [1, -1], [-1, 1], [1, 1],
@@ -21,7 +26,7 @@ function bounceY(t) {
   return -Math.cos(t * Math.PI * 3) * decay * 18;
 }
 
-export function HypePopup({ text, color = '#ff3344', cameraX = 0 }) {
+export function HypePopup({ text, color = '#ff3344', cameraX = 0, viewW = ZOOM_W }) {
   const [elapsed, setElapsed] = React.useState(0);
   const rafRef = React.useRef(null);
 
@@ -36,27 +41,35 @@ export function HypePopup({ text, color = '#ff3344', cameraX = 0 }) {
     return () => cancelAnimationFrame(rafRef.current);
   }, [text]);
 
+  // Shrink the scale until the phrase fits the *actual* visible width. On desktop
+  // viewW === ZOOM_W and this always lands on MAX_SCALE, so nothing changes there.
+  const pxScale = React.useMemo(() => {
+    const avail = Math.max(1, viewW - H_MARGIN * 2);
+    const fit   = Math.floor(avail / (text.length * MONOGRAM_CELL_W));
+    return Math.max(MIN_SCALE, Math.min(MAX_SCALE, fit));
+  }, [text, viewW]);
+
   // Pixel layers are built ONCE per text/color at the origin and never change —
   // all animation happens via transforms on the parent groups, so per-frame
   // React work is a handful of attribute strings instead of thousands of rects.
   const layers = React.useMemo(() => {
-    const pixels = pixelTextPixels(text, 0, 0, SCALE);
+    const pixels = pixelTextPixels(text, 0, 0, pxScale);
     return {
       shadow: pixels.map(([px, py], pi) => (
-        <rect key={`s${pi}`} x={px} y={py} width={SCALE} height={SCALE} fill={color} />
+        <rect key={`s${pi}`} x={px} y={py} width={pxScale} height={pxScale} fill={color} />
       )),
       outline: OUTLINE_DIRS.map(([dx, dy], oi) =>
         pixels.map(([px, py], pi) => (
           <rect key={`o${oi}-${pi}`}
-            x={px + dx * SCALE} y={py + dy * SCALE}
-            width={SCALE} height={SCALE} fill="black" />
+            x={px + dx * pxScale} y={py + dy * pxScale}
+            width={pxScale} height={pxScale} fill="black" />
         ))
       ),
       fill: pixels.map(([px, py], pi) => (
-        <rect key={`f${pi}`} x={px} y={py} width={SCALE} height={SCALE} fill="white" />
+        <rect key={`f${pi}`} x={px} y={py} width={pxScale} height={pxScale} fill="white" />
       )),
     };
-  }, [text, color]);
+  }, [text, color, pxScale]);
 
   // Phase 1: drop from above; 2: bounce; 3: hold + wiggle; 4: exit fade
   let yOff = 0;
@@ -91,13 +104,17 @@ export function HypePopup({ text, color = '#ff3344', cameraX = 0 }) {
   const shadowOffY  = 4 + shadowPulse * 3;
   const shadowAlpha = 0.55 + shadowPulse * 0.35;
 
-  const textW  = text.length * MONOGRAM_CELL_W * SCALE;
-  const glyphH = MONOGRAM_GLYPH_H * SCALE;
-  const baseX  = Math.round(cameraX + (ZOOM_W - textW) / 2);
+  const textW  = text.length * MONOGRAM_CELL_W * pxScale;
+  const glyphH = MONOGRAM_GLYPH_H * pxScale;
+  // Center on the visible viewport, not ZOOM_W — on mobile the viewBox is only
+  // ZOOM_W/mobileZoom wide, so centering on ZOOM_W pushed the text ~41px right.
+  const baseX  = Math.round(cameraX + (viewW - textW) / 2);
   const baseY  = Math.round(TOTAL_H / 3 - glyphH / 2);
 
   return (
     <g
+      data-testid="hype-popup"
+      data-text={text}
       opacity={opacity}
       shapeRendering="crispEdges"
       transform={`translate(${baseX} ${baseY + yOff}) translate(${textW / 2} ${glyphH / 2}) scale(${scale}) rotate(${rot}) translate(${-textW / 2} ${-glyphH / 2})`}

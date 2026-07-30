@@ -509,7 +509,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     const midPeriod = NUM_PERIODS / 2;
     const qLabel = quarterRef.current === NUM_PERIODS ? 'FINAL BUZZER!'
       : quarterRef.current === midPeriod ? 'HALFTIME!'
-      : `END OF Q${quarterRef.current}!`;
+      : `END OF H${quarterRef.current}!`;
     setQuarterAnnouncement(qLabel);
     setTimeout(walkOffCourt, 1200);
     // Show quarter stats screen after players walk off (1200ms delay + 1500ms walk = 2700ms, add 400ms buffer)

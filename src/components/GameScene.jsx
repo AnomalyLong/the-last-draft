@@ -159,6 +159,10 @@ export function GameScene({
     return () => ro.disconnect();
   }, [setViewportW]);
 
+  // Visible game-space width of the zoomed SVG viewBox — 408 on desktop,
+  // ~326 in portrait. Popups center on this so they track the real viewport.
+  const viewW = Math.round(ZOOM_W / mobileZoom);
+
   return (
     <div ref={containerRef} style={{ position: 'relative', ...containerStyle }} {...containerProps}>
       <svg
@@ -255,8 +259,8 @@ export function GameScene({
           )}
         </g>
 
-        {scorePopup && <ScorePopup text={scorePopup} cameraX={cameraX} />}
-        {hypePopup && <HypePopup key={hypePopup.id} text={hypePopup.text} color={hypePopup.color} cameraX={cameraX} />}
+        {scorePopup && <ScorePopup text={scorePopup} cameraX={cameraX} viewW={viewW} />}
+        {hypePopup && <HypePopup key={hypePopup.id} text={hypePopup.text} color={hypePopup.color} cameraX={cameraX} viewW={viewW} />}
         {defenseBonus && <DefenseBonusPopup key={defenseBonus.id} credits={DEFENSE_BONUS_CREDITS} cameraX={cameraX} />}
         {xpFlyup    && <XpFlyup    key={xpFlyup.id}    fromCx={xpFlyup.fromCx}    fromCy={xpFlyup.fromCy}    toCx={xpFlyup.toCx}    toCy={xpFlyup.toCy}    amount={xpFlyup.amount} />}
         {stealFlyup && <StealFlyup key={stealFlyup.id}  fromCx={stealFlyup.fromCx} fromCy={stealFlyup.fromCy} toCx={stealFlyup.toCx} toCy={stealFlyup.toCy} color={stealFlyup.color} />}

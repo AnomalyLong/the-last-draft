@@ -10,7 +10,7 @@ export const PixelText = React.memo(function PixelText({ text, x, y, scale = 2, 
   const pixels = pixelTextPixels(text, x, y, scale);
   const dirs = thick ? DIRS8 : DIRS4;
   return (
-    <g shapeRendering="crispEdges">
+    <g shapeRendering="crispEdges" data-text={text}>
       {outline != null && dirs.map(([dx,dy],oi) => pixels.map(([px,py],pi) => (
         <rect key={`o${oi}_${pi}`} x={px+dx*scale} y={py+dy*scale} width={scale} height={scale} fill={outline} />
       )))}
