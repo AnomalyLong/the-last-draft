@@ -24,17 +24,17 @@ export function LoadingScreen({ onDone }) {
   }, []);
 
   const cx   = ZOOM_W / 2;
+  const barY = Math.round(TOTAL_H / 2) + 46;
   const barX = cx - BAR_W / 2;
-  const barY = Math.round(TOTAL_H / 2) + 36;
 
   return (
     <g>
       <rect x={0} y={0} width={ZOOM_W} height={TOTAL_H} fill="#0d1220" />
 
-      <PixelTextC text="THE MBA" cx={cx} y={Math.round(TOTAL_H / 2) - 28}
+      <PixelTextC text="THE MBA" cx={cx} y={Math.round(TOTAL_H / 2) - 32}
         scale={6} fill="#e8c060" outline="#2a1800" thick />
 
-      <PixelTextC text="MULTIVERSAL BASKETBALL LEAGUE" cx={cx} y={Math.round(TOTAL_H / 2) + 14}
+      <PixelTextC text="MULTIVERSAL BASKETBALL LEAGUE" cx={cx} y={Math.round(TOTAL_H / 2) + 24}
         scale={1} fill="#1eb8d8" outline={null} />
 
       {/* Loading bar track */}

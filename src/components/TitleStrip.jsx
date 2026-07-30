@@ -1,7 +1,6 @@
 import React from 'react';
 import '../styles/lobby.css';
 import { trpc } from '../trpc.js';
-import { toggleMute, isMuted } from '../sound/basketball.js';
 import { playCursor, playSelect } from '../sound/ui.js';
 import { useNotifStatus, optIn as notifOptIn, optOut as notifOptOut } from '../notifStatus.js';
 
@@ -113,7 +112,7 @@ function NotifDropdown({ announcements, onSelect }) {
   );
 }
 
-export function TitleStrip({ credits = 0, energy, maxEnergy = 5, onEvents }) {
+export function TitleStrip({ credits = 0, energy, maxEnergy = 5, onEvents, muted = false, onToggleMute }) {
   const [showNotifs, setShowNotifs] = React.useState(false);
   const announcements = useAnnouncements();
 
@@ -136,14 +135,7 @@ export function TitleStrip({ credits = 0, energy, maxEnergy = 5, onEvents }) {
     });
   };
 
-  // Global sound mute — backed by the shared audioSettings singleton so the
-  // toggle is session-wide regardless of which screen's strip is mounted.
-  const [muted, setMuted] = React.useState(() => isMuted());
-  const handleToggleMute = () => {
-    const next = toggleMute();
-    setMuted(next);
-    if (!next) playCursor(); // audible confirmation only when turning sound back on
-  };
+
 
   return (
     <div className="lb2-title-strip">
@@ -183,7 +175,7 @@ export function TitleStrip({ credits = 0, energy, maxEnergy = 5, onEvents }) {
         <span className="lb2-ts-time">{(credits ?? 0).toLocaleString()} CR</span>
         <button
           className={`lb2-ts-mute${muted ? ' active' : ''}`}
-          onClick={handleToggleMute}
+          onClick={() => { onToggleMute?.(); if (muted) playCursor(); }}
           aria-label={muted ? 'Unmute sound' : 'Mute sound'}
           aria-pressed={muted}
           data-testid="sound-mute"

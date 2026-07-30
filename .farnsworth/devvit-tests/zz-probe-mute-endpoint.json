@@ -1,0 +1,22 @@
+{
+  "name": "zz-probe-mute-endpoint",
+  "description": "Diagnostic: is the mute click reaching state at all, and does the user.setMuted trpc route respond? Samples aria-pressed immediately after click (before the .catch revert can run) then probes /api/trpc/user.setMuted and user.init directly to read the raw HTTP status/body.",
+  "steps": [
+    { "action": "reload", "waitMs": 6000 },
+    { "action": "waitFor", "selector": "[data-testid=lobby-screen]", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": ".lobby2-ftue svg" },
+    { "action": "sleep", "ms": 1000 },
+
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); const before = b.getAttribute('aria-pressed'); b.click(); const immediate = b.getAttribute('aria-pressed'); return JSON.stringify({ before, immediateAfterClick: immediate, note: 'React may not have flushed yet' }); })()", "name": "A - state immediately after click" },
+    { "action": "sleep", "ms": 150 },
+    { "action": "eval", "expression": "JSON.stringify({ at150ms: document.querySelector('[data-testid=sound-mute]').getAttribute('aria-pressed') })", "name": "B - state at 150ms (post-render, pre-network)" },
+    { "action": "sleep", "ms": 2000 },
+    { "action": "eval", "expression": "JSON.stringify({ at2s: document.querySelector('[data-testid=sound-mute]').getAttribute('aria-pressed'), interpretation: 'if B=true and this=false, the .catch() revert fired => server call failed' })", "name": "C - state at 2s (post-network)" },
+
+    { "action": "eval", "expression": "(async () => { try { const r = await fetch('/api/trpc/user.setMuted?batch=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ 0: { json: { muted: true } } }) }); const t = await r.text(); return JSON.stringify({ status: r.status, ok: r.ok, body: t.slice(0, 500) }); } catch (e) { return 'FETCH THREW: ' + e.message; } })()", "name": "D - raw POST user.setMuted", "awaitPromise": true },
+    { "action": "sleep", "ms": 500 },
+    { "action": "eval", "expression": "(async () => { try { const r = await fetch('/api/trpc/user.init?batch=1', { method: 'GET' }); const t = await r.text(); let muted = 'unparsed'; try { const j = JSON.parse(t); muted = JSON.stringify(j?.[0]?.result?.data?.json?.muted ?? j?.[0]?.result?.data?.muted ?? 'not-found'); } catch (e) {} return JSON.stringify({ status: r.status, mutedField: muted, body: t.slice(0, 400) }); } catch (e) { return 'FETCH THREW: ' + e.message; } })()", "name": "E - read back muted via user.init", "awaitPromise": true },
+
+    { "action": "eval", "expression": "JSON.stringify({ consoleErrorsCaptured: (window.__testErrors || 'none - no error hook installed') })", "name": "F - window error hook" }
+  ]
+}

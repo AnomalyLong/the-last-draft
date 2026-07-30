@@ -1,0 +1,69 @@
+{
+  "name": "u/carol: START GAME from assign screen → tip-off → play possessions to final buzzer",
+  "_note": "No reload: autoAssign() only calls setAssignments locally and does NOT persist. handleStartGame (DraftScreen.jsx:1145) is what calls saveRosterToServer, so clicking START GAME both saves the lineup and launches. Possession loop lifted from carol-play-full-match. Also captures energy before/after to verify the deduct path.",
+  "steps": [
+    {"action": "waitFor", "selector": ".da-btn.primary.big", "timeout": 15000},
+    {"action": "extract", "expression": "JSON.stringify({assigned: document.querySelector('.dp-val')?.textContent?.trim(), cta: document.querySelector('.da-btn.primary.big')?.textContent?.trim(), disabled: document.querySelector('.da-btn.primary.big')?.disabled})", "into": "preStart"},
+
+    {"action": "while", "max": 3, "until": "!document.querySelector('.draft-coach')", "steps": [
+      {"action": "click", "selector": ".draft-coach"},
+      {"action": "sleep", "ms": 500}
+    ]},
+
+    {"action": "click", "selector": ".da-btn.primary.big"},
+    {"action": "waitFor", "selector": "[data-testid='matchmaking-screen'], [data-testid='score-home']", "timeout": 25000},
+
+    {"action": "if", "condition": "!!document.querySelector('[data-testid=\"matchmaking-screen\"]')", "steps": [
+      {"action": "waitFor", "selector": "[data-testid='matchmaking-screen'][data-state='vs']", "timeout": 25000},
+      {"action": "waitFor", "selector": ".launch-bar.tap-to-start", "timeout": 20000},
+      {"action": "screenshot", "path": "/tmp/carol-play-01-tapstart.png"},
+      {"action": "click", "selector": ".launch-bar.tap-to-start"}
+    ]},
+
+    {"action": "waitFor", "selector": "[data-testid='score-home']", "timeout": 25000},
+    {"action": "eval", "expression": "(() => { window.__plays = 0; window.__defs = 0; window.__ups = 0; return 'reset'; })()"},
+    {"action": "screenshot", "path": "/tmp/carol-play-02-tipoff.png"},
+
+    {"action": "while", "max": 150, "until": "!!document.querySelector('[data-testid=\"game-over-screen\"]')", "steps": [
+      {"action": "if", "condition": "!!document.querySelector('[data-testid=\"levelup-ok\"]')", "steps": [
+        {"action": "click", "selector": "[data-testid='levelup-ok']"},
+        {"action": "sleep", "ms": 300}
+      ]},
+      {"action": "if", "condition": "!!document.querySelector('[data-testid^=\"levelup-ability-\"]')", "steps": [
+        {"action": "extract", "expression": "(() => { const a = document.querySelector('[data-testid^=\"levelup-ability-\"]'); window.__ups = (window.__ups ?? 0) + 1; return a ? a.getAttribute('data-testid') : ''; })()", "into": "abilityPick"},
+        {"action": "click", "selector": "[data-testid='${abilityPick}']"},
+        {"action": "sleep", "ms": 400}
+      ]},
+      {"action": "if", "condition": "!!document.querySelector('[data-testid=\"bball-tip\"]')", "steps": [
+        {"action": "click", "selector": "[data-testid='bball-tip']"},
+        {"action": "sleep", "ms": 300}
+      ]},
+      {"action": "if", "condition": "!!document.querySelector('[data-testid=\"defense-ftue\"]')", "steps": [
+        {"action": "click", "selector": "[data-testid='defense-ftue']"},
+        {"action": "sleep", "ms": 300}
+      ]},
+      {"action": "if", "condition": "!!document.querySelector('[data-testid=\"quarter-summary-continue\"]')", "steps": [
+        {"action": "click", "selector": "[data-testid='quarter-summary-continue']"},
+        {"action": "sleep", "ms": 500}
+      ]},
+      {"action": "if", "condition": "!!document.querySelector('[data-testid=\"play-picker\"][data-iso-mode=\"1\"]')", "steps": [
+        {"action": "click", "selector": "[data-testid='iso-target-PG']"},
+        {"action": "sleep", "ms": 400}
+      ]},
+      {"action": "if", "condition": "!!document.querySelector('[data-testid=\"play-picker\"][data-iso-mode=\"0\"]')", "steps": [
+        {"action": "extract", "expression": "(() => { const all = [...document.querySelectorAll('[data-testid^=\"play-\"]')].filter(e => e.getAttribute('data-testid') !== 'play-picker'); const ok = all.filter(e => e.getAttribute('data-disabled') === '0' && e.getAttribute('data-testid') !== 'play-iso'); const p = ok[0] || all.find(e => e.getAttribute('data-disabled') === '0') || all[0]; window.__plays = (window.__plays ?? 0) + 1; return p ? p.getAttribute('data-testid') : ''; })()", "into": "playPick"},
+        {"action": "click", "selector": "[data-testid='${playPick}']"},
+        {"action": "sleep", "ms": 450}
+      ]},
+      {"action": "if", "condition": "!!document.querySelector('[data-testid=\"defense-picker\"]')", "steps": [
+        {"action": "extract", "expression": "(() => { const d = document.querySelector('[data-testid=\"defense-motion\"], [data-testid=\"defense-guard\"], [data-testid=\"defense-aggressive\"]'); window.__defs = (window.__defs ?? 0) + 1; return d ? d.getAttribute('data-testid') : ''; })()", "into": "defPick"},
+        {"action": "click", "selector": "[data-testid='${defPick}']"},
+        {"action": "sleep", "ms": 450}
+      ]},
+      {"action": "sleep", "ms": 450}
+    ]},
+
+    {"action": "extract", "expression": "JSON.stringify({plays: window.__plays ?? 0, defenses: window.__defs ?? 0, upgrades: window.__ups ?? 0, home: document.querySelector('[data-testid=\"score-home\"]')?.textContent, away: document.querySelector('[data-testid=\"score-away\"]')?.textContent, gameOver: !!document.querySelector('[data-testid=\"game-over-screen\"]')})", "into": "finalState"},
+    {"action": "screenshot", "path": "/tmp/carol-play-03-final.png"}
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "zz-probe-mute-fiber",
+  "description": "Diagnostic: walk the React fiber tree from the mute button up to LobbyScreen/TitleStrip and report whether muted/onToggleMute props are actually present at runtime, plus capture any error thrown by the click handler. Avoids async evals (the runner does not await promises) by stashing results on window.",
+  "steps": [
+    { "action": "reload", "waitMs": 6000 },
+    { "action": "waitFor", "selector": "[data-testid=lobby-screen]", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": ".lobby2-ftue svg" },
+    { "action": "sleep", "ms": 1000 },
+
+    { "action": "eval", "expression": "(() => { window.__err = []; window.addEventListener('error', e => window.__err.push('error: ' + e.message)); window.addEventListener('unhandledrejection', e => window.__err.push('rejection: ' + (e.reason && (e.reason.message || String(e.reason))))); const ce = console.error; console.error = function(...a) { window.__err.push('console.error: ' + a.map(x => (x && x.message) || String(x)).join(' ').slice(0, 300)); return ce.apply(this, a); }; return 'error hooks installed'; })()", "name": "A - install error capture" },
+
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); const fk = Object.keys(b).find(k => k.startsWith('__reactFiber$')); if (!fk) return 'NO FIBER KEY - keys: ' + Object.keys(b).join(','); let f = b[fk]; const chain = []; let n = 0; while (f && n < 40) { const name = typeof f.type === 'function' ? (f.type.name || 'anon') : (typeof f.type === 'string' ? f.type : String(f.type)); if (typeof f.type === 'function') { const p = f.memoizedProps || {}; chain.push({ comp: name, hasMuted: 'muted' in p, mutedVal: p.muted, hasToggle: 'onToggleMute' in p, toggleType: typeof p.onToggleMute }); } f = f.return; n++; } return JSON.stringify(chain); })()", "name": "B - fiber chain props (LobbyScreen/TitleStrip)" },
+
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); const pk = Object.keys(b).find(k => k.startsWith('__reactProps$')); const p = b[pk] || {}; return JSON.stringify({ hasOnClick: typeof p.onClick, ariaPressed: p['aria-pressed'], className: p.className }); })()", "name": "C - button own props" },
+
+    { "action": "click", "selector": "[data-testid=sound-mute]" },
+    { "action": "sleep", "ms": 300 },
+    { "action": "eval", "expression": "JSON.stringify({ at300ms: document.querySelector('[data-testid=sound-mute]').getAttribute('aria-pressed'), errors: window.__err })", "name": "D - state + errors right after click" },
+    { "action": "sleep", "ms": 2500 },
+    { "action": "eval", "expression": "JSON.stringify({ at3s: document.querySelector('[data-testid=sound-mute]').getAttribute('aria-pressed'), errors: window.__err })", "name": "E - state + errors after network settles" },
+
+    { "action": "eval", "expression": "(() => { fetch('/api/trpc/user.setMuted?batch=1', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ 0: { json: { muted: true } } }) }).then(r => r.text().then(t => { window.__post = { status: r.status, body: t.slice(0, 400) }; })).catch(e => { window.__post = { threw: e.message }; }); return 'POST fired'; })()", "name": "F - fire raw setMuted POST" },
+    { "action": "sleep", "ms": 2500 },
+    { "action": "eval", "expression": "JSON.stringify(window.__post || 'no result yet')", "name": "G - raw POST result" },
+
+    { "action": "eval", "expression": "(() => { fetch('/api/trpc/user.init?batch=1').then(r => r.text().then(t => { window.__init = { status: r.status, body: t.slice(0, 600) }; })).catch(e => { window.__init = { threw: e.message }; }); return 'GET fired'; })()", "name": "H - fire user.init read-back" },
+    { "action": "sleep", "ms": 2500 },
+    { "action": "eval", "expression": "JSON.stringify(window.__init || 'no result yet')", "name": "I - user.init result (look for muted field)" }
+  ]
+}

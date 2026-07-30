@@ -1,0 +1,208 @@
+{
+  "name": "VERIFY: hype popup fits + centers on mobile viewport (temp-forced to longest phrase)",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "carol"
+    },
+    {
+      "action": "reload",
+      "waitMs": 3500
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "if",
+      "condition": "!!document.querySelector('.lb2-coach')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": ".lb2-coach"
+        },
+        {
+          "action": "sleep",
+          "ms": 400
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='bnav-play']"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='matchmaking-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "waitFor",
+      "selector": ".launch-bar.tap-to-start",
+      "timeout": 25000
+    },
+    {
+      "action": "click",
+      "selector": ".launch-bar.tap-to-start"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='score-home']",
+      "timeout": 20000
+    },
+    {
+      "action": "while",
+      "max": 120,
+      "until": "!!document.querySelector('[data-testid=\"hype-popup\"]')",
+      "steps": [
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"levelup-ok\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='levelup-ok']"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid^=\"levelup-ability-\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const a = document.querySelector('[data-testid^=\"levelup-ability-\"]'); return a ? a.getAttribute('data-testid') : ''; })()",
+              "into": "abilityPick"
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${abilityPick}']"
+            },
+            {
+              "action": "sleep",
+              "ms": 400
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"bball-tip\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='bball-tip']"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"defense-ftue\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='defense-ftue']"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"quarter-summary-continue\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='quarter-summary-continue']"
+            },
+            {
+              "action": "sleep",
+              "ms": 500
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"play-picker\"][data-iso-mode=\"1\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='iso-target-PG']"
+            },
+            {
+              "action": "sleep",
+              "ms": 400
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"play-picker\"][data-iso-mode=\"0\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const all = [...document.querySelectorAll('[data-testid^=\"play-\"]')].filter(e => e.getAttribute('data-testid') !== 'play-picker'); const ok = all.filter(e => e.getAttribute('data-disabled') === '0' && e.getAttribute('data-testid') !== 'play-iso'); const p = ok[0] || all.find(e => e.getAttribute('data-disabled') === '0') || all[0]; return p ? p.getAttribute('data-testid') : ''; })()",
+              "into": "playPick"
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${playPick}']"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"defense-picker\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const d = document.querySelector('[data-testid=\"defense-motion\"], [data-testid=\"defense-guard\"], [data-testid=\"defense-aggressive\"]'); return d ? d.getAttribute('data-testid') : ''; })()",
+              "into": "defPick"
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${defPick}']"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "sleep",
+          "ms": 250
+        }
+      ]
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='hype-popup']",
+      "timeout": 15000,
+      "_comment": "ASSERT: loop exited because a popup appeared, not by exhausting max"
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const g = document.querySelector('[data-testid=\"hype-popup\"]'); if (!g) return 'NONE'; const r=g.getBoundingClientRect(), s=g.ownerSVGElement.getBoundingClientRect(); return [g.getAttribute('data-text'),'L'+Math.round(r.left-s.left),'R'+Math.round(s.right-r.right),'w'+Math.round(r.width),'s'+Math.round(s.width),'clip'+((r.left<s.left-1)||(r.right>s.right+1)?'YES':'no')].join('|'); })()",
+      "into": "hypeGeom"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/hype-verify.png"
+    }
+  ]
+}

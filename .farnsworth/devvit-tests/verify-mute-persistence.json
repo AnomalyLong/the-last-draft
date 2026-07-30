@@ -1,0 +1,67 @@
+{
+  "name": "verify-mute-persistence",
+  "description": "Verifies the per-user mute preference: the toggle works on the LOBBY strip (regression - LobbyScreen renders its own TitleStrip and was not wired to App state), survives navigation to Draft/BP/Roster, and survives a full reload (relaunch) because it is stored in Redis on the user hash. Also confirms the unmuted state persists so the flag is not write-only. Never clicks .bnav-play - that leaves the lobby into a match.",
+  "steps": [
+    { "action": "reload", "waitMs": 6000 },
+    { "action": "waitFor", "selector": "[data-testid=lobby-screen]", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": ".lobby2-ftue svg" },
+    { "action": "sleep", "ms": 800 },
+    { "action": "waitFor", "selector": "[data-testid=sound-mute]", "timeout": 10000 },
+
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); return JSON.stringify({ ariaPressed: b?.getAttribute('aria-pressed'), classes: b?.className }); })()", "name": "0 - initial mute state on lobby" },
+
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); if (b.getAttribute('aria-pressed') === 'true') { b.click(); return 'was muted - clicked to unmute for baseline'; } return 'already unmuted'; })()", "name": "1 - normalise baseline to UNMUTED" },
+    { "action": "sleep", "ms": 1200 },
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); const p = b.getAttribute('aria-pressed'); return JSON.stringify({ ariaPressed: p, PASS: p === 'false', expected: 'false' }); })()", "name": "2 - baseline is UNMUTED" },
+
+    { "action": "click", "selector": "[data-testid=sound-mute]" },
+    { "action": "sleep", "ms": 1200 },
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); const p = b.getAttribute('aria-pressed'); return JSON.stringify({ ariaPressed: p, hasActiveClass: b.className.includes('active'), label: b.getAttribute('aria-label'), PASS: p === 'true' && b.className.includes('active'), expected: 'CORE: clicking mute on the LOBBY must register' }); })()", "name": "3 - MUTE CLICK WORKS ON LOBBY" },
+    { "action": "eval", "expression": "JSON.stringify(Array.from(document.querySelectorAll('audio')).map(a => ({ src: (a.currentSrc || a.src || '').split('/').pop(), muted: a.muted, volume: Number(a.volume.toFixed(3)), paused: a.paused })))", "name": "4 - audio elements after mute" },
+    { "action": "screenshot", "path": "/tmp/mute-01-lobby-muted.png" },
+
+    { "action": "click", "selector": "[data-testid=bnav-draft]" },
+    { "action": "sleep", "ms": 2500 },
+    { "action": "waitFor", "selector": "[data-testid=sound-mute]", "timeout": 10000 },
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); const p = b.getAttribute('aria-pressed'); const onLobby = !!document.querySelector('[data-testid=lobby-screen]'); return JSON.stringify({ leftLobby: !onLobby, ariaPressed: p, PASS: p === 'true', expected: 'CORE: still muted after navigating to DRAFT' }); })()", "name": "5 - stays muted on DRAFT" },
+    { "action": "screenshot", "path": "/tmp/mute-02-draft-muted.png" },
+
+    { "action": "reload", "waitMs": 6000 },
+    { "action": "waitFor", "selector": "[data-testid=lobby-screen]", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": ".lobby2-ftue svg" },
+    { "action": "sleep", "ms": 1500 },
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); const p = b?.getAttribute('aria-pressed'); return JSON.stringify({ ariaPressed: p, PASS: p === 'true', expected: 'CORE: mute SURVIVES a full relaunch (loaded from Redis)' }); })()", "name": "6 - mute SURVIVES RELAUNCH" },
+    { "action": "eval", "expression": "JSON.stringify(Array.from(document.querySelectorAll('audio')).map(a => ({ src: (a.currentSrc || a.src || '').split('/').pop(), muted: a.muted, volume: Number(a.volume.toFixed(3)), paused: a.paused })))", "name": "7 - no audio playing after muted relaunch" },
+    { "action": "screenshot", "path": "/tmp/mute-03-relaunch-muted.png" },
+
+    { "action": "click", "selector": "[data-testid=bnav-battlepass]" },
+    { "action": "sleep", "ms": 2500 },
+    { "action": "waitFor", "selector": "[data-testid=sound-mute]", "timeout": 10000 },
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); const p = b.getAttribute('aria-pressed'); return JSON.stringify({ onBattlePass: !!document.querySelector('[data-testid=battle-pass-screen]'), ariaPressed: p, PASS: p === 'true', expected: 'CORE: still muted on BP' }); })()", "name": "8 - stays muted on BP" },
+    { "action": "screenshot", "path": "/tmp/mute-04-bp-muted.png" },
+
+    { "action": "reload", "waitMs": 6000 },
+    { "action": "waitFor", "selector": "[data-testid=lobby-screen]", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": ".lobby2-ftue svg" },
+    { "action": "sleep", "ms": 1200 },
+    { "action": "click", "selector": "[data-testid=bnav-collection]" },
+    { "action": "waitFor", "selector": "[data-state=collection]", "timeout": 10000 },
+    { "action": "sleep", "ms": 1200 },
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); const p = b?.getAttribute('aria-pressed'); return JSON.stringify({ ariaPressed: p, PASS: p === 'true', expected: 'CORE: still muted on ROSTER' }); })()", "name": "9 - stays muted on ROSTER" },
+    { "action": "screenshot", "path": "/tmp/mute-05-roster-muted.png" },
+
+    { "action": "reload", "waitMs": 6000 },
+    { "action": "waitFor", "selector": "[data-testid=lobby-screen]", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": ".lobby2-ftue svg" },
+    { "action": "sleep", "ms": 1200 },
+    { "action": "click", "selector": "[data-testid=sound-mute]" },
+    { "action": "sleep", "ms": 1200 },
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); const p = b.getAttribute('aria-pressed'); return JSON.stringify({ ariaPressed: p, PASS: p === 'false', expected: 'unmute click registers' }); })()", "name": "10 - unmute click registers" },
+    { "action": "reload", "waitMs": 6000 },
+    { "action": "waitFor", "selector": "[data-testid=lobby-screen]", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": ".lobby2-ftue svg" },
+    { "action": "sleep", "ms": 1500 },
+    { "action": "eval", "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); const p = b?.getAttribute('aria-pressed'); return JSON.stringify({ ariaPressed: p, PASS: p === 'false', expected: 'CORE: UNMUTED state also persists (flag is not write-only)' }); })()", "name": "11 - UNMUTE SURVIVES RELAUNCH" },
+    { "action": "screenshot", "path": "/tmp/mute-06-relaunch-unmuted.png" }
+  ]
+}

@@ -18,6 +18,7 @@ export type UserData = {
   teamName: string;
   wins: number;
   losses: number;
+  muted: boolean;
   // Lifetime flag set when a user buys ANY Founders Pass tier in Season 0.
   // Stays true forever — used to auto-grant free season passes when S1
   // ships. Distinct from the season-scoped pass record (see core/battlePass.ts).
@@ -44,6 +45,7 @@ const parseUser = (raw: Record<string, string>): UserData => ({
   teamName: raw.teamName ?? '',
   wins: Number(raw.wins ?? 0),
   losses: Number(raw.losses ?? 0),
+  muted: raw.muted === '1',
   // Defensive default: any pre-pass user reads as non-founder.
   founder: raw.founder === '1' ? 1 : 0,
 });
@@ -70,6 +72,7 @@ export const getOrCreateUser = async (username: string, redditId: string): Promi
     // New users get 5 free picks — exactly enough to draft a starting roster.
     // After the FTUE draft consumes all 5, users must earn more picks.
     redis.hSetNX(key, 'freeDrafts', '5'),
+    redis.hSetNX(key, 'muted', '0'),
   ]);
 
   await Promise.all([
@@ -121,6 +124,11 @@ export const deductEnergy = async (username: string): Promise<{ success: boolean
 // Persist the user's team name. One team per user.
 export const setTeamName = async (username: string, teamName: string): Promise<void> => {
   await redis.hSet(userKey(username), { teamName: teamName.slice(0, 24) });
+};
+
+// Persist the user's global sound preference across devices and sessions.
+export const setMutedPreference = async (username: string, muted: boolean): Promise<void> => {
+  await redis.hSet(userKey(username), { muted: muted ? '1' : '0' });
 };
 
 export const awardCredits = async (

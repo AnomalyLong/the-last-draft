@@ -1466,9 +1466,9 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
                   </div>
                 </div>
                 <div className="paid-result-sub">
-                  {paidResult.name} joined your collection{typeof paidResult.costPaid === 'number' ? ` · ${paidResult.costPaid.toLocaleString()} CR` : ''}
+                  {paidResult.name} joined your roster{typeof paidResult.costPaid === 'number' ? ` · ${paidResult.costPaid.toLocaleString()} CR` : ''}
                 </div>
-                <div className="paid-result-hint">Set your lineup in the Collection screen.</div>
+                <div className="paid-result-hint">Set your lineup in the Roster screen.</div>
                 <button className="paid-result-btn" onClick={() => { playSelect(); onPaidComplete?.(paidResult); }} onMouseEnter={() => playCursor()}>
                   DONE
                 </button>

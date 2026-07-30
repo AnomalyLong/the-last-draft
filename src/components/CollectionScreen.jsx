@@ -533,7 +533,51 @@ function SendPlayerModal({ player, onClose, onSent }) {
 }
 
 // ─── Root component ─────────────────────────────────────────────
-export function CollectionScreen({ roster = [], lineup: lineupProp = {}, username = '', credits = 0, onBack, onAuction, onLineupChange, onRosterChange, isMobile: isMobileProp }) {
+// ─── Lifetime record ────────────────────────────────────────────────────
+// Reads wins / losses / creditsEarned straight off user.init (already on the
+// wire — no new server route). Renders nothing until stats resolve so the
+// panel never flashes 0-0-0 at a player with a real record.
+//
+// Win rate is derived from wins+losses, NOT from user.gamesPlayed: gamesPlayed
+// is a zCard over every game the user started, while wins/losses only tick for
+// games that finished clean (see game.ts endGame `if (isClean)`). Dividing by
+// gamesPlayed would under-report the rate for anyone with an abandoned or
+// flagged game.
+function RecordBar({ stats }) {
+  if (!stats) return null;
+  const wins = stats.wins ?? 0;
+  const losses = stats.losses ?? 0;
+  const creditsEarned = stats.creditsEarned ?? 0;
+  const decided = wins + losses;
+  const winPct = decided > 0 ? Math.round((wins / decided) * 100) : null;
+
+  return (
+    <div className="col-record" data-testid="roster-record">
+      <div className="cr-cell">
+        <span className="cr-val cr-win" data-testid="roster-record-wins">{wins}</span>
+        <span className="cr-lbl">WINS</span>
+      </div>
+      <div className="cr-cell">
+        <span className="cr-val cr-loss" data-testid="roster-record-losses">{losses}</span>
+        <span className="cr-lbl">LOSSES</span>
+      </div>
+      <div className="cr-cell">
+        <span className="cr-val" data-testid="roster-record-winpct">
+          {winPct === null ? '--' : winPct + '%'}
+        </span>
+        <span className="cr-lbl">WIN RATE</span>
+      </div>
+      <div className="cr-cell cr-cell-credits">
+        <span className="cr-val cr-credits" data-testid="roster-record-credits">
+          {creditsEarned.toLocaleString()}
+        </span>
+        <span className="cr-lbl">CREDITS EARNED</span>
+      </div>
+    </div>
+  );
+}
+
+export function CollectionScreen({ roster = [], lineup: lineupProp = {}, username = '', credits = 0, stats = null, onBack, onAuction, onLineupChange, onRosterChange, isMobile: isMobileProp }) {
   const activeRoster = roster.length ? roster : ROSTER;
   const [selectedId, setSelectedId]       = useState(null);
   const [lineup, setLineup]               = useState(() =>
@@ -659,10 +703,12 @@ export function CollectionScreen({ roster = [], lineup: lineupProp = {}, usernam
             <span className="bk-glyph">◀</span>
           </button>
           <div className="col-title">
-            <span className="ct-big">COLLECTION</span>
+            <span className="ct-big">ROSTER</span>
             <span className="ct-sub">PLAYER REGISTRY</span>
           </div>
         </div>
+
+        <RecordBar stats={stats} />
 
         <SquadBar
           roster={activeRoster}
@@ -676,7 +722,6 @@ export function CollectionScreen({ roster = [], lineup: lineupProp = {}, usernam
                style={{ '--c': rc.color, '--ca': rc.accent }}>
             <button className="col-detail-close" onClick={() => { playCancel(); setSelectedId(null); }} onMouseEnter={() => playCursor()}>
               <span className="cdc-glyph">✕</span>
-              <span className="cdc-lbl">CLOSE</span>
             </button>
             <DetailPanel
               player={selected}

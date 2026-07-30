@@ -4,7 +4,7 @@ import { Context } from './context';
 import { context, reddit, redis } from '@devvit/web/server';
 import { z } from 'zod';
 
-import { getOrCreateUser, getUser, grantFreeDrafts, setTeamName, userKey, ledgerKey, gamesKey, MAX_ENERGY, computeEnergy, USERS_INDEX_KEY } from './core/user';
+import { getOrCreateUser, getUser, grantFreeDrafts, setTeamName, setMutedPreference, userKey, ledgerKey, gamesKey, MAX_ENERGY, computeEnergy, USERS_INDEX_KEY } from './core/user';
 import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, setLineup, updatePlayerProgress, buildRosterForUser, transferPlayer, ROLES, type Role, rosterKey, lineupKey } from './core/player';
 import { SKIN_PALETTES } from '../shared/palettes';
 import { createChallengePost, canCreateChallengePost, getChallengePost, listChallengeResults, getMyChallenge, challengePostKey } from './core/post';
@@ -208,6 +208,14 @@ export const appRouter = t.router({
         const username = await requireUsername();
         await setTeamName(username, input.teamName);
         return { success: true };
+      }),
+
+    setMuted: publicProcedure
+      .input(z.object({ muted: z.boolean() }))
+      .mutation(async ({ input }) => {
+        const username = await requireUsername();
+        await setMutedPreference(username, input.muted);
+        return { success: true, muted: input.muted };
       }),
 
     // Look up whether a username is registered (has played the app before).

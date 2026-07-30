@@ -33,10 +33,10 @@ import { TitleStrip } from './components/TitleStrip.jsx';
 // Column wrapper that pins the global TitleStrip (lobby header) above a
 // full-screen scene. The wrapped screens use `position: absolute; inset: 0`
 // roots, so the inner relative container confines them below the strip.
-function ScreenWithStrip({ credits, energy, maxEnergy, onEvents, children }) {
+function ScreenWithStrip({ credits, energy, maxEnergy, onEvents, muted, onToggleMute, children }) {
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 55, display: 'flex', flexDirection: 'column' }}>
-      <TitleStrip credits={credits} energy={energy} maxEnergy={maxEnergy} onEvents={onEvents} />
+      <TitleStrip credits={credits} energy={energy} maxEnergy={maxEnergy} onEvents={onEvents} muted={muted} onToggleMute={onToggleMute} />
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>{children}</div>
     </div>
   );
@@ -45,7 +45,7 @@ import ChallengeCardHost from './components/ChallengeCardHost.jsx';
 import TeamSetupView from '../lobby/team-setup.jsx';
 import '../lobby/team-setup.css';
 import '../lobby/mobile-team-setup.css';
-import { titleMusic, bgMusic, bounceBall, applyAllVolumes } from './sound/basketball.js';
+import { titleMusic, bgMusic, bounceBall, applyAllVolumes, setMuted } from './sound/basketball.js';
 import { audioSettings } from './sound/audioSettings.js';
 import { useGame } from './useGame.js';
 import OPPONENTS from './opponents.json';
@@ -75,8 +75,26 @@ export default function App() {
   const [scanlines, setScanlines] = React.useState(0.5);   // 0.5 → 0.175 ≈ original 0.16
   const [vignette,  setVignette]  = React.useState(0.75);  // 0.75 → 0.60 = original 0.60
   const [showInGameOptions, setShowInGameOptions] = React.useState(false);
+  const [audioPreferenceLoaded, setAudioPreferenceLoaded] = React.useState(false);
+  const [muted, setMutedState] = React.useState(false);
+
+  const handleToggleMute = React.useCallback(() => {
+    const next = !muted;
+    // Always apply locally: the click must take effect for this session even
+    // if persistence fails. Do NOT revert on error — an earlier version did,
+    // which made a stale-server 404 on user.setMuted look like a dead button
+    // (the UI flipped back within ~50ms and nothing appeared to happen).
+    setMuted(next);
+    setMutedState(next);
+    trpc.user.setMuted.mutate({ muted: next }).catch((err) => {
+      // Surface it loudly instead of silently discarding the preference:
+      // audio is correct now, but it won't survive a relaunch.
+      console.error('[mute] failed to persist preference — will not survive relaunch:', err);
+    });
+  }, [muted]);
 
   React.useEffect(() => {
+    if (!audioPreferenceLoaded) return;
     if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'draftHub' || scene === 'collection' || scene === 'matchmaking' || scene === 'featuredEvents' || scene === 'battlePass') {
       bgMusic.stop();
       bounceBall.stop();
@@ -84,7 +102,7 @@ export default function App() {
     } else {
       titleMusic.stop();
     }
-  }, [scene]);
+  }, [scene, audioPreferenceLoaded]);
 
   // applyAllVolumes() re-applies every live channel and notifies subscribers
   // (FTUE typing loop, intro video), so a slider drag reaches all of them.
@@ -107,6 +125,9 @@ export default function App() {
   // so it never flashes a wrong "0/5".
   const [serverEnergy, setServerEnergy] = React.useState(null);
   const [serverMaxEnergy, setServerMaxEnergy] = React.useState(5);
+  // Lifetime record shown on the Roster screen. null until user.init
+  // resolves so the panel never flashes a misleading 0-0.
+  const [serverStats, setServerStats] = React.useState(null);
   // Paid (credit) draft: which mode the DraftScreen runs in, and the
   // server-priced cost of the user's next paid draft this month.
   const [draftMode, setDraftMode] = React.useState('free'); // 'free' | 'credit'
@@ -174,8 +195,17 @@ export default function App() {
         if (user.maxEnergy) setServerMaxEnergy(user.maxEnergy);
         setFreeDrafts(user.freeDrafts ?? 0);
         setPaidPicks(user.paidPicks ?? 0);
+        setServerStats({
+          wins: user.wins ?? 0,
+          losses: user.losses ?? 0,
+          creditsEarned: user.creditsEarned ?? 0,
+        });
         if (user.teamName) setHomeTeamName(user.teamName);
-      }).catch(() => {}),
+        const savedMuted = user.muted ?? false;
+        setMuted(savedMuted);
+        setMutedState(savedMuted);
+        setAudioPreferenceLoaded(true);
+      }).catch(() => setAudioPreferenceLoaded(true)),
       refreshMissions(),
     ]);
   }, [refreshMissions]);
@@ -231,9 +261,18 @@ export default function App() {
       if (user.maxEnergy) setServerMaxEnergy(user.maxEnergy);
       setFreeDrafts(user.freeDrafts ?? 0);
       setPaidPicks(user.paidPicks ?? 0);
+      setServerStats({
+        wins: user.wins ?? 0,
+        losses: user.losses ?? 0,
+        creditsEarned: user.creditsEarned ?? 0,
+      });
       setIsFtue(user.gamesPlayed === 0);
       if (user.teamName) setHomeTeamName(user.teamName);
-    }).catch(() => {});
+      const savedMuted = user.muted ?? false;
+      setMuted(savedMuted);
+      setMutedState(savedMuted);
+      setAudioPreferenceLoaded(true);
+    }).catch(() => setAudioPreferenceLoaded(true));
 
     refreshPass();
     refreshBpMissions();
@@ -452,6 +491,8 @@ export default function App() {
           credits={serverCredits}
           energy={serverEnergy}
           maxEnergy={serverMaxEnergy}
+          muted={muted}
+          onToggleMute={handleToggleMute}
           homeRoster={homeRoster}
           missions={serverMissions}
           isFtue={isFtue}
@@ -496,7 +537,7 @@ export default function App() {
       )}
 
       {!isInline && scene === 'featuredEvents' && (
-        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy}>
+        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} muted={muted} onToggleMute={handleToggleMute}>
           <FeaturedEventsScreen
             username={username}
             credits={serverCredits}
@@ -511,7 +552,7 @@ export default function App() {
       )}
 
       {!isInline && scene === 'battlePass' && (
-        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} onEvents={() => setScene('featuredEvents')}>
+        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} muted={muted} onToggleMute={handleToggleMute} onEvents={() => setScene('featuredEvents')}>
           <BattlePassScreen
             username={username}
             credits={serverCredits}
@@ -530,12 +571,13 @@ export default function App() {
       )}
 
       {!isInline && scene === 'collection' && (
-        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} onEvents={() => setScene('featuredEvents')}>
+        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} muted={muted} onToggleMute={handleToggleMute} onEvents={() => setScene('featuredEvents')}>
           <CollectionScreen
             roster={rawRoster}
             lineup={rawLineup}
             username={username}
             credits={serverCredits}
+            stats={serverStats}
             onLineupChange={(next) => setRawLineup({ ...next })}
             onRosterChange={refreshRoster}
             onBack={() => setScene('title')}
@@ -544,7 +586,7 @@ export default function App() {
       )}
 
       {!isInline && scene === 'draft' && (
-        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} onEvents={() => setScene('featuredEvents')}>
+        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} muted={muted} onToggleMute={handleToggleMute} onEvents={() => setScene('featuredEvents')}>
         <DraftScreen
           homeTeamName={homeTeamName}
           isFtue={isFtue}
@@ -609,7 +651,7 @@ export default function App() {
       )}
 
       {!isInline && scene === 'draftHub' && (
-        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} onEvents={() => setScene('featuredEvents')}>
+        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} muted={muted} onToggleMute={handleToggleMute} onEvents={() => setScene('featuredEvents')}>
         <DraftHubScreen
           freeDrafts={freeDrafts}
           paidPicks={paidPicks}

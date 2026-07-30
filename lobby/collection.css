@@ -651,3 +651,56 @@ body.is-narrow .party-tag { display: none; }
 .send-modal-btn.primary:hover:not(:disabled) {
   background: linear-gradient(180deg, color-mix(in srgb, var(--c-left, #19e6c4) 32%, transparent), transparent);
 }
+
+/* ─────────────────────────────────────────────────────────
+   LIFETIME RECORD  (Roster screen)
+   Sits between the topnav and the squad bar. Deliberately a
+   sibling of .col-title, not a child — .col-title is
+   display:none under 560px, so nesting it there would hide
+   the record on mobile.
+   ───────────────────────────────────────────────────────── */
+.col-record {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: rgba(255, 255, 255, 0.12);   /* shows through as hairline dividers */
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  flex: none;
+}
+.col-record .cr-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  background: rgba(2, 6, 10, 0.72);
+  min-width: 0;
+}
+.col-record .cr-val {
+  font-family: var(--f-head);
+  font-weight: 900;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: var(--c-ink);
+  white-space: nowrap;
+}
+.col-record .cr-win    { color: var(--c-left);  text-shadow: 0 0 14px rgba(25, 230, 196, 0.35); }
+.col-record .cr-loss   { color: var(--c-right); text-shadow: 0 0 14px rgba(255, 45, 111, 0.30); }
+.col-record .cr-credits{ color: #ffd97a;        text-shadow: 0 0 14px rgba(255, 217, 122, 0.30); }
+.col-record .cr-lbl {
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--c-ink-dim);
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .col-record .cr-cell { padding: 8px 3px; gap: 3px; }
+  .col-record .cr-val  { font-size: 18px; }
+  /* 0.20em tracking overflows the credits cell at 4-up on a 320px screen */
+  .col-record .cr-lbl  { font-size: 7px; letter-spacing: 0.08em; }
+}
