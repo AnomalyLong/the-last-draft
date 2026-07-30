@@ -17,7 +17,9 @@ import levelUpSound    from './levelup.wav';
 import fanfareSound    from './fanfare.wav';
 import blockSound      from './block.wav';
 import pickSound       from './basketball/pick.wav';
-import { audioSettings, musicVolume, sfxVolume } from './audioSettings.js';
+import {
+  audioSettings, musicVolume, sfxVolume, notifyAudioSettingsChanged,
+} from './audioSettings.js';
 
 function makeSound(src, baseVol = 0.8) {
   const proto = new Audio(src);
@@ -107,11 +109,19 @@ export const titleMusic = {
 // already-playing music goes silent/returns without waiting for a restart.
 // One-shot SFX pick up the new state on their next play. Session-only — no
 // browser storage in the Devvit iframe.
+// Re-applies every live channel owned by this module, then notifies external
+// subscribers (FTUE typing loop, intro video, ...) so they re-read too. Call
+// this after any mutation of audioSettings.
+export function applyAllVolumes() {
+  _bounce.volume     = BOUNCE_BASE * sfxVolume();
+  _bgMusic.volume    = BG_BASE     * musicVolume();
+  _titleMusic.volume = TITLE_BASE  * musicVolume();
+  notifyAudioSettingsChanged();
+}
+
 export function setMuted(m) {
   audioSettings.muted = !!m;
-  _bounce.volume   = BOUNCE_BASE * sfxVolume();
-  _bgMusic.volume  = BG_BASE     * musicVolume();
-  _titleMusic.volume = TITLE_BASE * musicVolume();
+  applyAllVolumes();
   return audioSettings.muted;
 }
 export function toggleMute() { return setMuted(!audioSettings.muted); }

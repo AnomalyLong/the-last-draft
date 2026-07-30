@@ -45,7 +45,7 @@ import ChallengeCardHost from './components/ChallengeCardHost.jsx';
 import TeamSetupView from '../lobby/team-setup.jsx';
 import '../lobby/team-setup.css';
 import '../lobby/mobile-team-setup.css';
-import { titleMusic, bgMusic, bounceBall } from './sound/basketball.js';
+import { titleMusic, bgMusic, bounceBall, applyAllVolumes } from './sound/basketball.js';
 import { audioSettings } from './sound/audioSettings.js';
 import { useGame } from './useGame.js';
 import OPPONENTS from './opponents.json';
@@ -86,15 +86,16 @@ export default function App() {
     }
   }, [scene]);
 
+  // applyAllVolumes() re-applies every live channel and notifies subscribers
+  // (FTUE typing loop, intro video), so a slider drag reaches all of them.
   const handleMusicVol = (v) => {
     audioSettings.music = v;
-    titleMusic.applyVolume();
-    bgMusic.applyVolume();
+    applyAllVolumes();
     setMusicVol(v);
   };
   const handleSfxVol = (v) => {
     audioSettings.sfx = v;
-    bounceBall.applyVolume();
+    applyAllVolumes();
     setSfxVol(v);
   };
 

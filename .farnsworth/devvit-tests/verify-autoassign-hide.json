@@ -1,0 +1,76 @@
+{
+  "name": "Full draft flow, verify AUTO ASSIGN hides once team filled",
+  "steps": [
+    {"action": "reload", "waitMs": 3000},
+    {"action": "waitFor", "selector": ".fw-stage--desktop, .fw-stage--mobile, body", "timeout": 8000},
+    {"action": "if", "condition": "!!document.querySelector('.lb2-coach')", "steps": [
+      {"action": "click", "selector": ".lb2-coach"},
+      {"action": "waitFor", "selector": ".lb2-coach", "timeout": 3000},
+      {"action": "click", "selector": ".lb2-coach"}
+    ]},
+    {"action": "click", "selector": ".bnav-play"},
+    {"action": "waitFor", "selector": "[data-testid='ftue-intro-video'], .dh-btn.primary, .tsetup, .draft-start-btn", "timeout": 15000},
+    {"action": "if", "condition": "!!document.querySelector(\"[data-testid='ftue-intro-video']\")", "steps": [
+      {"action": "click", "selector": "[data-testid='ftue-intro-video']"},
+      {"action": "waitFor", "selector": "[data-testid='ftue-intro-video']", "timeout": 1500},
+      {"action": "sleep", "ms": 1500},
+      {"action": "click", "selector": "[data-testid='ftue-intro-video']"},
+      {"action": "waitFor", "selector": "[data-testid='ftue-intro-video']", "timeout": 1500},
+      {"action": "click", "selector": "[data-testid='ftue-intro-video']"}
+    ]},
+    {"action": "waitFor", "selector": ".dh-btn.primary, .tsetup, .draft-start-btn", "timeout": 15000},
+    {"action": "if", "condition": "!!document.querySelector('.dh-btn.primary')", "steps": [
+      {"action": "click", "selector": ".dh-btn.primary"},
+      {"action": "waitFor", "selector": ".tsetup, .draft-start-btn", "timeout": 10000}
+    ]},
+    {"action": "if", "condition": "!!document.querySelector('.tsetup') && !!document.querySelector('.ts-name-input')", "steps": [
+      {"action": "type", "selector": ".ts-name-input", "text": "Cthulhu"},
+      {"action": "click", "selector": "text=CONFIRM"},
+      {"action": "waitFor", "selector": "text=UNIFORM", "timeout": 5000},
+      {"action": "click", "selector": "text=CONFIRM"},
+      {"action": "waitFor", "selector": "text=TEAM LOGO", "timeout": 5000},
+      {"action": "click", "selector": "text=CONTINUE TO DRAFT"}
+    ]},
+    {"action": "waitFor", "selector": ".draft-start-btn", "timeout": 20000},
+    {"action": "click", "selector": ".draft-start-btn"},
+    {"action": "if", "condition": "!!document.querySelector('.draft-coach')", "steps": [
+      {"action": "click", "selector": ".draft-coach"},
+      {"action": "waitFor", "selector": ".draft-coach", "timeout": 2000},
+      {"action": "click", "selector": ".draft-coach"},
+      {"action": "waitFor", "selector": ".draft-coach", "timeout": 2000},
+      {"action": "click", "selector": ".draft-coach"}
+    ]},
+    {"action": "while", "max": 6, "until": "!!document.querySelector('.da-btn.primary.big')", "steps": [
+      {"action": "if", "condition": "!document.querySelector('.draft-card-slot .dc-tier-label') || Array.from(document.querySelectorAll('.draft-card-slot .dc-tier-label')).some(l => !l.textContent.trim())", "steps": [
+        {"action": "sleep", "ms": 8000, "_comment": "cover worst case (round 1) entryDone timing"},
+        {"action": "if", "condition": "!!document.querySelector('.draft-coach')", "steps": [{"action": "click", "selector": ".draft-coach"}]},
+        {"action": "sleep", "ms": 300},
+        {"action": "if", "condition": "!!document.querySelector('.draft-coach')", "steps": [{"action": "click", "selector": ".draft-coach"}]},
+        {"action": "click", "selector": ".draft-card-slot:nth-child(1) .draft-card-anim"},
+        {"action": "sleep", "ms": 7500},
+        {"action": "waitFor", "selector": ".draft-card-slot .dc-tier-label", "timeout": 15000}
+      ]},
+      {"action": "sleep", "ms": 300},
+      {"action": "if", "condition": "!!document.querySelector('.draft-coach')", "steps": [{"action": "click", "selector": ".draft-coach"}]},
+      {"action": "sleep", "ms": 300},
+      {"action": "if", "condition": "!!document.querySelector('.draft-coach')", "steps": [{"action": "click", "selector": ".draft-coach"}]},
+      {"action": "click", "selector": ".draft-card-slot:nth-child(1) .draft-card-anim"},
+      {"action": "waitFor", "selector": ".draft-card-anim.picked", "timeout": 8000},
+      {"action": "waitForNotVisible", "selector": ".draft-card-anim.picked", "timeout": 30000}
+    ]},
+    {"action": "waitFor", "selector": ".da-btn.primary.big", "timeout": 15000},
+    {"action": "sleep", "ms": 500, "_comment": "let assign-phase FTUE coach mount if present"},
+    {"action": "if", "condition": "!!document.querySelector('.draft-coach')", "steps": [
+      {"action": "click", "selector": ".draft-coach", "_comment": "dismiss 'Want me to help? Just click Auto Assign' coach"}
+    ]},
+    {"action": "sleep", "ms": 300},
+    {"action": "extract", "expression": "!!Array.from(document.querySelectorAll('.da-btn.ghost span')).find(s => s.textContent.trim() === 'AUTO ASSIGN')", "into": "hasAutoBefore"},
+    {"action": "screenshot", "path": "/tmp/assign-before-auto.png"},
+    {"action": "click", "selector": "text=AUTO ASSIGN"},
+    {"action": "sleep", "ms": 300},
+    {"action": "extract", "expression": "!!Array.from(document.querySelectorAll('.da-btn.ghost span')).find(s => s.textContent.trim() === 'AUTO ASSIGN')", "into": "hasAutoAfter"},
+    {"action": "extract", "expression": "document.querySelector('.dp-val')?.textContent || null", "into": "assignedCountText"},
+    {"action": "screenshot", "path": "/tmp/assign-after-auto.png"}
+  ]
+}
+

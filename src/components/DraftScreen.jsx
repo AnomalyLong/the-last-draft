@@ -1586,12 +1586,14 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
               <span>▶</span>
               <span>{saving ? 'SAVING...' : 'START GAME'}</span>
             </button>
-            <button className="da-btn ghost"
-              disabled={saving}
-              onClick={autoAssign}
-              onMouseEnter={() => playCursor()}>
-              <span>✨</span><span>AUTO ASSIGN</span>
-            </button>
+            {!canStart && (
+              <button className="da-btn ghost"
+                disabled={saving}
+                onClick={autoAssign}
+                onMouseEnter={() => playCursor()}>
+                <span>✨</span><span>AUTO ASSIGN</span>
+              </button>
+            )}
             {canStart && !isFtue && (
               <button className="da-btn ghost"
                 disabled={saving}

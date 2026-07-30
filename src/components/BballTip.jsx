@@ -2,17 +2,30 @@ import React from 'react';
 import { BballChar } from './BballChar.jsx';
 import { PixelText } from './PixelText.jsx';
 import typingSound from '../sound/typing1.ogg';
+import { sfxVolume, subscribeAudioSettings } from '../sound/audioSettings.js';
 
 // ── Audio ──────────────────────────────────────────────────────────────────────
+// Two alternating nodes chained back-to-back to fake a seamless loop. Volume is
+// NOT baked in at module load — it's derived from sfxVolume() on every play so
+// the global mute is respected, and re-applied on settings changes so muting
+// mid-sentence goes silent immediately instead of at the next chain hop.
+const TYPING_BASE = 0.5;
 const _ta = [new Audio(typingSound), new Audio(typingSound)];
-_ta.forEach(a => { a.volume = 0.5; });
 let _taActive = false;
 let _taChainTimer = null;
+
+function _applyTypingVolume() {
+  const v = TYPING_BASE * sfxVolume();
+  _ta.forEach(a => { a.volume = v; });
+}
+_applyTypingVolume();
+subscribeAudioSettings(_applyTypingVolume);
 
 function _chainPlay(idx) {
   if (!_taActive) return;
   const a = _ta[idx];
   a.currentTime = 0;
+  a.volume = TYPING_BASE * sfxVolume();
   a.play().catch(() => {});
   function schedule() {
     const delay = Math.max(0, (a.duration - 0.02) * 1000);

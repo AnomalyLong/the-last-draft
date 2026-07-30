@@ -1,49 +1,22 @@
-## Devvit Vibe Coding Template
+# The Last Draft 🏀
 
-> Experimental! Template may change!
+**The Last Draft** is a pixel-art basketball game for Reddit (built with Devvit). Draft a
+5-player roster of quirky multiverse characters, assign them to positions (PG/SG/SF/PF/C)
+based on their stats, then play fast-paced arcade basketball matches against other players.
+Collect new characters through drafts and auctions, level up via a battle pass, and climb
+the ranks of the "Multiverse Basketball Association."
 
-A starter to build web applications on Reddit's developer platform
+## Teaser
 
-- [Devvit](https://developers.reddit.com/): A way to build and deploy immersive games on Reddit
-- [Vite](https://vite.dev/): For compiling the webView
-- [React](https://react.dev/): For UI
-- [Hono](https://hono.dev/): For backend logic
-- [TRPC](https://trpc.io/): Type safe RPCs from server to client
-- [Tailwind](https://tailwindcss.com/): For styles
-- [TypeScript](https://www.typescriptlang.org/): For type safety
+[![Watch the teaser](https://img.youtube.com/vi/WZCFpNp_Om8/maxresdefault.jpg)](https://youtu.be/WZCFpNp_Om8)
 
-## Getting Started
+▶️ [Watch on YouTube](https://youtu.be/WZCFpNp_Om8)
 
-> Make sure you have Node 22 downloaded on your machine before running!
+## Tech
 
-1. Run `npm create devvit@latest --template=vibe-coding`
-2. Go through the installation wizard. You will need to create a Reddit account and connect it to Reddit developers
-3. Copy the command on the success page into your terminal
+Built on [Devvit](https://developers.reddit.com/) with React (client) + a Devvit/Hono
+server, using tRPC for client-server calls.
 
-## Local Dev Tools (no Reddit required)
-
-A standalone Vite app for debugging and previewing game assets without deploying to Reddit.
-
-```
-npm run dev:tools
-```
-
-Opens at `http://localhost:5174`. Features:
-
-- **Sprite Preview** — all sprite animations displayed in a grid. Each card has play/pause, frame step, a scrubber, zoom controls, and a jersey color picker.
-
-No Devvit account or Reddit connection needed. Safe to use for rapid iteration on sprites and UI.
-
-## Commands
-
-- `npm run dev`: Starts a development server where you can develop your application live on Reddit.
-- `npm run dev:tools`: Starts the local dev tools preview (no Reddit required).
-- `npm run build`: Builds your client and server projects
-- `npm run deploy`: Uploads a new version of your app
-- `npm run launch`: Publishes your app for review
-- `npm run login`: Logs your CLI into Reddit
-- `npm run type-check`: Type checks, lints, and prettifies your app
-
-## MCP Integration
-
-If you'd like to use the Devvit MCP server, please visit: https://developers.reddit.com/docs/next/guides/ai
+- `npm run dev` — run the Devvit playtest server
+- `npm run test` — run the test suite (vitest)
+- `npm run build` — build the client/server bundles

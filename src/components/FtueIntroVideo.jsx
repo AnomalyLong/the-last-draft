@@ -1,11 +1,22 @@
 import React from 'react';
 import videoSrc from '../videos/MBAtest1080.mp4';
+import { audioSettings, musicVolume, subscribeAudioSettings } from '../sound/audioSettings.js';
 
 export function FtueIntroVideo({ onDone }) {
   const videoRef = React.useRef(null);
   // Mobile browsers (iOS Safari especially) block autoplay of unmuted media.
   // Start muted so the video begins immediately, then unmute on the first tap.
-  const [muted, setMuted] = React.useState(true);
+  const [tapMuted, setTapMuted] = React.useState(true);
+  // The global mute from the title-strip speaker button. Tracked as state (not
+  // read inline) so flipping mute while the video plays re-renders and silences
+  // it immediately. This video used to keep its own `muted` flag only, which is
+  // why it kept playing audio through a global mute.
+  const [globalMuted, setGlobalMuted] = React.useState(() => audioSettings.muted);
+  React.useEffect(
+    () => subscribeAudioSettings((s) => setGlobalMuted(s.muted)),
+    [],
+  );
+  const effectiveMuted = tapMuted || globalMuted;
   const [needsTap, setNeedsTap] = React.useState(true);
   const [canSkip, setCanSkip] = React.useState(false);
   const [confirmSkip, setConfirmSkip] = React.useState(false);
@@ -17,12 +28,15 @@ export function FtueIntroVideo({ onDone }) {
 
   const handleClick = () => {
     if (needsTap) {
-      // First tap: unmute + ensure play started within a user gesture.
-      setMuted(false);
+      // First tap: lift the autoplay mute + ensure play started within a user
+      // gesture. A global mute still wins — the tap clears the autoplay gate,
+      // it does not override the user's mute setting.
+      setTapMuted(false);
       setNeedsTap(false);
       const v = videoRef.current;
       if (v) {
-        v.muted = false;
+        v.muted = audioSettings.muted;
+        v.volume = musicVolume();
         v.play().catch(() => {});
       }
       // Allow skip after a short delay so this tap doesn't double as a skip.
@@ -47,6 +61,15 @@ export function FtueIntroVideo({ onDone }) {
     if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
   }, []);
 
+  // Keep the live element in sync — `volume` has no JSX equivalent, and muted
+  // must be forced imperatively for flips that happen after mount.
+  React.useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = effectiveMuted;
+    v.volume = musicVolume();
+  }, [effectiveMuted, globalMuted]);
+
   return (
     <div
       data-testid="ftue-intro-video"
@@ -62,7 +85,7 @@ export function FtueIntroVideo({ onDone }) {
         src={videoSrc}
         autoPlay
         playsInline
-        muted={muted}
+        muted={effectiveMuted}
         preload="auto"
         controls={false}
         disablePictureInPicture
@@ -107,7 +130,9 @@ export function FtueIntroVideo({ onDone }) {
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
           animation: 'tappulse 1.4s ease-in-out infinite',
         }}>
-          <span style={{ lineHeight: 1 }}>TAP TO ENABLE SOUND</span>
+          <span style={{ lineHeight: 1 }}>
+            {globalMuted ? 'TAP TO CONTINUE' : 'TAP TO ENABLE SOUND'}
+          </span>
           <span style={{
             fontSize: 22, lineHeight: 1, display: 'block',
             animation: 'fingerTap 1s ease-in-out infinite',
