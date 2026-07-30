@@ -1478,3 +1478,62 @@
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ── TitleStrip: events label ⇄ calendar icon, and the energy box ──────
+   The EVENTS button keeps its bordered "chip" look on tablet/desktop. Below
+   the 480px mobile breakpoint the text label is swapped for a calendar glyph
+   and the chrome (border/background/padding) is dropped so it reads as a bare
+   icon next to the credits + energy readouts. */
+.lb2-ts-events {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.lb2-ts-events-icon { display: none; flex: none; }
+
+/* Energy readout — bare icon + count, no chrome. Amber separates "resource you
+   spend" from the teal actions. */
+.lb2-ts-energy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #ffd97a;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.lb2-ts-energy-icon {
+  flex: none;
+  filter: drop-shadow(0 0 5px rgba(255, 217, 122, 0.75));
+}
+/* "3/5" — the denominator is de-emphasised rather than hidden. */
+.lb2-ts-energy-val em {
+  font-style: normal;
+  opacity: 0.55;
+}
+/* Drained: go grey so a full bar always reads as the "good" state. */
+.lb2-ts-energy.is-empty {
+  color: var(--c-ink-dim);
+}
+.lb2-ts-energy.is-empty .lb2-ts-energy-icon { filter: none; opacity: 0.7; }
+
+@media (max-width: 480px) {
+  .lb2-ts-events {
+    border: none;
+    background: none;
+    padding: 4px 6px;
+  }
+  /* :hover sticks on touch after a tap — neutralise it with the border gone. */
+  .lb2-ts-events:hover {
+    background: none;
+    border-color: transparent;
+  }
+  .lb2-ts-events-label { display: none; }
+  .lb2-ts-events-icon { display: block; }
+
+  .lb2-ts-energy { gap: 4px; }
+  .lb2-ts-right { gap: 7px; }
+}

@@ -113,7 +113,7 @@ function NotifDropdown({ announcements, onSelect }) {
   );
 }
 
-export function TitleStrip({ credits = 0, onEvents }) {
+export function TitleStrip({ credits = 0, energy, maxEnergy = 5, onEvents }) {
   const [showNotifs, setShowNotifs] = React.useState(false);
   const announcements = useAnnouncements();
 
@@ -152,11 +152,34 @@ export function TitleStrip({ credits = 0, onEvents }) {
       <button
         className="lb2-ts-events"
         onClick={onEvents}
+        aria-label="Events"
         data-testid="title-events"
       >
-        EVENTS
+        {/* Label shown on wider viewports; swapped for a calendar icon
+            below the 480px mobile breakpoint (see lobby.css) so the strip
+            stays compact on phones. */}
+        <span className="lb2-ts-events-label">EVENTS</span>
+        <svg className="lb2-ts-events-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="3" y="4.5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" />
+          <path d="M3 9.5H21" stroke="currentColor" strokeWidth="2" />
+          <path d="M8 2.5V6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M16 2.5V6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <rect x="6.5" y="12.5" width="3" height="3" fill="currentColor" />
+        </svg>
       </button>
       <div className="lb2-ts-right">
+        {energy != null && (
+          <div
+            className={`lb2-ts-energy${energy <= 0 ? ' is-empty' : ''}`}
+            aria-label={`Energy ${energy} of ${maxEnergy}`}
+            data-testid="title-energy"
+          >
+            <svg className="lb2-ts-energy-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <span className="lb2-ts-energy-val">{energy}<em>/{maxEnergy}</em></span>
+          </div>
+        )}
         <span className="lb2-ts-time">{(credits ?? 0).toLocaleString()} CR</span>
         <button
           className={`lb2-ts-mute${muted ? ' active' : ''}`}

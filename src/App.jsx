@@ -33,10 +33,10 @@ import { TitleStrip } from './components/TitleStrip.jsx';
 // Column wrapper that pins the global TitleStrip (lobby header) above a
 // full-screen scene. The wrapped screens use `position: absolute; inset: 0`
 // roots, so the inner relative container confines them below the strip.
-function ScreenWithStrip({ credits, onEvents, children }) {
+function ScreenWithStrip({ credits, energy, maxEnergy, onEvents, children }) {
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 55, display: 'flex', flexDirection: 'column' }}>
-      <TitleStrip credits={credits} onEvents={onEvents} />
+      <TitleStrip credits={credits} energy={energy} maxEnergy={maxEnergy} onEvents={onEvents} />
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>{children}</div>
     </div>
   );
@@ -103,6 +103,10 @@ export default function App() {
     try { return devvitContext?.username ?? ''; } catch { return ''; }
   });
   const [serverCredits, setServerCredits] = React.useState(0);
+  // null until user.init resolves — TitleStrip hides the box while unknown
+  // so it never flashes a wrong "0/5".
+  const [serverEnergy, setServerEnergy] = React.useState(null);
+  const [serverMaxEnergy, setServerMaxEnergy] = React.useState(5);
   // Paid (credit) draft: which mode the DraftScreen runs in, and the
   // server-priced cost of the user's next paid draft this month.
   const [draftMode, setDraftMode] = React.useState('free'); // 'free' | 'credit'
@@ -166,6 +170,8 @@ export default function App() {
     return Promise.all([
       trpc.user.init.query().then((user) => {
         setServerCredits(user.credits);
+        setServerEnergy(user.energy ?? null);
+        if (user.maxEnergy) setServerMaxEnergy(user.maxEnergy);
         setFreeDrafts(user.freeDrafts ?? 0);
         setPaidPicks(user.paidPicks ?? 0);
         if (user.teamName) setHomeTeamName(user.teamName);
@@ -221,6 +227,8 @@ export default function App() {
   React.useEffect(() => {
     trpc.user.init.query().then((user) => {
       setServerCredits(user.credits);
+      setServerEnergy(user.energy ?? null);
+      if (user.maxEnergy) setServerMaxEnergy(user.maxEnergy);
       setFreeDrafts(user.freeDrafts ?? 0);
       setPaidPicks(user.paidPicks ?? 0);
       setIsFtue(user.gamesPlayed === 0);
@@ -427,6 +435,8 @@ export default function App() {
         <LobbyScreen
           username={username}
           credits={serverCredits}
+          energy={serverEnergy}
+          maxEnergy={serverMaxEnergy}
           homeRoster={homeRoster}
           missions={serverMissions}
           isFtue={isFtue}
@@ -466,7 +476,7 @@ export default function App() {
       )}
 
       {!isInline && scene === 'featuredEvents' && (
-        <ScreenWithStrip credits={serverCredits}>
+        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy}>
           <FeaturedEventsScreen
             username={username}
             credits={serverCredits}
@@ -481,7 +491,7 @@ export default function App() {
       )}
 
       {!isInline && scene === 'battlePass' && (
-        <ScreenWithStrip credits={serverCredits} onEvents={() => setScene('featuredEvents')}>
+        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} onEvents={() => setScene('featuredEvents')}>
           <BattlePassScreen
             username={username}
             credits={serverCredits}
@@ -500,7 +510,7 @@ export default function App() {
       )}
 
       {!isInline && scene === 'collection' && (
-        <ScreenWithStrip credits={serverCredits} onEvents={() => setScene('featuredEvents')}>
+        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} onEvents={() => setScene('featuredEvents')}>
           <CollectionScreen
             roster={rawRoster}
             lineup={rawLineup}
@@ -514,7 +524,7 @@ export default function App() {
       )}
 
       {!isInline && scene === 'draft' && (
-        <ScreenWithStrip credits={serverCredits} onEvents={() => setScene('featuredEvents')}>
+        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} onEvents={() => setScene('featuredEvents')}>
         <DraftScreen
           homeTeamName={homeTeamName}
           isFtue={isFtue}
@@ -579,7 +589,7 @@ export default function App() {
       )}
 
       {!isInline && scene === 'draftHub' && (
-        <ScreenWithStrip credits={serverCredits} onEvents={() => setScene('featuredEvents')}>
+        <ScreenWithStrip credits={serverCredits} energy={serverEnergy} maxEnergy={serverMaxEnergy} onEvents={() => setScene('featuredEvents')}>
         <DraftHubScreen
           freeDrafts={freeDrafts}
           paidPicks={paidPicks}

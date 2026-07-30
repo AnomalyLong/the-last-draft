@@ -579,7 +579,7 @@ export function BottomNav({ onPlay, onCollection, onDraft, onAuction, onOptions,
 }
 
 // ── Main LobbyScreen ──────────────────────────────────────
-export default function LobbyScreen({ username, credits, homeRoster, missions, isFtue, onPlay, onCollection, onDraft, onAuction, onOptions, onEvents, onCreateChallenge, challengeActive, onViewChallenge, onClaim }) {
+export default function LobbyScreen({ username, credits, energy, maxEnergy, homeRoster, missions, isFtue, onPlay, onCollection, onDraft, onAuction, onOptions, onEvents, onCreateChallenge, challengeActive, onViewChallenge, onClaim }) {
   const [selectedMode, setSelectedMode] = React.useState('training');
   const [modal, setModal] = React.useState(() => !username ? 'guest' : null);
   const [coachDismissed, setCoachDismissed] = React.useState(false);
@@ -670,7 +670,7 @@ export default function LobbyScreen({ username, credits, homeRoster, missions, i
     <div className={`lobby2${isFtue && !coachDismissed && !modal ? ' lobby2-ftue' : ''}`} data-testid="lobby-screen">
 
       {/* Title strip (shared with draft/collection/events screens) */}
-      <TitleStrip credits={credits} onEvents={onEvents} />
+      <TitleStrip credits={credits} energy={energy} maxEnergy={maxEnergy} onEvents={onEvents} />
 
       {/* Scrollable body */}
       <div className="lb2-body">

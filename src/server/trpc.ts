@@ -4,7 +4,7 @@ import { Context } from './context';
 import { context, reddit, redis } from '@devvit/web/server';
 import { z } from 'zod';
 
-import { getOrCreateUser, getUser, grantFreeDrafts, setTeamName, userKey, ledgerKey, gamesKey, MAX_ENERGY, USERS_INDEX_KEY } from './core/user';
+import { getOrCreateUser, getUser, grantFreeDrafts, setTeamName, userKey, ledgerKey, gamesKey, MAX_ENERGY, computeEnergy, USERS_INDEX_KEY } from './core/user';
 import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, setLineup, updatePlayerProgress, buildRosterForUser, transferPlayer, ROLES, type Role, rosterKey, lineupKey } from './core/player';
 import { SKIN_PALETTES } from '../shared/palettes';
 import { createChallengePost, canCreateChallengePost, getChallengePost, listChallengeResults, getMyChallenge, challengePostKey } from './core/post';
@@ -90,7 +90,14 @@ export const appRouter = t.router({
     init: publicProcedure.query(async () => {
       const username = await requireUsername();
       const currentUser = await reddit.getCurrentUser();
-      return await getOrCreateUser(username, currentUser?.id ?? username);
+      const user = await getOrCreateUser(username, currentUser?.id ?? username);
+      // Stored energy is only accurate as of energyUpdatedAt — apply the
+      // regen curve here so the client never renders a stale value.
+      return {
+        ...user,
+        energy: computeEnergy(user.energy, user.energyUpdatedAt),
+        maxEnergy: MAX_ENERGY,
+      };
     }),
 
     get: publicProcedure.query(async () => {
