@@ -13,6 +13,7 @@
 //     addLog: (text, type?) => void,
 //     trpc,                              // tRPC client
 //     setShowAdminOverlay?: (b) => void, // title only
+//     enterDebugCourt?: () => void,      // title only
 //     handleGameCommand?: (op, args) => void } // game only
 
 import { trpc } from './trpc';
@@ -27,6 +28,7 @@ export const COMMAND_META = {
 
   // ── Title only ────────────────────────────────────────────────────────
   admin: { scope: 'title', help: 'admin — open admin overlay (admins only)' },
+  court: { scope: 'title', help: 'court — enter debug court sandbox (WOLVES vs HAWKS)' },
 
   // ── Game only ─────────────────────────────────────────────────────────
   move:             { scope: 'game', help: 'move <dx> <dy>    — move ball carrier by pixels' },
@@ -55,6 +57,9 @@ export const COMMAND_META = {
   testLevelUp:      { scope: 'game', help: 'testLevelUp       — trigger level-up sequence for ball carrier' },
   testPickPlay:     { scope: 'game', help: 'testPickPlay      — open the play picker overlay' },
   testPickDefense:  { scope: 'game', help: 'testPickDefense   — open the defense picker (auto-closes in 3s)' },
+  abilities:        { scope: 'game', help: 'abilities         — list all abilities + who currently has each' },
+  ability:          { scope: 'game', help: 'ability <name> [all|home|away|ball|PG..C] — grant an ability (default all)' },
+  clearAbilities:   { scope: 'game', help: 'clearAbilities [target] — remove granted abilities (draft ones stay)' },
 };
 
 // Title/shared command implementations
@@ -76,6 +81,21 @@ const sharedImpls = {
         ctx.closeConsole?.();
       })
       .catch(() => {});
+  },
+
+  // Debug court: drop straight onto a live court with fixture teams, skipping
+  // matchmaking/draft/energy entirely. Sandbox — no game session is opened, so
+  // nothing is recorded server-side and no energy is spent. Intended for
+  // animation calibration (e.g. testMoveAway + testSpinDunk).
+  court(args, ctx) {
+    if (!ctx.enterDebugCourt) {
+      ctx.addLog('debug court unavailable in this context', 'err');
+      return;
+    }
+    ctx.addLog('entering debug court — WOLVES (home) vs HAWKS (away)');
+    ctx.addLog('sandbox: no energy spent, no server writes. use the in-game console.');
+    ctx.enterDebugCourt();
+    ctx.closeConsole?.();
   },
 
   getUserFlairBySubreddit(args, ctx) {

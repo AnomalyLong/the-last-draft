@@ -317,7 +317,7 @@ export default function App() {
 
   const handleTitleCommand = (cmd) => {
     const addTitleLog = (text, type = 'out') => setTitleLogs(prev => [...prev, { text, type }]);
-    runCommand(cmd, { scene: 'title', addLog: addTitleLog, setShowAdminOverlay, closeConsole: () => setShowTitleDebug(false) });
+    runCommand(cmd, { scene: 'title', addLog: addTitleLog, setShowAdminOverlay, enterDebugCourt, closeConsole: () => setShowTitleDebug(false) });
   };
 
   const [gameTip, setGameTip] = React.useState(null);
@@ -425,6 +425,34 @@ export default function App() {
   const gameSessionRef = React.useRef(null); // { gameId, token, seq }
   const clientScoreRef = React.useRef(0);    // tracks only post-session-ready makes
 
+  // ── Debug court sandbox (admin `court` command) ────────────────────
+  // True while the user is on a throwaway fixture court entered from the
+  // title debug console. Nothing here talks to the server: no game.start,
+  // no recordPlay (onPlayEvent no-ops without a session), no game.end, no
+  // FTUE mutation. State only, cleared on exit.
+  const [sandboxMode, setSandboxMode] = React.useState(false);
+
+  // Fixture matchup so calibration work is reproducible run-to-run:
+  // OPPONENTS[0] WOLVES as home, OPPONENTS[1] HAWKS as away. Home players get
+  // no serverId, which is what keeps the per-player progress writes in
+  // onDismissGameOver from firing against real roster rows.
+  const enterDebugCourt = React.useCallback(() => {
+    const home = OPPONENTS[0];
+    const away = OPPONENTS[1];
+    setHomeTeamName(home.name);
+    setHomeRoster(withDerivedPalette(home.players).map(p => ({
+      ...p, rarity: p.rarity ?? 'common', ability: p.ability ?? null,
+      abilities: p.abilities ?? [], level: 1, xp: 0,
+    })));
+    setAwayTeam({ ...away, players: withDerivedPalette(away.players) });
+    gameSessionRef.current = null;
+    clientScoreRef.current = 0;
+    setGameTip(null);            // no tip gate — the tip's dismiss opens a session
+    setShowTitleDebug(false);
+    setSandboxMode(true);
+    setScene('game');
+  }, []);
+
   const onPlayEvent = (play) => {
     const session = gameSessionRef.current;
     if (!session) return; // session not ready yet — skip recording and counting
@@ -437,7 +465,9 @@ export default function App() {
     trpc.game.recordPlay.mutate({ gameId: session.gameId, token: session.token, sequence: seq, play }).catch(() => {});
   };
 
-  const gameState = useGame({ homeRoster, awayRoster: awayTeam.players, isFtue, onPlayEvent });
+  // isFtue is forced off in the sandbox: the FTUE defense explainer and forced
+  // first level-up would interrupt animation testing.
+  const gameState = useGame({ homeRoster, awayRoster: awayTeam.players, isFtue: isFtue && !sandboxMode, onPlayEvent });
 
   const withLevelUpBonuses = (roster, baseId) =>
     roster.map((r, i) => {
@@ -463,6 +493,12 @@ export default function App() {
 
   return (
     <div data-testid="game-root"
+      /* Test hooks: team identity is never painted on the court (only
+         position labels, which are identical for both teams), so expose
+         the matchup + sandbox flag as data attributes for assertions. */
+      data-home-team={homeTeamName}
+      data-away-team={awayTeam?.name}
+      data-sandbox={sandboxMode ? '1' : '0'}
       /* NOTE on `lineHeight: 0` below: this is THE source of the inherited
          zero line-height that every text container in this app has to defend
          against. It kills the whitespace gap under inline sprites/images, so
@@ -797,6 +833,15 @@ export default function App() {
             setGameTip(null);
           }}
           onDismissGameOver={() => {
+            // Debug court: no session was ever opened, so there is nothing to
+            // settle. Return to the lobby WITHOUT touching game.end, FTUE, or
+            // player progress — the markFtuePlayed fallback below would
+            // otherwise permanently clear a real user's FTUE flag.
+            if (sandboxMode) {
+              setSandboxMode(false);
+              setScene('title');
+              return;
+            }
             const session = gameSessionRef.current;
             if (session) {
               const score = clientScoreRef.current;

@@ -1,0 +1,93 @@
+{
+  "name": "`ability` debug command grants abilities to targeted players on the debug court",
+  "description": "Verifies the new game-scope ability/abilities/clearAbilities commands. Fixture rosters (WOLVES/HAWKS in src/opponents.json) carry no `ability` field, so every player starts with zero abilities and all counts are deterministic. Assertions are marker-div + waitFor, because the runner's `eval` action never fails a run — a bare eval would report green even if it threw.",
+  "steps": [
+    { "action": "switchUser", "username": "bob" },
+    { "action": "reload" },
+    { "action": "waitFor", "selector": "[data-testid='lobby-screen']", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']" },
+    { "action": "sleep", "ms": 300 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']" },
+
+    { "action": "waitFor", "selector": "[data-testid='dbg-toggle']", "timeout": 8000 },
+    { "action": "click", "selector": "[data-testid='dbg-toggle']" },
+    { "action": "waitFor", "selector": "[data-testid='debug-panel']", "timeout": 5000 },
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "court" },
+    { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()" },
+    { "action": "waitFor", "selector": "[data-testid='game-court']", "timeout": 15000 },
+    { "action": "waitFor", "selector": "[data-testid='game-root'][data-sandbox='1']", "timeout": 5000 },
+    { "action": "sleep", "ms": 800 },
+
+    { "action": "waitFor", "selector": "[data-testid='dbg-toggle']", "timeout": 8000 },
+    { "action": "click", "selector": "[data-testid='dbg-toggle']" },
+    { "action": "waitFor", "selector": "[data-testid='debug-input']", "timeout": 5000 },
+
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "abilities" },
+    { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()" },
+    { "action": "sleep", "ms": 500 },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-baseline').forEach(n=>n.remove()); const t = (document.querySelector('[data-testid=debug-log]')||{}).innerText || ''; const none = (t.match(/\\/(PG|SG|SF|PF|C): \\(none\\)/g) || []).length; if (none === 10) { const d = document.createElement('div'); d.id = 'probe-baseline'; document.body.appendChild(d); } return 'none-count=' + none; })()",
+      "into": "baselineNone"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-baseline",
+      "timeout": 4000,
+      "_comment": "ASSERTION 1 (baseline): all 10 fixture players report (none). Proves the later grant is caused by the command, not pre-existing draft abilities."
+    },
+
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "ability spindunk all" },
+    { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()" },
+    { "action": "sleep", "ms": 500 },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-grant').forEach(n=>n.remove()); const t = (document.querySelector('[data-testid=debug-log]')||{}).innerText || ''; if (t.indexOf('DUNK MASTER \\u2192 10 player(s) [all]') !== -1) { const d = document.createElement('div'); d.id='probe-grant'; document.body.appendChild(d); } return t.slice(-300); })()",
+      "into": "grantLog"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-grant",
+      "timeout": 4000,
+      "_comment": "ASSERTION 2: the `spindunk` alias resolved to DUNK MASTER and granted to all 10. Spin dunk is NOT an ability — it is the animation DUNK MASTER triggers in triggerDunk (useGame.js:1416)."
+    },
+
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "abilities" },
+    { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()" },
+    { "action": "sleep", "ms": 500 },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-readback').forEach(n=>n.remove()); const t = (document.querySelector('[data-testid=debug-log]')||{}).innerText || ''; const tail = t.slice(t.lastIndexOf('\\u2014 current grants \\u2014')); const hits = (tail.match(/DUNK MASTER/g) || []).length; if (hits === 10) { const d = document.createElement('div'); d.id='probe-readback'; document.body.appendChild(d); } return 'hits=' + hits; })()",
+      "into": "readbackHits"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-readback",
+      "timeout": 4000,
+      "_comment": "ASSERTION 3 (the real one): read back through hasAbility() — the SAME function triggerDunk calls to choose the spin-dunk branch. All 10 players now resolve DUNK MASTER, on both home and away."
+    },
+
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "clearAbilities all" },
+    { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()" },
+    { "action": "sleep", "ms": 400 },
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "ability ironblock away" },
+    { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()" },
+    { "action": "sleep", "ms": 400 },
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "abilities" },
+    { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()" },
+    { "action": "sleep", "ms": 500 },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-target').forEach(n=>n.remove()); const t = (document.querySelector('[data-testid=debug-log]')||{}).innerText || ''; const tail = t.slice(t.lastIndexOf('\\u2014 current grants \\u2014')); const lines = tail.split('\\n').filter(l => /(home|away)\\/(PG|SG|SF|PF|C):/.test(l)); const awayIron = lines.filter(l => l.indexOf('away/') !== -1 && l.indexOf('IRON BLOCK') !== -1).length; const homeAny = lines.filter(l => l.indexOf('home/') !== -1 && l.indexOf('(none)') === -1).length; const dunkLeft = (tail.match(/DUNK MASTER/g) || []).length; if (awayIron === 5 && homeAny === 0 && dunkLeft === 0) { const d = document.createElement('div'); d.id='probe-target'; document.body.appendChild(d); } return JSON.stringify({awayIron, homeAny, dunkLeft}); })()",
+      "into": "targetCounts"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-target",
+      "timeout": 4000,
+      "_comment": "ASSERTION 4: clearAbilities wiped the previous grants (dunkLeft=0) and `away` targeting is exact — 5 away players have IRON BLOCK, 0 home players have anything."
+    },
+
+    { "action": "screenshot", "path": "/tmp/ability-cmd.png" }
+  ]
+}

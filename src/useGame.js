@@ -1502,7 +1502,13 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         const riseEnd = 7 * FRAME_MS;
         const hangEnd = 15 * FRAME_MS;
         const jumpDur = 19 * FRAME_MS;
-        const rimCx = basketCx - 21;
+        // Hang just short of the basket centre, on the side the dunker is
+        // driving in from. This offset MUST mirror by team: home attacks the
+        // right basket moving L->R, away attacks the left basket moving R->L.
+        // A fixed -21 only calibrated home; for away it pushed the dunker 21px
+        // PAST the rim (cx 21 instead of 63), hence the overshoot.
+        const RIM_APPROACH_OFFSET = 21;
+        const rimCx = basketCx + (isHome ? -RIM_APPROACH_OFFSET : RIM_APPROACH_OFFSET);
         const rimCy = startCy - 17;
         const jumpStart = performance.now();
         const jumpAnim = (now) => {
@@ -2462,6 +2468,73 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         const carrier = playersRef.current.find(p => p.hasBall) || playersRef.current[0];
         playLevelUp(); playFanfare(); setLevelUpState({ player: { ...carrier }, abilities: pickLevelUpChoices(carrier, rosterRef, abilityOverridesRef) });
         addLog(`${carrier.role} leveling up!`);
+      } else if (op === 'abilities') {
+        addLog('— available abilities —');
+        ABILITIES.forEach(a => addLog(`  ${a.id}. ${a.name} — ${a.desc}`));
+        addLog('— current grants —');
+        playersRef.current.forEach(p => {
+          const owned = ABILITIES.filter(a => hasAbility(p, a.name)).map(a => a.name);
+          addLog(`  ${p.team}/${p.role}: ${owned.length ? owned.join(', ') : '(none)'}`);
+        });
+
+      } else if (op === 'ability' || op === 'clearAbilities') {
+        // Target is the LAST arg if it looks like one; everything before it is
+        // the ability name (which may contain spaces, e.g. "dunk master").
+        const TARGETS = ['all', 'home', 'away', 'ball', 'pg', 'sg', 'sf', 'pf', 'c'];
+        const argv = parts.slice(1); // parts[0] is the op (see shim above)
+        let target = 'all';
+        if (argv.length && TARGETS.includes(argv[argv.length - 1].toLowerCase())) {
+          target = argv.pop().toLowerCase();
+        }
+
+        const matchTarget = (p) => {
+          if (target === 'all') return true;
+          if (target === 'home' || target === 'away') return p.team === target;
+          if (target === 'ball') return p.hasBall;
+          return p.role.toLowerCase() === target;
+        };
+        const targets = playersRef.current.filter(matchTarget);
+        if (!targets.length) { addLog(`no players match target "${target}"`, 'err'); return; }
+
+        if (op === 'clearAbilities') {
+          // Only clears debug/level-up grants — draft abilities live on the
+          // roster object and are not touched here.
+          targets.forEach(p => abilityOverridesRef.current.delete(p.id));
+          addLog(`cleared granted abilities on ${targets.length} player(s) [${target}]`);
+          addLog('note: draft abilities from the roster are unaffected');
+          return;
+        }
+
+        const norm = (x) => String(x).toLowerCase().replace(/[^a-z0-9]/g, '');
+        const query = norm(argv.join(''));
+        if (!query) { addLog('usage: ability <name> [all|home|away|ball|PG..C]', 'err'); return; }
+
+        // "spin dunk" is an animation, not an ability — it is what DUNK MASTER
+        // produces, so accept it as an alias to avoid confusion.
+        const ALIASES = { spindunk: 'dunkmaster', dunkspin: 'dunkmaster' };
+        const key = ALIASES[query] ?? query;
+
+        const ability =
+          ABILITIES.find(a => String(a.id) === key) ||
+          ABILITIES.find(a => norm(a.name) === key) ||
+          ABILITIES.find(a => norm(a.name).startsWith(key));
+
+        if (!ability) {
+          addLog(`unknown ability "${argv.join(' ')}"`, 'err');
+          addLog(`try: ${ABILITIES.map(a => a.name).join(' | ')}`);
+          return;
+        }
+
+        let granted = 0, already = 0;
+        targets.forEach(p => {
+          if (hasAbility(p, ability.name)) { already += 1; return; }
+          const extras = abilityOverridesRef.current.get(p.id) ?? [];
+          abilityOverridesRef.current.set(p.id, [...extras, ability]);
+          granted += 1;
+        });
+        addLog(`${ability.name} → ${granted} player(s) [${target}]${already ? `, ${already} already had it` : ''}`);
+        if (ability.name === 'DUNK MASTER') addLog('every dunk from these players is now a SPIN DUNK');
+
       } else {
         addLog(`unknown: "${op}" — type help`, 'err');
       }

@@ -1,0 +1,82 @@
+{
+  "name": "dbg-panel-mobile-fit",
+  "description": "Admin debug console panel must fit within the mobile viewport (no horizontal overflow). Regression test for the fixed width:400 panel overflowing narrow screens. Assertion works by injecting #fit-pass only when the measurement is clean; the following waitFor times out (hard fail) if it is absent.",
+  "steps": [
+    {
+      "action": "reload",
+      "waitMs": 3000,
+      "_comment": "Deterministic start: console closed, no markers left from a prior run"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "clickIfPresent",
+      "selector": "[data-testid='coach-continue']",
+      "_comment": "u/bob is FTUE; the coach tooltip overlays and swallows the DBG toggle"
+    },
+    {
+      "action": "sleep",
+      "ms": 600
+    },
+    {
+      "action": "clickIfPresent",
+      "selector": "[data-testid='coach-continue']"
+    },
+    {
+      "action": "sleep",
+      "ms": 400
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='dbg-toggle']",
+      "timeout": 8000
+    },
+    {
+      "action": "if",
+      "condition": "!document.querySelector('[data-testid=\"debug-panel\"]')",
+      "steps": [
+        { "action": "click", "selector": "[data-testid='dbg-toggle']" }
+      ],
+      "_comment": "Open only if not already open, so the test is re-runnable"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='debug-panel']",
+      "timeout": 5000
+    },
+    {
+      "action": "sleep",
+      "ms": 500,
+      "_comment": "Let layout settle before measuring"
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid='debug-input']",
+      "text": "aaaa-this-is-a-deliberately-long-unbroken-token-to-test-wrapping-behaviour",
+      "_comment": "Long unbroken token exercises the overflowWrap fix in the input row"
+    },
+    {
+      "action": "sleep",
+      "ms": 300
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const p=document.querySelector('[data-testid=\"debug-panel\"]'); const r=p.getBoundingClientRect(); const de=document.documentElement; const vw=de.clientWidth; const overflowRight=Math.round(r.right-vw); const docOverflow=de.scrollWidth-de.clientWidth; const ok = overflowRight<=0 && docOverflow<=0 && r.width>120; const d=document.createElement('div'); d.id = ok?'fit-pass':'fit-fail'; d.style.cssText='position:fixed;width:1px;height:1px;left:0;top:0;opacity:0.01'; document.body.appendChild(d); return JSON.stringify({vw,panelW:Math.round(r.width),panelLeft:Math.round(r.left),panelRight:Math.round(r.right),overflowRight,docScrollW:de.scrollWidth,docClientW:de.clientWidth,docOverflow,verdict:ok?'PASS':'FAIL'}); })()",
+      "into": "measurements",
+      "_comment": "Measure panel vs viewport and inject the verdict marker element"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#fit-pass",
+      "timeout": 3000,
+      "_comment": "HARD ASSERTION: times out and fails the run if the panel overflowed"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/dbg-panel-mobile-fit.png"
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "name": "Admin `court` command drops onto the WOLVES vs HAWKS fixture court (sandbox, no energy spent)",
+  "description": "Smoke test for the title-scope `court` debug command. Every check is a hard waitFor assertion (verified failing via zz-negative-control) rather than a passive extract: the command enters the game scene, the matchup is the deterministic WOLVES/HAWKS fixture, sandbox mode is flagged, the in-game console is reachable, and energy is unchanged after a reload.",
+  "steps": [
+    { "action": "switchUser", "username": "bob", "_comment": "bob is the admin — DBG chip only renders for admins" },
+    { "action": "reload" },
+    { "action": "waitFor", "selector": "[data-testid='lobby-screen']", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']", "_comment": "FTUE coach overlay eats clicks if present" },
+    { "action": "sleep", "ms": 300 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']" },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='title-energy'][aria-label='Energy 5 of 5']",
+      "timeout": 8000,
+      "_comment": "BASELINE (hard): energy is full at 5/5 before entering the sandbox"
+    },
+    { "action": "waitFor", "selector": "[data-testid='dbg-toggle']", "timeout": 8000 },
+    { "action": "click", "selector": "[data-testid='dbg-toggle']" },
+    { "action": "waitFor", "selector": "[data-testid='debug-panel']", "timeout": 5000, "_comment": "PRECONDITION: title console genuinely open" },
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "court" },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'enter-sent'; })()"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='game-court']",
+      "timeout": 15000,
+      "_comment": "ASSERTION 1: `court` put us on a live court — no draft, no matchmaking, no energy modal"
+    },
+    {
+      "action": "waitForNotVisible",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 5000,
+      "_comment": "ASSERTION 2: we genuinely left the lobby (not a court rendered behind it)"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='game-root'][data-home-team='WOLVES'][data-away-team='HAWKS']",
+      "timeout": 5000,
+      "_comment": "ASSERTION 3 (the fixture guarantee): deterministic matchup every run, not a random opponent. Team names are never painted on the court, so this data attribute is the only observable source."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='game-root'][data-sandbox='1']",
+      "timeout": 5000,
+      "_comment": "ASSERTION 4: sandbox flag set — this is what suppresses game.end / markFtuePlayed / player-progress writes on exit"
+    },
+    { "action": "sleep", "ms": 800, "_comment": "let players take position" },
+    {
+      "action": "eval",
+      "expression": "String(document.querySelectorAll('svg text').length)",
+      "into": "svgTextCount"
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({ home: (document.querySelector('[data-testid=score-home]')||{}).textContent, away: (document.querySelector('[data-testid=score-away]')||{}).textContent, quarter: (document.querySelector('[data-testid=quarter]')||{}).textContent })",
+      "into": "scoreboard",
+      "_comment": "Informational: expect 0-0 at Q1 on a fresh court"
+    },
+    { "action": "screenshot", "path": "/tmp/court-01-entered.png" },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='dbg-toggle']",
+      "timeout": 8000,
+      "_comment": "ASSERTION 5: in-game DBG chip present — required for testMoveAway / testSpinDunk calibration"
+    },
+    { "action": "click", "selector": "[data-testid='dbg-toggle']" },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='debug-input']",
+      "timeout": 5000,
+      "_comment": "ASSERTION 6: in-game console accepts commands — the whole point of the sandbox"
+    },
+    { "action": "screenshot", "path": "/tmp/court-02-ingame-console.png" },
+    { "action": "reload", "_comment": "Bail out of the sandbox the cheap way; a real session would have been persisted server-side by now" },
+    { "action": "waitFor", "selector": "[data-testid='lobby-screen']", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']" },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='title-energy'][aria-label='Energy 5 of 5']",
+      "timeout": 8000,
+      "_comment": "ASSERTION 7 (the sandbox payoff): still 5/5 after a server round-trip. Entering the debug court spent no energy and opened no game session."
+    },
+    { "action": "screenshot", "path": "/tmp/court-03-energy-intact.png" }
+  ]
+}

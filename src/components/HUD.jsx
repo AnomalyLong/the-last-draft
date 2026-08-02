@@ -920,7 +920,7 @@ export function DebugConsole({ logs, onCommand, showDebug, onToggleDebug }) {
   };
 
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 200, fontFamily: 'monospace', fontSize: '18px' }}>
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'none', zIndex: 200, fontFamily: 'monospace', fontSize: '18px' }}>
       {/* DBG toggle */}
       <div
         data-testid="dbg-toggle"
@@ -937,14 +937,14 @@ export function DebugConsole({ logs, onCommand, showDebug, onToggleDebug }) {
       {/* Console panel */}
       {showDebug && (
         <div data-testid="debug-panel" style={{
-          position: 'absolute', top: 36, left: 8, width: 400, height: 260,
+          position: 'absolute', top: 36, left: 8, right: 8, width: 'auto', maxWidth: 400, height: 260,
           display: 'flex', flexDirection: 'column',
           background: 'rgba(8,8,8,0.92)', border: '1px solid #333', borderRadius: 3,
-          overflow: 'hidden', pointerEvents: 'auto',
+          boxSizing: 'border-box', overflow: 'hidden', pointerEvents: 'auto',
         }}>
           <div ref={logRef} data-testid="debug-log" style={{ flex: 1, overflowY: 'auto', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
             {logs.map((log, i) => (
-              <div key={i} data-testid={`log-entry-${log.type}`} style={{ color: log.type === 'cmd' ? '#4af' : log.type === 'err' ? '#f55' : '#8f8', whiteSpace: 'pre-wrap', lineHeight: '1.3' }}>
+              <div key={i} data-testid={`log-entry-${log.type}`} style={{ color: log.type === 'cmd' ? '#4af' : log.type === 'err' ? '#f55' : '#8f8', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: '1.3' }}>
                 {log.type === 'cmd' ? `> ${log.text}` : log.text}
               </div>
             ))}
