@@ -1,0 +1,36 @@
+{
+  "name": "zz-dbg-fit-negative-control",
+  "description": "NEGATIVE CONTROL: force the debug panel back to the original fixed width:400/left:8 geometry and confirm the fit assertion FAILS. Expected result is exit 1 with #fit-pass timing out. If this passes, the fit test is not actually measuring anything.",
+  "steps": [
+    { "action": "reload", "waitMs": 3000 },
+    { "action": "waitFor", "selector": "[data-testid='lobby-screen']", "timeout": 15000 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']" },
+    { "action": "sleep", "ms": 600 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']" },
+    { "action": "sleep", "ms": 400 },
+    { "action": "waitFor", "selector": "[data-testid='dbg-toggle']", "timeout": 8000 },
+    {
+      "action": "if",
+      "condition": "!document.querySelector('[data-testid=\"debug-panel\"]')",
+      "steps": [ { "action": "click", "selector": "[data-testid='dbg-toggle']" } ]
+    },
+    { "action": "waitFor", "selector": "[data-testid='debug-panel']", "timeout": 5000 },
+    {
+      "action": "eval",
+      "expression": "(() => { const p=document.querySelector('[data-testid=\"debug-panel\"]'); p.style.width='400px'; p.style.maxWidth='none'; p.style.right='auto'; p.style.left='8px'; return 'reverted to old geometry'; })()",
+      "_comment": "Reproduce the pre-fix inline styles"
+    },
+    { "action": "sleep", "ms": 400 },
+    {
+      "action": "extract",
+      "expression": "(() => { const p=document.querySelector('[data-testid=\"debug-panel\"]'); const r=p.getBoundingClientRect(); const de=document.documentElement; const vw=de.clientWidth; const overflowRight=Math.round(r.right-vw); const docOverflow=de.scrollWidth-de.clientWidth; const ok = overflowRight<=0 && docOverflow<=0 && r.width>120; const d=document.createElement('div'); d.id = ok?'fit-pass':'fit-fail'; d.style.cssText='position:fixed;width:1px;height:1px;left:0;top:0;opacity:0.01'; document.body.appendChild(d); return JSON.stringify({vw,panelW:Math.round(r.width),panelRight:Math.round(r.right),overflowRight,docOverflow,verdict:ok?'PASS':'FAIL'}); })()",
+      "into": "measurements"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#fit-pass",
+      "timeout": 3000,
+      "_comment": "EXPECTED TO TIME OUT — a TIMEOUT here means the assertion works"
+    }
+  ]
+}

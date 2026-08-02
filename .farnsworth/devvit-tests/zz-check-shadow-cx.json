@@ -1,0 +1,7 @@
+{
+  "name": "verify net shadow ellipse cx values",
+  "steps": [
+    { "action": "eval", "expression": "(() => { const els = Array.from(document.querySelectorAll(\"ellipse[stroke='#8a6a3a']\")); return els.map(e => e.getAttribute('cx')).join(','); })()" }
+  ]
+}
+
