@@ -1,0 +1,76 @@
+{
+  "name": "zz-admin-roster-abilities",
+  "description": "Open admin panel, load a user, and verify the roster shows abilities plus the Scan/Repair Roster controls",
+  "steps": [
+    {
+      "action": "waitFor",
+      "selector": "text=DBG",
+      "timeout": 8000
+    },
+    {
+      "action": "if",
+      "condition": "!document.querySelector('[data-testid=debug-input]')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "text=DBG"
+        },
+        {
+          "action": "waitFor",
+          "selector": "[data-testid=debug-input]",
+          "timeout": 5000
+        }
+      ]
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=debug-input]",
+      "text": "admin"
+    },
+    {
+      "action": "sleep",
+      "ms": 200
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); if (!el) return 'ERR: no debug input'; if (el.value !== 'admin') { const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'admin'); el.dispatchEvent(new Event('input', { bubbles: true })); } el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); return 'submitted'; })()",
+      "name": "submit admin command"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=ADMIN PANEL",
+      "timeout": 8000
+    },
+    {
+      "action": "sleep",
+      "ms": 600
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const b = Array.from(document.querySelectorAll('button')).find(x => x.textContent.trim() === 'User'); if (b) { b.click(); return 'clicked User tab'; } return 'User tab not found'; })()",
+      "name": "open Users tab"
+    },
+    {
+      "action": "sleep",
+      "ms": 800
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const chips = Array.from(document.querySelectorAll('button')).filter(b => b.textContent.trim().startsWith('u/')); if (!chips.length) return 'ERR: no username chips'; const names = chips.map(c => c.textContent.trim()); const pick = chips.find(c => /carol/i.test(c.textContent)) || chips[0]; pick.click(); return 'clicked ' + pick.textContent.trim() + ' of ' + JSON.stringify(names); })()",
+      "name": "pick first username"
+    },
+    {
+      "action": "sleep",
+      "ms": 2000
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const btns = Array.from(document.querySelectorAll('button')).map(b => b.textContent.trim()); const body = document.body.innerText; return JSON.stringify({ hasScan: btns.includes('Scan Roster'), hasRepair: btns.includes('Repair Roster'), hasClamp: /clamp stats/.test(body), rosterHeading: (body.match(/Roster \\([^)]*\\)/) || [])[0] || null, abilityCells: Array.from(document.querySelectorAll('td[colspan=\"8\"]')).map(td => td.innerText.trim()).slice(0, 8) }); })()",
+      "name": "repair controls + ability rows"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/admin-roster-abilities.png"
+    }
+  ]
+}

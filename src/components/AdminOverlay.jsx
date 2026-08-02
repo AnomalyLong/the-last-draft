@@ -129,6 +129,18 @@ function UsernameBrowser({ users, total, selected, onPick, busy }) {
 
 const RARITY_COLOR = { common: '#778', rare: '#3a8fd4', epic: '#a060e0', legendary: '#e0a030' };
 
+// Collapses an abilities array into [name, count] pairs. count > 1 is the
+// signature of the game-over re-send bug (see core/player.ts mergeAbilities):
+// the ability was earned once but re-saved on every subsequent game over.
+const abilityCounts = (abilities) => {
+  const m = new Map();
+  for (const a of abilities ?? []) {
+    const n = typeof a?.name === 'string' ? a.name : '(unnamed)';
+    m.set(n, (m.get(n) ?? 0) + 1);
+  }
+  return [...m.entries()];
+};
+
 function UserPanel() {
   const [username, setUsername] = useState('');
   const [user, setUser] = useState(null);
@@ -137,6 +149,9 @@ function UserPanel() {
   const [credits, setCredits] = useState('');
   const [freeDrafts, setFreeDrafts] = useState('');
   const [confirmReset, setConfirmReset] = useState(false);
+  const [repair, setRepair] = useState(null);
+  const [clampStats, setClampStats] = useState(false);
+  const [confirmRepair, setConfirmRepair] = useState(false);
   const { busy, msg, wrap, setMsg } = useWrap();
   const { users, total } = useUsernames();
 
@@ -145,6 +160,8 @@ function UserPanel() {
     if (!target) return;
     setUsername(target);
     setConfirmReset(false);
+    setConfirmRepair(false);
+    setRepair(null);
     setRoster(null);
     setPass(null);
     wrap(async () => {
@@ -189,6 +206,25 @@ function UserPanel() {
     if (isNaN(n) || n < 1) throw new Error('Enter a positive number');
     await trpc.admin.grantFreeDrafts.mutate({ username: username.trim(), amount: n });
     await reload(); setMsg({ text: `Granted ${n} free draft(s).`, ok: true });
+  });
+
+  // Duplicate-ability repair. Same admin.repairPlayers endpoint the
+  // `repairPlayers` debug command calls — dry-run reports, apply writes.
+  const runRepair = (dryRun) => wrap(async () => {
+    const report = await trpc.admin.repairPlayers.mutate({
+      username: username.trim(), clampStats, dryRun,
+    });
+    setRepair(report);
+    setConfirmRepair(false);
+    if (!dryRun) await reload();
+    setMsg({
+      text: report.affected === 0
+        ? `Scanned ${report.scanned} player(s) — nothing to repair.`
+        : dryRun
+          ? `${report.duplicatesRemoved} duplicate ability instance(s) on ${report.affected} player(s). Nothing written — press Repair to apply.`
+          : `✓ Repaired ${report.affected} player(s) — removed ${report.duplicatesRemoved} duplicate(s).`,
+      ok: true,
+    });
   });
 
   const grantPass = (tier) => wrap(async () => {
@@ -294,6 +330,49 @@ function UserPanel() {
           <button style={S.btn('#1a3a4a')} onClick={grantDrafts} disabled={busy || !freeDrafts}>Grant Free Drafts</button>
         </div>
 
+        {/* Roster repair — strips duplicate abilities left behind by the
+            game-over re-send bug, and (opt-in) clamps provably impossible stat
+            bonuses. Scan is read-only; Repair writes and needs a confirm. */}
+        <div style={{ ...S.row, marginTop: 4 }}>
+          <button style={S.btn('#1a3a4a')} onClick={() => runRepair(true)} disabled={busy}>Scan Roster</button>
+          {confirmRepair
+            ? <>
+                <button style={{ ...S.danger, background: '#8a1010', color: '#fff', fontWeight: 'bold' }}
+                  onClick={() => runRepair(false)} disabled={busy}>CONFIRM REPAIR</button>
+                <button style={S.btn()} onClick={() => setConfirmRepair(false)}>Cancel</button>
+              </>
+            : <button style={S.btn('#4a3a1a')} onClick={() => setConfirmRepair(true)} disabled={busy}>Repair Roster</button>
+          }
+          <label style={{ color: '#667', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+            <input type="checkbox" checked={clampStats} onChange={e => setClampStats(e.target.checked)} />
+            clamp stats
+          </label>
+        </div>
+
+        {repair && (
+          <div style={{ fontSize: 11, color: '#778', marginBottom: 8 }}>
+            <span style={S.tag(repair.dryRun ? '#1a3a6a' : '#1a4a2a')}>{repair.dryRun ? 'DRY RUN' : 'APPLIED'}</span>
+            {' '}scanned {repair.scanned} · affected {repair.affected} · dupes {repair.duplicatesRemoved}
+            {repair.statsInflated > 0 && (
+              <span style={{ color: '#e0a030' }}>
+                {' '}· {repair.statsInflated} with impossible stat totals
+                {!clampStats && ' (enable "clamp stats" to fix)'}
+              </span>
+            )}
+            {repair.players?.length > 0 && (
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                {repair.players.map(pl => (
+                  <li key={pl.id}>
+                    {pl.name} #{pl.id} — {pl.abilitiesBefore}→{pl.abilitiesAfter} abilities
+                    {pl.duplicatesRemoved.length > 0 && ` (${pl.duplicatesRemoved.join(', ')})`}
+                    {pl.statsInflated && ` · stats ${pl.statPoints}/${pl.statPointsMax}${pl.statsClamped ? ' clamped' : ''}`}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {/* Founders Pass — admin grant / revoke. Mirrors core/battlePass.ts
             behavior: grant deposits credits + sets founder flag; revoke
             clears the season record but keeps credits & founder. */}
@@ -361,18 +440,46 @@ function UserPanel() {
                 <tbody>
                   {roster.map(p => {
                     const bs = p.statBonuses ?? {};
+                    const abilities = abilityCounts(p.abilities);
+                    const hasDupes = abilities.some(([, n]) => n > 1);
                     return (
-                      <tr key={p.id}>
-                        <td style={{ ...S.td, padding: '3px 6px', color: '#556' }}>{p.lineupRole ?? '—'}</td>
-                        <td style={{ ...S.td, padding: '3px 6px' }}>{p.name}</td>
-                        <td style={{ ...S.td, padding: '3px 6px', color: RARITY_COLOR[p.rarity] ?? '#778' }}>{p.rarity}</td>
-                        <td style={{ ...S.td, padding: '3px 6px' }}>{p.level}</td>
-                        {['spd', 'dex', 'jmp', 'acc'].map(s => (
-                          <td key={s} style={{ ...S.td, padding: '3px 6px' }}>
-                            {p[s]}{bs[s] ? <span style={{ color: '#4a8' }}>+{bs[s]}</span> : ''}
+                      <React.Fragment key={p.id}>
+                        <tr>
+                          <td style={{ ...S.td, padding: '3px 6px', color: '#556', borderBottom: 'none' }}>{p.lineupRole ?? '—'}</td>
+                          <td style={{ ...S.td, padding: '3px 6px', borderBottom: 'none' }}>{p.name}</td>
+                          <td style={{ ...S.td, padding: '3px 6px', borderBottom: 'none', color: RARITY_COLOR[p.rarity] ?? '#778' }}>{p.rarity}</td>
+                          <td style={{ ...S.td, padding: '3px 6px', borderBottom: 'none' }}>{p.level}</td>
+                          {['spd', 'dex', 'jmp', 'acc'].map(s => (
+                            <td key={s} style={{ ...S.td, padding: '3px 6px', borderBottom: 'none' }}>
+                              {p[s]}{bs[s] ? <span style={{ color: '#4a8' }}>+{bs[s]}</span> : ''}
+                            </td>
+                          ))}
+                        </tr>
+                        {/* Abilities live on their own full-width row: the table
+                            is 8 columns inside a 560px panel, so a 9th column
+                            would squeeze the stats to unreadable. A red ×N
+                            badge is the visible tell for the duplicate bug. */}
+                        <tr>
+                          <td colSpan={8} style={{ ...S.td, padding: '0 6px 4px 6px', fontSize: 11 }}>
+                            {abilities.length === 0
+                              ? <span style={{ color: '#334' }}>no abilities</span>
+                              : <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
+                                  {abilities.map(([name, n]) => (
+                                    <span key={name} style={{
+                                      background: n > 1 ? '#3a1010' : '#141c2e',
+                                      border: `1px solid ${n > 1 ? '#8a3030' : '#22304a'}`,
+                                      color: n > 1 ? '#ff9090' : '#8a9ab0',
+                                      borderRadius: 3, padding: '1px 6px',
+                                    }}>
+                                      {name}{n > 1 && <b style={{ color: '#ff6060' }}> ×{n}</b>}
+                                    </span>
+                                  ))}
+                                </span>
+                            }
+                            {hasDupes && <span style={{ color: '#ff6060', marginLeft: 6 }}>⚠ duplicates</span>}
                           </td>
-                        ))}
-                      </tr>
+                        </tr>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>

@@ -7,13 +7,15 @@ const DUNK = { name: 'DUNK MASTER', rarity: 3 };
 const SNIPER = { name: 'SNIPER', rarity: 2 };
 
 // Writes a minimal player hash directly, bypassing mintPlayer so each test can
-// set up the exact corrupt state it wants to repair.
+// set up the exact corrupt state it wants to repair. Deliberately writes NO
+// `id` field, because mintPlayer doesn't either — the id lives in the redis
+// key. An earlier version of this helper set `id`, which hid a guard bug that
+// made repairPlayerRecord a no-op on every real player.
 const seedPlayer = async (
   id: number,
   fields: { level?: number; abilities?: unknown[]; statBonuses?: Record<string, number> } = {},
 ) => {
   await redis.hSet(playerKey(id), {
-    id: String(id),
     owner: 'tester',
     name: `Player ${id}`,
     level: String(fields.level ?? 1),
@@ -112,6 +114,26 @@ test('repairPlayerRecord clamps inflated stats proportionally when asked', async
   // Proportions preserved: spd was half the total, so it stays the largest.
   expect(after.spd).toBe(5);
   expect(JSON.parse((await redis.hGet(playerKey(8), 'statBonuses')) ?? '{}')).toEqual(after);
+});
+
+// Regression: player hashes written by mintPlayer have no `id` field. The
+// repair must key off `owner` (as getPlayer does) or it silently skips
+// every real player and reports "scanned 0".
+test('repairPlayerRecord repairs a hash with no id field (mintPlayer shape)', async () => {
+  await redis.hSet(playerKey(42), {
+    owner: 'tester',
+    name: 'VOSS WARD',
+    level: '2',
+    xp: '0',
+    abilities: JSON.stringify([DUNK, DUNK, DUNK, DUNK, DUNK]),
+  });
+
+  const report = await repairPlayerRecord(42);
+
+  expect(report).not.toBeNull();
+  expect(report?.abilitiesBefore).toBe(5);
+  expect(report?.abilitiesAfter).toBe(1);
+  expect(await storedAbilities(42)).toEqual([DUNK]);
 });
 
 test('repairPlayerRecord returns null for a player that does not exist', async () => {

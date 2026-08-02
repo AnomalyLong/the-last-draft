@@ -463,7 +463,10 @@ export const repairPlayerRecord = async (
 ): Promise<PlayerRepairReport | null> => {
   const key = playerKey(id);
   const raw = await redis.hGetAll(key);
-  if (!raw || !raw.id) return null;
+  // Guard on `owner`, NOT `id`: mintPlayer never writes an `id` field — the id
+  // lives in the redis key and getPlayer derives it from its argument. Keying
+  // this check on `id` made the repair a silent no-op on every real player.
+  if (!raw || !raw.owner) return null;
 
   const level = Number(raw.level ?? 1) || 1;
 
