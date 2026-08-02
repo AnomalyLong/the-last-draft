@@ -11,8 +11,9 @@ export const Court = React.memo(function Court({ netSwish = { left: 0, right: 0 
       <g transform="translate(339, 0) scale(-1, 1) translate(-494, 0)">
         <image href={bg8} x={0} y={0} width={495} height={428} />
       </g>
-      <ellipse cx={42} cy={COURT_MID_Y} rx={7} ry={3} fill="none" stroke="#8a6a3a" strokeWidth={1.5} opacity={0.5} />
-      <ellipse cx={638} cy={COURT_MID_Y} rx={7} ry={3} fill="none" stroke="#8a6a3a" strokeWidth={1.5} opacity={0.5} />
+      {/* Net shadows — nudged 7px toward court center on each side (4px + 3px) to sit directly under the rim. */}
+      <ellipse cx={49} cy={COURT_MID_Y} rx={7} ry={3} fill="none" stroke="#8a6a3a" strokeWidth={1.5} opacity={0.5} />
+      <ellipse cx={631} cy={COURT_MID_Y} rx={7} ry={3} fill="none" stroke="#8a6a3a" strokeWidth={1.5} opacity={0.5} />
       {/* Left rim + net overlay — sits on the left backboard. */}
       <Net x={31} y={169} scale={1} swishId={netSwish.left} dunkId={netDunk.left} missId={netMiss.left} />
       {/* Right rim + net — mirrored about the court center (right_x = 679 - left_x),
