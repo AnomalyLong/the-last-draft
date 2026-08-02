@@ -863,6 +863,7 @@ export default function App() {
             }
             setIsFtue(false);
             // Save each home player's progress earned this game
+            const progressSaves = [];
             homeRoster.forEach((r, i) => {
               const gameId = i + 1;
               const progress = gameState.playerProgressRef.current.get(gameId);
@@ -877,7 +878,7 @@ export default function App() {
               }
               const statDelta = gameState.statBonusRef.current.get(gameId);
               const addAbilities = gameState.abilityOverridesRef.current.get(gameId) ?? [];
-              trpc.player.progress.mutate({
+              progressSaves.push(trpc.player.progress.mutate({
                 playerId: r.serverId,
                 level: progress.level,
                 xp: progress.xp,
@@ -894,8 +895,13 @@ export default function App() {
                   gameState.statBonusRef.current.delete(gameId);
                   gameState.playerProgressRef.current.delete(gameId);
                 })
-                .catch(err => console.error('player.progress failed', err));
+                .catch(err => console.error('player.progress failed', err)));
             });
+            // Pull the roster back down once the saves land. homeRoster is what
+            // seeds player levels and the ability cap for the NEXT match, and it
+            // was previously only refreshed when the Collection screen opened —
+            // so back-to-back games ran against a stale level-1 roster.
+            Promise.allSettled(progressSaves).then(() => refreshRoster());
             setScene('title');
           }}
           showOptions={showInGameOptions}

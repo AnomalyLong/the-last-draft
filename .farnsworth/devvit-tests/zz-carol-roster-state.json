@@ -1,0 +1,10 @@
+{
+  "name": "probe: carol roster levels + abilities after 1 game",
+  "steps": [
+    {"action":"waitFor","selector":"[data-testid='lobby-screen']","timeout":20000},
+    {"action":"click","selector":"[data-testid='bnav-collection']"},
+    {"action":"sleep","ms":2500},
+    {"action":"screenshot","path":"/tmp/carol-roster.png"},
+    {"action":"extract","expression":"JSON.stringify([...document.querySelectorAll('.rc-card, .coll-card, .roster-card')].map(c=>c.textContent.replace(/\\s+/g,' ').trim().slice(0,120)))","into":"cards"}
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "name": "u/carol: lobby → PLAY → 5s countdown → TAP TO START → play possessions via play/defense pickers",
+  "name": "u/carol: lobby → PLAY → 5s countdown → TAP TO START → play possessions via play/defense pickers (rotates 1st/2nd/3rd choice)",
   "steps": [
     {
       "action": "switchUser",
@@ -15,6 +15,11 @@
       "action": "waitFor",
       "selector": "[data-testid='lobby-screen']",
       "timeout": 15000
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__playRot = 0; return 'reset'; })()",
+      "_comment": "Reset the play-choice rotation counter for this run"
     },
     {
       "action": "if",
@@ -199,9 +204,9 @@
           "steps": [
             {
               "action": "extract",
-              "expression": "(() => { const all = [...document.querySelectorAll('[data-testid^=\"play-\"]')].filter(e => e.getAttribute('data-testid') !== 'play-picker'); const ok = all.filter(e => e.getAttribute('data-disabled') === '0' && e.getAttribute('data-testid') !== 'play-iso'); const p = ok[0] || all.find(e => e.getAttribute('data-disabled') === '0') || all[0]; window.__plays = (window.__plays ?? 0) + 1; return p ? p.getAttribute('data-testid') : ''; })()",
+              "expression": "(() => { const all = [...document.querySelectorAll('[data-testid^=\"play-\"]')].filter(e => e.getAttribute('data-testid') !== 'play-picker'); const enabled = all.filter(e => e.getAttribute('data-disabled') === '0'); const list = enabled.length ? enabled : all; const rot = window.__playRot ?? 0; const idx = list.length ? (rot % list.length) : 0; const p = list[idx] || list[0]; window.__plays = (window.__plays ?? 0) + 1; window.__playRot = rot + 1; return p ? p.getAttribute('data-testid') : ''; })()",
               "into": "playPick",
-              "_comment": "First enabled non-ISO play (last pick is disabled each possession)"
+              "_comment": "Rotate 1st/2nd/3rd enabled choice each possession (repeat) so every play gets exercised, not just the first. 3rd slot is ISO -> its submenu is handled by the iso-mode branch above on the next tick."
             },
             {
               "action": "click",

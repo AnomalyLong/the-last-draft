@@ -399,10 +399,21 @@ export const updatePlayerProgress = async (
   },
 ): Promise<void> => {
   const key = playerKey(id);
-  const updates: Record<string, string> = {
-    level: String(params.level),
-    xp: String(params.xp),
-  };
+  const updates: Record<string, string> = {};
+
+  // Level is monotonic: never write a level BELOW what's already stored.
+  //
+  // The client used to start every match from INITIAL_PLAYERS (level 1), so a
+  // level-5 player's first XP gain of the game "levelled up" to 2 and saved
+  // that, silently demoting them and re-issuing a level-up reward every match.
+  // The client bug is fixed, but this stays as a cheap backstop: player.progress
+  // is client-supplied and any future regression would corrupt real progression.
+  // A stale level implies stale xp, so we reject both together.
+  const storedLevel = Number(await redis.hGet(key, 'level')) || 0;
+  if (params.level >= storedLevel) {
+    updates.level = String(params.level);
+    updates.xp = String(params.xp);
+  }
 
   if (params.addAbilities?.length) {
     const existing = await readStoredAbilities(key);
@@ -422,7 +433,7 @@ export const updatePlayerProgress = async (
     updates.statBonuses = JSON.stringify(bonuses);
   }
 
-  await redis.hSet(key, updates);
+  if (Object.keys(updates).length) await redis.hSet(key, updates);
 };
 
 // ── Admin repair ─────────────────────────────────────────────────────────────

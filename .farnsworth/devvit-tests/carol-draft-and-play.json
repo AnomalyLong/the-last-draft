@@ -1,0 +1,540 @@
+{
+  "name": "carol: draft -> START GAME -> full match -> claim -> verify persist",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "carol"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 30000
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__pickCount = 0; window.__picks = []; return 'reset'; })()"
+    },
+    {
+      "action": "while",
+      "max": 5,
+      "until": "!document.querySelector('.lb2-coach')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": ".lb2-coach"
+        },
+        {
+          "action": "sleep",
+          "ms": 700
+        }
+      ]
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({roster: (document.querySelector('[data-testid=roster-strip-empty]') ? 'empty' : 'has-players'), energy: document.querySelector('.lb2-ts-energy')?.textContent?.trim() ?? 'none'})",
+      "into": "preDraft"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='bnav-draft']"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='ftue-intro-video'], .dh-btn.primary, .tsetup, .draft-start-btn",
+      "timeout": 20000
+    },
+    {
+      "action": "if",
+      "condition": "!!document.querySelector(\"[data-testid='ftue-intro-video']\")",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "[data-testid='ftue-intro-video']"
+        },
+        {
+          "action": "sleep",
+          "ms": 1800
+        },
+        {
+          "action": "click",
+          "selector": "[data-testid='ftue-intro-video']"
+        },
+        {
+          "action": "sleep",
+          "ms": 600
+        },
+        {
+          "action": "click",
+          "selector": "[data-testid='ftue-intro-video']"
+        },
+        {
+          "action": "sleep",
+          "ms": 1000
+        }
+      ]
+    },
+    {
+      "action": "waitFor",
+      "selector": ".dh-btn.primary, .tsetup, .draft-start-btn",
+      "timeout": 20000
+    },
+    {
+      "action": "if",
+      "condition": "!!document.querySelector('.dh-btn.primary')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": ".dh-btn.primary"
+        },
+        {
+          "action": "waitFor",
+          "selector": ".tsetup, .draft-start-btn",
+          "timeout": 15000
+        }
+      ]
+    },
+    {
+      "action": "if",
+      "condition": "!!document.querySelector('.ts-name-input')",
+      "steps": [
+        {
+          "action": "type",
+          "selector": ".ts-name-input",
+          "text": "Cardinals"
+        },
+        {
+          "action": "click",
+          "selector": "text=CONFIRM"
+        },
+        {
+          "action": "sleep",
+          "ms": 900
+        },
+        {
+          "action": "clickIfPresent",
+          "selector": "text=CONFIRM"
+        },
+        {
+          "action": "sleep",
+          "ms": 900
+        },
+        {
+          "action": "clickIfPresent",
+          "selector": "text=CONFIRM"
+        },
+        {
+          "action": "sleep",
+          "ms": 900
+        },
+        {
+          "action": "clickIfPresent",
+          "selector": "text=CONTINUE TO DRAFT"
+        }
+      ]
+    },
+    {
+      "action": "waitFor",
+      "selector": ".draft-start-btn",
+      "timeout": 25000
+    },
+    {
+      "action": "click",
+      "selector": ".draft-start-btn"
+    },
+    {
+      "action": "while",
+      "max": 5,
+      "until": "!document.querySelector('.draft-coach')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": ".draft-coach"
+        },
+        {
+          "action": "sleep",
+          "ms": 700
+        }
+      ]
+    },
+    {
+      "action": "while",
+      "max": 14,
+      "until": "window.__pickCount >= 5 || !!document.querySelector('.da-btn.primary.big')",
+      "steps": [
+        {
+          "action": "waitFor",
+          "selector": ".draft-coach, .draft-card-slot.phase-back, .draft-card-slot .dc-tier-label, .da-btn.primary.big",
+          "timeout": 40000
+        },
+        {
+          "action": "if",
+          "condition": "!document.querySelector('.da-btn.primary.big')",
+          "steps": [
+            {
+              "action": "sleep",
+              "ms": 2200,
+              "_comment": "let the round's coach bubble render before we touch anything"
+            },
+            {
+              "action": "while",
+              "max": 5,
+              "until": "!document.querySelector('.draft-coach')",
+              "steps": [
+                {
+                  "action": "click",
+                  "selector": ".draft-coach"
+                },
+                {
+                  "action": "sleep",
+                  "ms": 600
+                }
+              ]
+            },
+            {
+              "action": "while",
+              "max": 6,
+              "until": "!document.querySelector('.draft-card-slot.phase-back')",
+              "steps": [
+                {
+                  "action": "clickIfPresent",
+                  "selector": ".draft-coach"
+                },
+                {
+                  "action": "click",
+                  "selector": ".draft-card-slot:nth-child(1) .draft-card-anim"
+                },
+                {
+                  "action": "sleep",
+                  "ms": 3500
+                }
+              ],
+              "_comment": "RETRY the flip until no slot is face-down — a tap eaten by a late coach is invisible otherwise"
+            },
+            {
+              "action": "while",
+              "max": 5,
+              "until": "!document.querySelector('.draft-coach')",
+              "steps": [
+                {
+                  "action": "click",
+                  "selector": ".draft-coach"
+                },
+                {
+                  "action": "sleep",
+                  "ms": 600
+                }
+              ],
+              "_comment": "post-flip coach"
+            },
+            {
+              "action": "waitFor",
+              "selector": ".draft-card-slot .dc-tier-label",
+              "timeout": 25000
+            },
+            {
+              "action": "extract",
+              "expression": "(() => { const slots = document.querySelectorAll('.draft-card-slot'); const m = {'COMMON':0,'UNCOMMON':1,'RARE':2,'ULTRA RARE':3}; let best = 1, br = -1; slots.forEach((s, i) => { const l = s.querySelector('.dc-tier-label'); const r = l ? (m[l.textContent.trim()] ?? 0) : 0; if (r > br) { br = r; best = i + 1; } }); window.__pickCount = (window.__pickCount ?? 0) + 1; const c = slots[best-1]; window.__picks.push({rd: window.__pickCount, took: c?.querySelector('.dc-tier-label')?.textContent.trim(), offered: Array.from(slots).map(s=>s.querySelector('.dc-tier-label')?.textContent.trim())}); return best; })()",
+              "into": "bestN"
+            },
+            {
+              "action": "click",
+              "selector": ".draft-card-slot:nth-child(${bestN}) .draft-card-anim"
+            },
+            {
+              "action": "waitFor",
+              "selector": ".draft-card-anim.picked",
+              "timeout": 12000
+            },
+            {
+              "action": "waitForNotVisible",
+              "selector": ".draft-card-anim.picked",
+              "timeout": 40000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify(window.__picks || [])",
+      "into": "picksMade"
+    },
+    {
+      "action": "waitFor",
+      "selector": ".da-btn.primary.big",
+      "timeout": 25000
+    },
+    {
+      "action": "while",
+      "max": 6,
+      "until": "document.querySelector('.dp-val')?.textContent?.trim()==='5/5'",
+      "steps": [
+        {
+          "action": "while",
+          "max": 5,
+          "until": "!document.querySelector('.draft-coach')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": ".draft-coach"
+            },
+            {
+              "action": "sleep",
+              "ms": 600
+            }
+          ]
+        },
+        {
+          "action": "sleep",
+          "ms": 300
+        },
+        {
+          "action": "clickIfPresent",
+          "selector": "text=AUTO ASSIGN"
+        },
+        {
+          "action": "sleep",
+          "ms": 900
+        }
+      ]
+    },
+    {
+      "action": "waitForNotVisible",
+      "selector": "text=AUTO ASSIGN",
+      "timeout": 8000
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/carol-draft-complete.png"
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({primaryLabel: document.querySelector('.da-btn.primary.big')?.textContent.trim(), picks: (window.__picks||[]).length})",
+      "into": "assignState"
+    },
+    {
+      "action": "while",
+      "max": 4,
+      "until": "!!document.querySelector('[data-testid=score-home]')",
+      "steps": [
+        {
+          "action": "clickIfPresent",
+          "selector": ".draft-coach"
+        },
+        {
+          "action": "sleep",
+          "ms": 400
+        },
+        {
+          "action": "clickIfPresent",
+          "selector": ".da-btn.primary.big"
+        },
+        {
+          "action": "sleep",
+          "ms": 2500
+        }
+      ]
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='score-home']",
+      "timeout": 20000,
+      "_comment": "GameScene HUD mounted"
+    },
+    {
+      "action": "while",
+      "max": 260,
+      "until": "!!document.querySelector('[data-testid=\"game-over-screen\"]')",
+      "steps": [
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"levelup-ok\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='levelup-ok']",
+              "_comment": "STAT UPGRADE modal — blocks all play until dismissed"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid^=\"levelup-ability-\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const a = document.querySelector('[data-testid^=\"levelup-ability-\"]'); window.__ups = (window.__ups ?? 0) + 1; return a ? a.getAttribute('data-testid') : ''; })()",
+              "into": "abilityPick"
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${abilityPick}']",
+              "_comment": "CHOOSE AN UPGRADE → take the first ability"
+            },
+            {
+              "action": "sleep",
+              "ms": 400
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"bball-tip\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='bball-tip']",
+              "_comment": "Mascot dialogue → dismiss"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"defense-ftue\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='defense-ftue']"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"quarter-summary-continue\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='quarter-summary-continue']",
+              "_comment": "End-of-quarter recap → continue"
+            },
+            {
+              "action": "sleep",
+              "ms": 500
+            }
+          ],
+          "_comment": "Gate on the CONTINUE button itself — the summary root renders first, the button only after BTN_TICK frames"
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"play-picker\"][data-iso-mode=\"1\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='iso-target-PG']",
+              "_comment": "ISO submenu open → PG keeps the ball"
+            },
+            {
+              "action": "sleep",
+              "ms": 400
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"play-picker\"][data-iso-mode=\"0\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const all = [...document.querySelectorAll('[data-testid^=\"play-\"]')].filter(e => e.getAttribute('data-testid') !== 'play-picker'); const enabled = all.filter(e => e.getAttribute('data-disabled') === '0'); const list = enabled.length ? enabled : all; const rot = window.__playRot ?? 0; const idx = list.length ? (rot % list.length) : 0; const p = list[idx] || list[0]; window.__plays = (window.__plays ?? 0) + 1; window.__playRot = rot + 1; return p ? p.getAttribute('data-testid') : ''; })()",
+              "into": "playPick",
+              "_comment": "Rotate 1st/2nd/3rd enabled choice each possession (repeat) so every play gets exercised, not just the first. 3rd slot is ISO -> its submenu is handled by the iso-mode branch above on the next tick."
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${playPick}']",
+              "_comment": "CALL A PLAY"
+            },
+            {
+              "action": "sleep",
+              "ms": 450
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"defense-picker\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const d = document.querySelector('[data-testid=\"defense-motion\"], [data-testid=\"defense-guard\"], [data-testid=\"defense-aggressive\"]'); window.__defs = (window.__defs ?? 0) + 1; return d ? d.getAttribute('data-testid') : ''; })()",
+              "into": "defPick"
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${defPick}']",
+              "_comment": "CALL A DEFENSE"
+            },
+            {
+              "action": "sleep",
+              "ms": 450
+            }
+          ]
+        },
+        {
+          "action": "sleep",
+          "ms": 450,
+          "_comment": "Let the possession animate out"
+        }
+      ],
+      "_comment": "Play the game: answer every dialogue until the final buzzer"
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({plays: window.__plays ?? 0, defenses: window.__defs ?? 0, upgrades: window.__ups ?? 0, q: document.querySelector('[data-testid=\"quarter\"]')?.textContent, time: document.querySelector('[data-testid=\"timer\"]')?.textContent, home: document.querySelector('[data-testid=\"score-home\"]')?.textContent, away: document.querySelector('[data-testid=\"score-away\"]')?.textContent, gameOver: !!document.querySelector('[data-testid=\"game-over-screen\"]')})",
+      "into": "finalState"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/carol-02-final.png"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='game-over-screen']",
+      "timeout": 20000,
+      "_comment": "ASSERT: loop must have exited via game-over, not by exhausting max. Placed AFTER extract+screenshot so diagnostics are captured even when this fails."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='game-over-claim-btn']",
+      "timeout": 20000,
+      "_comment": "Button is gated behind {tick >= BTN_TICK} (GameOverScreen.jsx:212) - renders only after the credits count-up finishes, so the root appearing is NOT enough."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='game-over-claim-btn']",
+      "_comment": "CLAIM CREDITS -> fires onDismissGameOver -> game.end (credits + missions + roster XP). Without this the run never commits."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 20000,
+      "_comment": "ASSERT: claim returns to lobby"
+    },
+    {
+      "action": "sleep",
+      "ms": 2500,
+      "_comment": "let refreshUser() settle after game.end"
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({credits: document.querySelector('.lb2-ts-credits')?.textContent?.trim() ?? '?', energy: document.querySelector('.lb2-ts-energy')?.textContent?.trim() ?? '?'})",
+      "into": "postGameLobby"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/carol-03-lobby-after.png"
+    }
+  ]
+}

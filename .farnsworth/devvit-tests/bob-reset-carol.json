@@ -1,0 +1,111 @@
+{
+  "name": "bob-reset-carol",
+  "description": "As u/bob (creator admin), open the admin panel, load u/carol, capture her BEFORE state, then Reset User + CONFIRM RESET and hard-assert she comes back wiped. Idempotent: if carol already has no user record it reports 'nothing to reset' and still verifies the clean state. Use this to get a clean slate before re-testing level/ability progression across multiple games.",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "bob",
+      "_comment": "bob is a hardcoded CREATOR_ADMIN (server/core/admin.ts). Also restarts the dev server, so server-side changes are picked up."
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=DBG",
+      "timeout": 15000,
+      "_comment": "HARD ASSERT: DBG toggle is admin-only. Times out if the acting user is not an admin."
+    },
+    {
+      "action": "if",
+      "condition": "!document.querySelector('[data-testid=debug-input]')",
+      "steps": [
+        { "action": "click", "selector": "text=DBG" },
+        { "action": "waitFor", "selector": "[data-testid=debug-input]", "timeout": 5000 }
+      ]
+    },
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "admin" },
+    { "action": "sleep", "ms": 200 },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); if (!el) return 'ERR: no debug input'; if (el.value !== 'admin') { const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'admin'); el.dispatchEvent(new Event('input', { bubbles: true })); } el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); return 'submitted'; })()",
+      "name": "run 'admin' command"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=ADMIN PANEL",
+      "timeout": 8000,
+      "_comment": "HARD ASSERT: admin overlay opened."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-user]",
+      "_comment": "HARD ASSERT: User tab exists. click fails the run if the selector is missing."
+    },
+    { "action": "sleep", "ms": 400 },
+    {
+      "action": "click",
+      "selector": "text=u/carol",
+      "_comment": "HARD ASSERT: carol appears in the username browser. Fails if she has never been seen by the app at all."
+    },
+    { "action": "sleep", "ms": 2500 },
+    {
+      "action": "eval",
+      "expression": "(() => { const stats = {}; document.querySelectorAll('table tr').forEach(tr => { const td = tr.querySelectorAll('td'); if (td.length === 2) stats[td[0].innerText.trim()] = td[1].innerText.trim(); }); const abilityRows = Array.from(document.querySelectorAll('td[colspan=\"8\"]')).map(td => td.innerText.trim()).filter(Boolean); const hasRecord = !!Array.from(document.querySelectorAll('button')).find(x => x.textContent.trim() === 'Reset User'); return JSON.stringify({ hasRecord, stats, abilityRows }, null, 1); })()",
+      "name": "BEFORE: carol stats + roster abilities"
+    },
+    { "action": "screenshot", "path": "/tmp/bob-reset-carol-before.png" },
+    {
+      "action": "if",
+      "condition": "!!Array.from(document.querySelectorAll('button')).find(x => x.textContent.trim() === 'Reset User')",
+      "_comment": "Only attempt the reset when carol actually has a user record. Re-running after a successful reset takes the else-path instead of failing.",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "text=Reset User",
+          "_comment": "First click arms the two-step confirm."
+        },
+        {
+          "action": "waitFor",
+          "selector": "text=CONFIRM RESET",
+          "timeout": 4000,
+          "_comment": "HARD ASSERT: the confirm step armed."
+        },
+        { "action": "click", "selector": "text=CONFIRM RESET" },
+        {
+          "action": "waitFor",
+          "selector": "text=has been reset",
+          "timeout": 10000,
+          "_comment": "HARD ASSERT: the server confirmed the reset. This is the assertion that actually fails the run if resetUser errored."
+        },
+        {
+          "action": "waitForNotVisible",
+          "selector": "text=Games Played",
+          "timeout": 8000,
+          "_comment": "HARD ASSERT: the user stats table is gone, i.e. getUser now returns no record."
+        }
+      ]
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const t = document.body.innerText; const i = t.indexOf('has been reset'); return i < 0 ? 'no reset performed this run (carol had no user record)' : t.slice(Math.max(0, i - 40), i + 40).trim(); })()",
+      "name": "reset outcome"
+    },
+    { "action": "screenshot", "path": "/tmp/bob-reset-carol-after.png" },
+    {
+      "action": "click",
+      "selector": "text=u/carol",
+      "_comment": "Reload carol from the server to confirm the wipe survived a round-trip, not just a local state clear."
+    },
+    { "action": "sleep", "ms": 2500 },
+    {
+      "action": "waitForNotVisible",
+      "selector": "text=Games Played",
+      "timeout": 8000,
+      "_comment": "HARD ASSERT: after re-fetching from the server, carol still has no user record."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const panelOpen = /ADMIN PANEL/.test(document.body.innerText); const stats = {}; document.querySelectorAll('table tr').forEach(tr => { const td = tr.querySelectorAll('td'); if (td.length === 2) stats[td[0].innerText.trim()] = td[1].innerText.trim(); }); const abilityRows = Array.from(document.querySelectorAll('td[colspan=\"8\"]')).map(td => td.innerText.trim()).filter(Boolean); const hasRecord = !!Array.from(document.querySelectorAll('button')).find(x => x.textContent.trim() === 'Reset User'); const problems = []; if (!panelOpen) problems.push('admin panel is not open - result is meaningless'); if (hasRecord) problems.push('user record survived the reset'); if (abilityRows.length) problems.push('roster still has ' + abilityRows.length + ' ability rows'); return JSON.stringify({ verdict: problems.length ? 'FAIL: ' + problems.join('; ') : 'PASS: carol is wiped - clean slate for progression testing', panelOpen, hasRecord, stats, abilityRows }, null, 1); })()",
+      "name": "AFTER: verify carol is wiped"
+    },
+    { "action": "screenshot", "path": "/tmp/bob-reset-carol-verify.png" }
+  ]
+}

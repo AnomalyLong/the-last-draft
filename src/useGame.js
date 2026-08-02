@@ -7,7 +7,11 @@ import { gridToSvg, svgToGrid, INITIAL_PLAYERS, SHOOT_TARGET_LEFT, SHOOT_TARGET_
   PICKROLL_DRIVE_RATE, PICKROLL_C_DUNK_RATE, NUM_PERIODS, DEFENSE_PICK_MS,
   GUARD_GAP_FRAC, GUARD_REPOSITION_MIN_MS, GUARD_REPOSITION_MAX_MS,
   AI_PICKROLL_RATE, AI_ISO_RATE, ROLES,
-  DEFENSE_BONUS_CREDITS, DEFENSE_COUNTERS } from './constants.js';
+  DEFENSE_BONUS_CREDITS, DEFENSE_COUNTERS,
+  JUMP_BALL_TILT_PER_JMP_POINT, JUMP_BALL_WIN_PROB_MIN, JUMP_BALL_WIN_PROB_MAX,
+  BLOCK_JMP_TILT_PER_POINT, DEFENSE_COUNTER_BLOCK_BONUS, BLOCK_RATE_MAX,
+  STEAL_STAT_TILT_PER_POINT, STEAL_RATE_MAX } from './constants.js';
+import { MAX_ABILITIES, countOwnedAbilities as countOwned, ownedAbilityNames as ownedNames } from './shared/abilities';
 import { SHOOT_CHAR_FRAMES } from './sprites/index.js';
 import { ABILITIES } from './abilities.js';
 import { runCommand } from './debugCommands.js';
@@ -61,18 +65,37 @@ function pickStatUpgradeChoices() {
 }
 
 
+// Never offer an ability the player already owns. Shares its ownership rules
+// with the 3-slot cap (countOwnedAbilities) so the two can't drift apart —
+// they previously did, which is why over-granted players ended up with 6
+// DISTINCT abilities rather than 6 copies of one.
 function pickLevelUpChoices(gamePlayer, rosterRef, abilityOverridesRef) {
-  const owned = new Set();
-  if (gamePlayer && rosterRef && abilityOverridesRef) {
-    const roster = gamePlayer.team === 'home' ? rosterRef.current.home : rosterRef.current.away;
-    const rp = roster?.find(r => (r.role ?? r.pos) === gamePlayer.role);
-    if (rp?.ability?.name) owned.add(rp.ability.name);
-    if (Array.isArray(rp?.abilities)) rp.abilities.forEach(a => { if (a?.name) owned.add(a.name); });
-    const extras = abilityOverridesRef.current.get(gamePlayer.id) ?? [];
-    extras.forEach(a => owned.add(a.name));
-  }
+  const owned = gamePlayer && abilityOverridesRef
+    ? ownedNames(
+        rosterEntryFor(gamePlayer, rosterRef),
+        abilityOverridesRef.current.get(gamePlayer.id) ?? [],
+      )
+    : new Set();
   const available = ABILITIES.filter(a => !owned.has(a.name));
   return [...available].sort(() => Math.random() - 0.5).slice(0, 3);
+}
+
+// Resolves a game player (INITIAL_PLAYERS row) to their persisted roster record.
+function rosterEntryFor(gamePlayer, rosterRef) {
+  if (!gamePlayer || !rosterRef) return null;
+  const roster = gamePlayer.team === 'home' ? rosterRef.current.home : rosterRef.current.away;
+  return roster?.find(r => (r.role ?? r.pos) === gamePlayer.role) ?? null;
+}
+
+// Ability-slot usage for a game player. Counts the persisted roster record
+// (draft ability + abilities earned in PREVIOUS games) as well as grants made
+// earlier in this session. See src/shared/abilities.ts.
+function countOwnedAbilities(gamePlayer, rosterRef, abilityOverridesRef) {
+  if (!gamePlayer || !abilityOverridesRef) return 0;
+  return countOwned(
+    rosterEntryFor(gamePlayer, rosterRef),
+    abilityOverridesRef.current.get(gamePlayer.id) ?? [],
+  );
 }
 
 // Returns updated player fields after applying XP gain. Handles level-up carry-over.
@@ -129,6 +152,10 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   // "DEFENSE BONUS! +50 CREDITS" popup — fired when the user reads the play right.
   const [defenseBonus, setDefenseBonus] = useState(null);
   const defenseBonusIdRef = useRef(0);
+  // Tracks whether the user picked the defense that counters the AI's current
+  // play — read by the block-chance calc so a correct read also boosts the
+  // block roll (only meaningful while HOME is defending, i.e. inside loopAwayRef).
+  const defenseCounteredRef = useRef(false);
   const showDefenseBonus = () => {
     const id = ++defenseBonusIdRef.current;
     setDefenseBonus({ id });
@@ -221,11 +248,8 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
             playFanfare();
             const lvlPlayer = { ...cur, prevLevel: cur.level, level, xp: newXp, xpMax: newXpMax, cx: fresh?.cx ?? cur.cx, cy: fresh?.cy ?? cur.cy };
             levelUpPlayerRef.current = lvlPlayer;
-            const roster = rosterRef.current.home;
-            const rp = roster?.find(r => (r.role ?? r.pos) === cur.role);
-            const hasDraft = !!rp?.ability;
-            const extras = abilityOverridesRef.current.get(cur.id) ?? [];
-            const abilitiesMaxed = (hasDraft ? 1 : 0) + extras.length >= 3;
+            const abilitiesMaxed =
+              countOwnedAbilities(cur, rosterRef, abilityOverridesRef) >= MAX_ABILITIES;
             const isFirstLevelUp = cur.level === 1; // level 1 → 2
             const forceAbility = isFtue && !firstLevelUpDoneRef.current;
             firstLevelUpDoneRef.current = true;
@@ -339,17 +363,38 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const rosterRef = useRef({ home: homeRoster, away: awayRoster });
   useEffect(() => { rosterRef.current = { home: homeRoster, away: awayRoster }; }, [homeRoster, awayRoster]);
 
-  // Seed playerProgressRef from server roster so levels start from the player's actual level,
-  // not INITIAL_PLAYERS level 1. Only seeds entries not already set by in-game XP gains.
+  // Seed from the server roster so levels start from the player's ACTUAL level,
+  // not INITIAL_PLAYERS level 1. Only seeds slots not already set by in-game XP.
+  //
+  // This must write `players`/`playersRef` too, not just playerProgressRef:
+  // awardXp reads the level off `playersRef`, so seeding the ref alone left the
+  // live player at level 1. Every game's first XP gain then "levelled" 1 -> 2 and
+  // overwrote playerProgressRef with {level: 2}, clobbering the real level and
+  // handing out a fresh level-up reward every single game.
   useEffect(() => {
+    const seeded = new Map();
     homeRoster.forEach((r, i) => {
       const gameId = i + 1;
-      if (!playerProgressRef.current.has(gameId) && (r.level ?? 1) > 1) {
-        const level = r.level ?? 1;
-        playerProgressRef.current.set(gameId, { level, xp: r.xp ?? 0, xpMax: XP_FOR_LEVEL(level) });
-      }
+      if (playerProgressRef.current.has(gameId)) return;
+      const level = r.level ?? 1;
+      const xp = r.xp ?? 0;
+      if (level <= 1 && xp <= 0) return;
+      const entry = { level, xp, xpMax: XP_FOR_LEVEL(level) };
+      playerProgressRef.current.set(gameId, entry);
+      seeded.set(gameId, entry);
     });
+    if (seeded.size) {
+      setPlayers(prev => prev.map(p => (seeded.has(p.id) ? { ...p, ...seeded.get(p.id) } : p)));
+    }
   }, [homeRoster]);
+
+  // Rebuilds the on-court roster from INITIAL_PLAYERS, re-applying each slot's
+  // persisted level/xp from playerProgressRef. Used at the start of a game AND
+  // between quarters so a fresh match never silently reverts players to level 1.
+  const buildFreshPlayers = () => INITIAL_PLAYERS.map(p => {
+    const saved = playerProgressRef.current.get(p.id);
+    return saved ? { ...p, ...saved } : { ...p };
+  });
 
   // Cap the log buffer at 30 entries to avoid unbounded growth.
   const addLog = (text, type = 'out') =>
@@ -580,7 +625,8 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         return !best || d < Math.hypot(best.cx - receiver.cx, best.cy - receiver.cy) ? p : best;
       }, null);
       if (!closest) return null;
-      const rate = STEAL_RATE + (hasAbility(closest, 'PICK POCKET') ? 0.10 : 0);
+      const statTilt = ((getPlayerStat(closest, 'spd', 50) + getPlayerStat(closest, 'dex', 50)) / 2 - 50) * STEAL_STAT_TILT_PER_POINT;
+      const rate = Math.max(0, Math.min(STEAL_RATE_MAX, STEAL_RATE + (hasAbility(closest, 'PICK POCKET') ? 0.10 : 0) + statTilt));
       return Math.random() < rate ? closest.id : null;
     })();
 
@@ -1140,7 +1186,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     const duration = 800;
 
     const blocker   = skipBlock ? null : triggerBlockAnimation(startCx, startCy, pg.team);
-    const blockRate = BLOCK_RATE + (blocker && hasAbility(blocker, 'IRON BLOCK') ? 0.10 : 0);
+    const blockRate = blocker ? computeBlockRate(blocker, BLOCK_RATE) : 0;
     const isBlock   = !!blocker && Math.random() < blockRate;
 
     playLeap();
@@ -1266,7 +1312,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
 
     const arcStartCx = startCx + driftBack + handOffset; // hand position at end of drift
     const blocker = triggerBlockAnimation(startCx, startCy, pg.team);
-    const effectiveBlockRate = blockRate + (blocker && hasAbility(blocker, 'IRON BLOCK') ? 0.10 : 0);
+    const effectiveBlockRate = blocker ? computeBlockRate(blocker, blockRate) : 0;
     const isBlock = !!blocker && Math.random() < effectiveBlockRate;
 
     setTimeout(() => {
@@ -1652,13 +1698,28 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
 
   // ─── Roster Helpers ────────────────────────────────────────────────────────
 
-  // Returns the shooter's ACC stat (0–100). Falls back to 70 if roster is missing.
-  const getShooterAcc = (gamePlayer) => {
+  // Returns a player's stat (spd/dex/jmp/acc), combining their roster base value
+  // with any in-session level-up bonuses. Falls back to `fallback` if roster is missing.
+  const getPlayerStat = (gamePlayer, statKey, fallback = 70) => {
     const roster = gamePlayer.team === 'home' ? rosterRef.current.home : rosterRef.current.away;
     const rp = roster.find(r => (r.role ?? r.pos) === gamePlayer.role);
-    const base = rp ? rp.acc : 70;
-    const bonus = statBonusRef.current.get(gamePlayer.id)?.acc ?? 0;
+    const base = rp && rp[statKey] != null ? rp[statKey] : fallback;
+    const bonus = statBonusRef.current.get(gamePlayer.id)?.[statKey] ?? 0;
     return base + bonus;
+  };
+
+  // Returns the shooter's ACC stat (0–100). Falls back to 70 if roster is missing.
+  const getShooterAcc = (gamePlayer) => getPlayerStat(gamePlayer, 'acc', 70);
+
+  // Combines base block rate + IRON BLOCK + a slight JMP tilt (centered at the
+  // 50 roster baseline) + a flat bonus when the user's defense call countered
+  // the play this possession. Clamped to BLOCK_RATE_MAX so no stack of bonuses
+  // approaches a guaranteed block.
+  const computeBlockRate = (blocker, baseRate) => {
+    const ironBonus = hasAbility(blocker, 'IRON BLOCK') ? 0.10 : 0;
+    const counterBonus = (blocker.team === 'home' && defenseCounteredRef.current) ? DEFENSE_COUNTER_BLOCK_BONUS : 0;
+    const jmpTilt = (getPlayerStat(blocker, 'jmp', 50) - 50) * BLOCK_JMP_TILT_PER_POINT;
+    return Math.max(0, Math.min(BLOCK_RATE_MAX, baseRate + ironBonus + counterBonus + jmpTilt));
   };
 
   // Returns true if the player has the named ability — checks all three sources:
@@ -1747,7 +1808,19 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
       if (arrived < JUMP_BALL_FORMATION.length) return;
 
       const { cx: centerCx, cy: centerCy } = gridToSvg(47, 25);
-      const goesRight = Math.random() < 0.5;
+
+      // Weight the tip slightly toward whichever Center has the higher JMP stat.
+      // Dead even at 50/50 when JMP is equal; clamped so no gap ever swings the
+      // odds past JUMP_BALL_WIN_PROB_MIN/MAX ("slightly" higher, never guaranteed).
+      const homeC = playersRef.current.find(p => p.id === homeCId);
+      const awayC = playersRef.current.find(p => p.id === awayCId);
+      const homeJmp = homeC ? getPlayerStat(homeC, 'jmp', 50) : 50;
+      const awayJmp = awayC ? getPlayerStat(awayC, 'jmp', 50) : 50;
+      const homeWinProb = Math.min(
+        JUMP_BALL_WIN_PROB_MAX,
+        Math.max(JUMP_BALL_WIN_PROB_MIN, 0.5 + (homeJmp - awayJmp) * JUMP_BALL_TILT_PER_JMP_POINT)
+      );
+      const goesRight = !(Math.random() < homeWinProb); // goesRight=false → home wins tip
 
       // Landing zone: ~13 ft from center toward the tipped side
       const landGx = goesRight
@@ -2089,6 +2162,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   //loop
   loopHomeRef.current = () => {
     if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+    defenseCounteredRef.current = false;
 
     stopTimer();
     ensurePGHasBall('home', () => {
@@ -2138,8 +2212,11 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
       showDefensePicker((def) => {
         if (!gameLoopActiveRef.current) return;
 
-        // Correct read → defense bonus: +50 credits (tallied at quarter end) + popup.
-        if (def && DEFENSE_COUNTERS[def.id] === playKind) {
+        // Correct read → defense bonus: +50 credits (tallied at quarter end) + popup,
+        // and a slight block-chance boost on this possession's shot attempt.
+        const countered = !!(def && DEFENSE_COUNTERS[def.id] === playKind);
+        defenseCounteredRef.current = countered;
+        if (countered) {
           quarterStatsRef.current.home.defenses += 1;
           addLog(`DEFENSE BONUS! +${DEFENSE_BONUS_CREDITS} credits`);
           showDefenseBonus();
@@ -2357,6 +2434,14 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         setTime(60);
         setTotalCredits(0); totalCreditsRef.current = 0;
         setPlayerAlpha(1);
+        // Rebuild the on-court roster at tip-off. Without this, `players` still
+        // held the PREVIOUS game's end state (useGame is mounted once for the
+        // whole session and never remounts between matches).
+        {
+          const freshPlayers = buildFreshPlayers();
+          playersRef.current = freshPlayers;
+          setPlayers(freshPlayers);
+        }
         gameLoopActiveRef.current = true;
         bgMusic.start();
         startTimer(1);
@@ -2618,15 +2703,15 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const onPickLevelUp = (ability) => {
     const p = levelUpState?.player;
     if (ability && p) {
-      const roster = p.team === 'home' ? rosterRef.current.home : rosterRef.current.away;
-      const rp = roster.find(r => (r.role ?? r.pos) === p.role);
-      const hasDraft = !!rp?.ability;
       const extras = abilityOverridesRef.current.get(p.id) ?? [];
-      if ((hasDraft ? 1 : 0) + extras.length < 3) {
+      const alreadyOwned = extras.some(a => a?.name === ability.name);
+      if (alreadyOwned) {
+        addLog(`${p.role} already has ${ability.name}`);
+      } else if (countOwnedAbilities(p, rosterRef, abilityOverridesRef) < MAX_ABILITIES) {
         abilityOverridesRef.current.set(p.id, [...extras, ability]);
         addLog(`${p.role} gained: ${ability.name}!`);
       } else {
-        addLog(`${p.role} already has max abilities (3)`);
+        addLog(`${p.role} already has max abilities (${MAX_ABILITIES})`);
       }
     } else addLog('level-up skipped');
     levelUpPlayerRef.current = null;
@@ -2653,10 +2738,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     activeAnimsRef.current.clear();
     animCbsRef.current.clear();
     if (gameRafRef.current) { cancelAnimationFrame(gameRafRef.current); gameRafRef.current = null; }
-    const freshPlayers = INITIAL_PLAYERS.map(p => {
-      const saved = playerProgressRef.current.get(p.id);
-      return saved ? { ...p, ...saved } : { ...p };
-    });
+    const freshPlayers = buildFreshPlayers();
     playersRef.current = freshPlayers;
     setPlayers(freshPlayers);
     setPlayerAlpha(1);

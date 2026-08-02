@@ -3,7 +3,29 @@ export const STEAL_RATE = 0.075; // probability a pass is stolen (0–1)
 export const DUNK_RATE  = 0.20; // probability a shot attempt becomes a dunk (0–1)
 export const BLOCK_RATE = 0.20; // probability the closest defender blocks a shot (0–1)
 
+// Jump ball: base 50/50, tilted slightly toward whoever's Center has the
+// higher JMP stat. TILT_PER_JMP_POINT is applied per point of JMP difference,
+// clamped to [MIN, MAX] so no jump advantage is ever more than slightly favored.
+export const JUMP_BALL_TILT_PER_JMP_POINT = 0.0015;
+export const JUMP_BALL_WIN_PROB_MIN = 0.35;
+export const JUMP_BALL_WIN_PROB_MAX = 0.65;
+
+// Blocking: slight tilt toward the blocker's own JMP stat (centered at 50 —
+// the roster baseline — so an average defender is unaffected), plus a flat
+// bonus when the user picked the defense that counters the play (rewards a
+// correct read, same spirit as the +50 credit bonus). Clamped so stacking
+// IRON BLOCK + counter + high JMP can never approach a guaranteed block.
+export const BLOCK_JMP_TILT_PER_POINT = 0.0008;
+export const DEFENSE_COUNTER_BLOCK_BONUS = 0.05;
+export const BLOCK_RATE_MAX = 0.75;
+
+// Stealing: slight tilt toward the defender's own SPD/DEX (averaged, centered
+// at 50). Same clamping philosophy as blocking above.
+export const STEAL_STAT_TILT_PER_POINT = 0.0015;
+export const STEAL_RATE_MAX = 0.6;
+
 export const ABILITY_LEVELUP_RATE = 0.10; // probability a level-up grants an ability vs a stat upgrade (0–1)
+// MAX_ABILITIES lives in src/shared/abilities.ts alongside the cap logic.
 
 // ─── UI Timers ────────────────────────────────────────────────────────────────
 export const DEFENSE_PICK_MS = 8250; // how long the defense picker modal stays open before auto-dismiss

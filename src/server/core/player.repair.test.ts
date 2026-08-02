@@ -139,3 +139,54 @@ test('repairPlayerRecord repairs a hash with no id field (mintPlayer shape)', as
 test('repairPlayerRecord returns null for a player that does not exist', async () => {
   expect(await repairPlayerRecord(999_999)).toBeNull();
 });
+
+// ── Level regression guard ───────────────────────────────────────────────────
+// The client used to start every match from INITIAL_PLAYERS (level 1), so a
+// high-level player's first XP gain "levelled up" to 2 and saved that — pinning
+// them at level 2 forever while re-issuing a level-up reward every game.
+
+test('updatePlayerProgress never lowers a stored level', async () => {
+  await seedPlayer(10, { level: 5 });
+  await redis.hSet(playerKey(10), { xp: '30' });
+
+  // A buggy/stale client reports the player as freshly levelled to 2.
+  await updatePlayerProgress(10, { level: 2, xp: 0 });
+
+  expect(await redis.hGet(playerKey(10), 'level')).toBe('5');
+  // Stale xp must be rejected alongside the stale level, not written on its own.
+  expect(await redis.hGet(playerKey(10), 'xp')).toBe('30');
+});
+
+test('updatePlayerProgress still advances the level normally', async () => {
+  await seedPlayer(11, { level: 5 });
+  await updatePlayerProgress(11, { level: 6, xp: 12 });
+
+  expect(await redis.hGet(playerKey(11), 'level')).toBe('6');
+  expect(await redis.hGet(playerKey(11), 'xp')).toBe('12');
+});
+
+test('updatePlayerProgress records xp gained within the same level', async () => {
+  await seedPlayer(12, { level: 4 });
+  await updatePlayerProgress(12, { level: 4, xp: 55 });
+
+  expect(await redis.hGet(playerKey(12), 'level')).toBe('4');
+  expect(await redis.hGet(playerKey(12), 'xp')).toBe('55');
+});
+
+test('a stale level still persists abilities earned that game', async () => {
+  // The level is rejected, but the player genuinely earned the ability, so it
+  // must not be silently dropped along with it.
+  await seedPlayer(13, { level: 7 });
+  await updatePlayerProgress(13, { level: 2, xp: 0, addAbilities: [SNIPER] });
+
+  expect(await redis.hGet(playerKey(13), 'level')).toBe('7');
+  expect(await storedAbilities(13)).toEqual([SNIPER]);
+});
+
+test('repeated stale saves cannot ratchet a player down over many games', async () => {
+  await seedPlayer(14, { level: 8 });
+  for (let i = 0; i < 6; i++) {
+    await updatePlayerProgress(14, { level: 2, xp: 0 });
+  }
+  expect(await redis.hGet(playerKey(14), 'level')).toBe('8');
+});
