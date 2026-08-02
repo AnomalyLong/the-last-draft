@@ -1,0 +1,22 @@
+{
+  "name": "titlestrip-wrap-check",
+  "description": "Screenshot the shared TitleStrip on roster/draft/BP pages to check the THE LAST DRAFT title doesn't overlap after the line-height fix",
+  "steps": [
+    { "action": "reload", "waitMs": 2000 },
+    { "action": "waitFor", "selector": ".bnav-play", "timeout": 8000 },
+    { "action": "clickIfPresent", "selector": ".lobby2-ftue svg" },
+    { "action": "click", "selector": "[data-testid=bnav-collection]" },
+    { "action": "sleep", "ms": 800 },
+    { "action": "screenshot", "path": "/tmp/ts-roster.png" },
+    { "action": "clickIfPresent", "selector": ".back-btn" },
+    { "action": "sleep", "ms": 500 },
+    { "action": "click", "selector": "[data-testid=bnav-draft]" },
+    { "action": "sleep", "ms": 800 },
+    { "action": "screenshot", "path": "/tmp/ts-draft.png" },
+    { "action": "clickIfPresent", "selector": ".dh-back-btn" },
+    { "action": "sleep", "ms": 500 },
+    { "action": "click", "selector": "[data-testid=bnav-battlepass]" },
+    { "action": "sleep", "ms": 800 },
+    { "action": "screenshot", "path": "/tmp/ts-bp.png" }
+  ]
+}

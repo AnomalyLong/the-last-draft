@@ -65,6 +65,14 @@
   padding: 8px 16px;
   font-family: var(--f-mono);
   font-size: 11px;
+  /* Explicit line-height — the app root sets line-height:0 (load-bearing for
+     sprite layout) which every text container must override. LobbyScreen's
+     own .lobby2 wrapper resets it to 1, but the ScreenWithStrip wrapper used
+     on the roster/draft/BP pages does not, so this strip's text inherited 0
+     there: any wrap ("THE LAST" / "DRAFT") stacked both lines on the same
+     baseline, reading as one overlapping line. Set explicitly here so every
+     host is covered, not just the ones that happen to reset it upstream. */
+  line-height: 1.3;
   letter-spacing: 0.24em;
   color: var(--c-ink-dim);
   text-transform: uppercase;
