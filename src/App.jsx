@@ -864,10 +864,17 @@ export default function App() {
             setIsFtue(false);
             // Save each home player's progress earned this game
             homeRoster.forEach((r, i) => {
-              if (!r.serverId) return;
               const gameId = i + 1;
               const progress = gameState.playerProgressRef.current.get(gameId);
-              if (!progress) return;
+              // Nothing persistable for this slot — drop any refs it holds so
+              // they can't be attributed to whoever occupies slot `gameId` in a
+              // later game (the refs are keyed by lineup slot, not serverId).
+              if (!r.serverId || !progress) {
+                gameState.abilityOverridesRef.current.delete(gameId);
+                gameState.statBonusRef.current.delete(gameId);
+                gameState.playerProgressRef.current.delete(gameId);
+                return;
+              }
               const statDelta = gameState.statBonusRef.current.get(gameId);
               const addAbilities = gameState.abilityOverridesRef.current.get(gameId) ?? [];
               trpc.player.progress.mutate({
@@ -876,7 +883,18 @@ export default function App() {
                 xp: progress.xp,
                 ...(addAbilities.length ? { addAbilities } : {}),
                 ...(statDelta ? { statDelta } : {}),
-              }).catch(() => {});
+              })
+                .then(() => {
+                  // Drop what we just persisted. These refs live on the root
+                  // `useGame` instance, which is never unmounted between games,
+                  // so anything left here would be re-sent at the NEXT game-over
+                  // — duplicating abilities and re-applying stat deltas. Cleared
+                  // only on success so a failed save can still retry next game.
+                  gameState.abilityOverridesRef.current.delete(gameId);
+                  gameState.statBonusRef.current.delete(gameId);
+                  gameState.playerProgressRef.current.delete(gameId);
+                })
+                .catch(err => console.error('player.progress failed', err));
             });
             setScene('title');
           }}

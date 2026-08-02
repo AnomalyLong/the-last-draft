@@ -355,6 +355,39 @@ export const clearPlayerFromLineup = async (username: string, playerId: number):
   if (slot) await redis.hDel(key, [slot]);
 };
 
+// ── Ability de-duplication ───────────────────────────────────────────────────
+// A player may hold at most one copy of a given ability (the client's level-up
+// picker filters names it already owns). Duplicates only ever entered the store
+// through updatePlayerProgress, which used to blindly `push` whatever the client
+// sent at game-over — and the client's in-memory ref was never cleared between
+// games, so every previously earned ability was re-sent each time.
+//
+// Merging through this helper is idempotent: it both blocks new duplicates and
+// repairs an already-duplicated stored list on the next write.
+const readStoredAbilities = async (key: string): Promise<PlayerAbility[]> => {
+  try {
+    const cur = await redis.hGet(key, 'abilities');
+    const parsed = cur ? JSON.parse(cur) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const mergeAbilities = (
+  existing: PlayerAbility[],
+  incoming: PlayerAbility[] = [],
+): PlayerAbility[] => {
+  const seen = new Set<string>();
+  const out: PlayerAbility[] = [];
+  for (const a of [...existing, ...incoming]) {
+    if (!a || typeof a.name !== 'string' || seen.has(a.name)) continue;
+    seen.add(a.name);
+    out.push(a);
+  }
+  return out;
+};
+
 // Persists level-up results: new level/xp, optional earned abilities, and optional stat deltas.
 export const updatePlayerProgress = async (
   id: number,
@@ -372,13 +405,8 @@ export const updatePlayerProgress = async (
   };
 
   if (params.addAbilities?.length) {
-    let abilities: PlayerAbility[] = [];
-    try {
-      const cur = await redis.hGet(key, 'abilities');
-      abilities = cur ? JSON.parse(cur) : [];
-    } catch {}
-    abilities.push(...params.addAbilities);
-    updates.abilities = JSON.stringify(abilities);
+    const existing = await readStoredAbilities(key);
+    updates.abilities = JSON.stringify(mergeAbilities(existing, params.addAbilities));
   }
 
   if (params.statDelta) {
@@ -395,4 +423,107 @@ export const updatePlayerProgress = async (
   }
 
   await redis.hSet(key, updates);
+};
+
+// ── Admin repair ─────────────────────────────────────────────────────────────
+// Every level-up grants EITHER one ability OR one stat package, and the richest
+// package in STAT_POOL (useGame.js) is worth 5 points. A player at level L has
+// had at most (L - 1) level-ups, so a total stat bonus above (L - 1) * 5 is
+// provably corrupt — it can only have come from the same re-send bug that
+// duplicated abilities. Anything at or below that bound is indistinguishable
+// from legitimate progression, so we never touch it.
+const MAX_STAT_POINTS_PER_LEVELUP = 5;
+
+export type PlayerRepairReport = {
+  id: number;
+  name: string;
+  owner: string;
+  level: number;
+  duplicatesRemoved: string[];
+  abilitiesBefore: number;
+  abilitiesAfter: number;
+  statPoints: number;
+  statPointsMax: number;
+  statsInflated: boolean;
+  statsClamped: boolean;
+  statBonusesBefore: PlayerStatBonuses;
+  statBonusesAfter: PlayerStatBonuses;
+  changed: boolean;
+};
+
+const STAT_KEYS = ['spd', 'dex', 'jmp', 'acc'] as const;
+
+// Repairs one stored player record. Ability de-duplication is always applied.
+// Stat clamping is opt-in (`clampStats`) because it is lossy — it scales the
+// bonuses down proportionally to the provable ceiling rather than reconstructing
+// the true history, which is not recoverable from what we store.
+export const repairPlayerRecord = async (
+  id: number,
+  opts: { clampStats?: boolean; dryRun?: boolean } = {},
+): Promise<PlayerRepairReport | null> => {
+  const key = playerKey(id);
+  const raw = await redis.hGetAll(key);
+  if (!raw || !raw.id) return null;
+
+  const level = Number(raw.level ?? 1) || 1;
+
+  const before = await readStoredAbilities(key);
+  const after = mergeAbilities(before);
+  const seen = new Set<string>();
+  const duplicatesRemoved: string[] = [];
+  for (const a of before) {
+    if (!a || typeof a.name !== 'string') continue;
+    if (seen.has(a.name)) duplicatesRemoved.push(a.name);
+    else seen.add(a.name);
+  }
+
+  let bonusesBefore: PlayerStatBonuses = { spd: 0, dex: 0, jmp: 0, acc: 0 };
+  try {
+    if (raw.statBonuses) {
+      const parsed = JSON.parse(raw.statBonuses);
+      if (parsed && typeof parsed === 'object') bonusesBefore = { ...bonusesBefore, ...parsed };
+    }
+  } catch {}
+
+  const statPoints = STAT_KEYS.reduce((n, k) => n + (Number(bonusesBefore[k]) || 0), 0);
+  const statPointsMax = Math.max(0, level - 1) * MAX_STAT_POINTS_PER_LEVELUP;
+  const statsInflated = statPoints > statPointsMax;
+
+  let bonusesAfter = bonusesBefore;
+  let statsClamped = false;
+  if (statsInflated && opts.clampStats) {
+    const scale = statPointsMax / statPoints;
+    bonusesAfter = { spd: 0, dex: 0, jmp: 0, acc: 0 };
+    for (const k of STAT_KEYS) {
+      bonusesAfter[k] = Math.max(0, Math.floor((Number(bonusesBefore[k]) || 0) * scale));
+    }
+    statsClamped = true;
+  }
+
+  const abilitiesChanged = after.length !== before.length;
+  const changed = abilitiesChanged || statsClamped;
+
+  if (changed && !opts.dryRun) {
+    const updates: Record<string, string> = {};
+    if (abilitiesChanged) updates.abilities = JSON.stringify(after);
+    if (statsClamped) updates.statBonuses = JSON.stringify(bonusesAfter);
+    await redis.hSet(key, updates);
+  }
+
+  return {
+    id,
+    name: raw.name ?? `#${id}`,
+    owner: raw.owner ?? '',
+    level,
+    duplicatesRemoved,
+    abilitiesBefore: before.length,
+    abilitiesAfter: after.length,
+    statPoints,
+    statPointsMax,
+    statsInflated,
+    statsClamped,
+    statBonusesBefore: bonusesBefore,
+    statBonusesAfter: bonusesAfter,
+    changed,
+  };
 };

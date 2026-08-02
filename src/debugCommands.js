@@ -25,6 +25,7 @@ export const COMMAND_META = {
   checkSubActivity: { scope: 'both', help: 'checkSubActivity [sub] — scan recent comments/posts for a sub' },
   dumpRoster: { scope: 'both', help: 'dumpRoster — log server-side roster + lineup for the current user' },
   dumpAdmins: { scope: 'both', help: 'dumpAdmins — list server-side admin usernames (admins only)' },
+  repairPlayers: { scope: 'both', help: 'repairPlayers <user|#id> [apply] [clampStats] — strip duplicate abilities (admins only; dry-run unless "apply")' },
 
   // ── Title only ────────────────────────────────────────────────────────
   admin: { scope: 'title', help: 'admin — open admin overlay (admins only)' },
@@ -118,6 +119,47 @@ const sharedImpls = {
         ctx.addLog(`${admins.length} admin(s) in Redis:`);
         admins.forEach(a => ctx.addLog(`  ${a.username} (granted ${new Date(a.grantedAt).toISOString().slice(0,10)})`));
         ctx.addLog('note: u/AfternoonNo3552 is also a hardcoded creator admin');
+      })
+      .catch(e => ctx.addLog(`error: ${e.message}`, 'err'));
+  },
+
+  // Repairs records damaged by the game-over re-send bug (duplicate abilities,
+  // inflated stat bonuses). Dry-run by default — pass "apply" to write.
+  repairPlayers(args, ctx) {
+    const target = args[0];
+    if (!target) {
+      ctx.addLog('usage: repairPlayers <username|#playerId> [apply] [clampStats]', 'err');
+      return;
+    }
+    const flags = args.slice(1).map(a => a.toLowerCase());
+    const dryRun = !flags.includes('apply');
+    const clampStats = flags.includes('clampstats');
+
+    const input = target.startsWith('#')
+      ? { playerId: Number(target.slice(1)), dryRun, clampStats }
+      : { username: target.replace(/^u\//, ''), dryRun, clampStats };
+
+    if (input.playerId !== undefined && !Number.isInteger(input.playerId)) {
+      ctx.addLog(`bad player id: "${target}"`, 'err');
+      return;
+    }
+
+    ctx.addLog(`${dryRun ? 'scanning' : 'REPAIRING'} ${target}${clampStats ? ' (+clamp stats)' : ''}...`);
+    trpc.admin.repairPlayers.mutate(input)
+      .then(r => {
+        ctx.addLog(`scanned ${r.scanned} player(s) — ${r.affected} need fixing`);
+        ctx.addLog(`duplicate abilities: ${r.duplicatesRemoved}, inflated stats: ${r.statsInflated}`);
+        r.players.forEach(p => {
+          const dupes = p.duplicatesRemoved.length
+            ? ` dupes[${[...new Set(p.duplicatesRemoved)].join(', ')}] ${p.abilitiesBefore}→${p.abilitiesAfter}`
+            : '';
+          const stats = p.statsInflated
+            ? ` stats ${p.statPoints}>${p.statPointsMax}${p.statsClamped ? ' (clamped)' : ' (NOT clamped)'}`
+            : '';
+          ctx.addLog(`  #${p.id} ${p.name} Lv.${p.level}${dupes}${stats}`);
+        });
+        if (dryRun && r.affected > 0) ctx.addLog('dry run — re-run with "apply" to write changes');
+        if (!dryRun) ctx.addLog('done. affected users must reload to see updated rosters.');
       })
       .catch(e => ctx.addLog(`error: ${e.message}`, 'err'));
   },

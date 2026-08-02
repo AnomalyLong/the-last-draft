@@ -5,7 +5,7 @@ import { context, reddit, redis } from '@devvit/web/server';
 import { z } from 'zod';
 
 import { getOrCreateUser, getUser, grantFreeDrafts, setTeamName, setMutedPreference, userKey, ledgerKey, gamesKey, MAX_ENERGY, computeEnergy, USERS_INDEX_KEY } from './core/user';
-import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, setLineup, updatePlayerProgress, buildRosterForUser, transferPlayer, ROLES, type Role, rosterKey, lineupKey } from './core/player';
+import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, setLineup, updatePlayerProgress, buildRosterForUser, transferPlayer, repairPlayerRecord, ROLES, type Role, rosterKey, lineupKey } from './core/player';
 import { SKIN_PALETTES } from '../shared/palettes';
 import { createChallengePost, canCreateChallengePost, getChallengePost, listChallengeResults, getMyChallenge, challengePostKey } from './core/post';
 import { freeDraft, creditDraft, buyDraftPick, getNextDraftCost } from './core/draft';
@@ -775,6 +775,37 @@ export const appRouter = t.router({
         const idToRole = new Map(Object.entries(lineup).map(([role, id]) => [id, role]));
         const players = await Promise.all(ids.map(id => getPlayer(id)));
         return players.filter(Boolean).map(p => ({ ...p, lineupRole: idToRole.get(p!.id) ?? null }));
+      }),
+
+    // Repairs players corrupted by the game-over re-send bug: strips duplicate
+    // abilities and (opt-in) clamps provably impossible stat bonuses. Pass a
+    // username to sweep that user's whole roster, or a playerId for one record.
+    // `dryRun` reports what would change without writing.
+    repairPlayers: adminProcedure
+      .input(z.object({
+        username: z.string().optional(),
+        playerId: z.number().int().positive().optional(),
+        clampStats: z.boolean().default(false),
+        dryRun: z.boolean().default(true),
+      }))
+      .mutation(async ({ input }) => {
+        if (!input.username && !input.playerId) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Provide a username or a playerId' });
+        }
+        const ids = input.playerId
+          ? [input.playerId]
+          : await getUserRoster(input.username!);
+        const opts = { clampStats: input.clampStats, dryRun: input.dryRun };
+        const reports = (await Promise.all(ids.map(id => repairPlayerRecord(id, opts)))).filter(Boolean);
+        const affected = reports.filter(r => r!.changed);
+        return {
+          dryRun: input.dryRun,
+          scanned: reports.length,
+          affected: affected.length,
+          duplicatesRemoved: affected.reduce((n, r) => n + r!.duplicatesRemoved.length, 0),
+          statsInflated: reports.filter(r => r!.statsInflated).length,
+          players: affected,
+        };
       }),
 
     restoreEnergy: adminProcedure
