@@ -26,6 +26,29 @@
 }
 
 /* ─────────────────────────────────────────────────────────
+   APP ROOT — mobile viewport-height fix
+   ───────────────────────────────────────────────────────── */
+/* Real mobile browsers (Chrome/Safari) define 100vh as the height with the
+   address bar + gesture/nav bar fully COLLAPSED — i.e. the tallest the
+   viewport can ever get. On load that chrome is usually still visible, so
+   the actual visible viewport is shorter than 100vh. App.jsx's root used a
+   plain inline `height: 100vh`, which only ever gets the tall value — so the
+   app (a `position:absolute; inset:0` grid with the bottom nav as its last
+   row) was sized past the real viewport bottom, pushing the bottom nav
+   behind the browser/OS chrome where it was invisible with no way to scroll
+   to it (the lobby sets overflow:hidden).
+   100dvh tracks the real, current visible viewport and fixes this. It's
+   applied via a class (not the inline style) because a JS style object
+   can't declare `height` twice for a graceful fallback — dvh is simply
+   ignored by browsers that don't support it, keeping the vh value. This
+   never reproduced in Farnsworth's Electron preview or desktop Chrome,
+   neither of which has a dynamic/collapsing toolbar. */
+.app-viewport-root {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* ─────────────────────────────────────────────────────────
    LOBBY V2 — mobile-first ready room
    ───────────────────────────────────────────────────────── */
 
@@ -1317,13 +1340,23 @@
 
 .bnav {
   position: relative;
-  height: 72px;
+  /* Bottom nav must clear the phone OS gesture/nav bar.
+
+     --fw-bottom-gutter is published by viewportGutter.js. env() alone is NOT
+     enough here: inside Reddit's cross-origin iframe the child document is not
+     the viewport-edge element, so env(safe-area-inset-bottom) measures 0 even
+     with viewport-fit=cover (verified on device: safe-bottom=0px iframe=true).
+     The env() value is kept as the var's fallback so behaviour is unchanged if
+     the JS never runs. box-sizing is border-box app-wide, so the 72px content
+     row is preserved and the gutter is added on top. Resolves to 0 on desktop
+     and in Farnsworth. (Aug 3) */
+  height: calc(72px + var(--fw-bottom-gutter, env(safe-area-inset-bottom, 0px)));
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   align-items: stretch;
   justify-items: center;
   z-index: 60;
-  padding: 0 8px;
+  padding: 0 8px var(--fw-bottom-gutter, env(safe-area-inset-bottom, 0px));
   pointer-events: auto;
   flex: none;
 }

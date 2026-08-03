@@ -17,6 +17,7 @@
 //     handleGameCommand?: (op, args) => void } // game only
 
 import { trpc } from './trpc';
+import { describeGutter, setOverride } from './viewportGutter.js';
 
 export const COMMAND_META = {
   // ── Shared ────────────────────────────────────────────────────────────
@@ -26,6 +27,8 @@ export const COMMAND_META = {
   dumpRoster: { scope: 'both', help: 'dumpRoster — log server-side roster + lineup for the current user' },
   dumpAdmins: { scope: 'both', help: 'dumpAdmins — list server-side admin usernames (admins only)' },
   repairPlayers: { scope: 'both', help: 'repairPlayers <user|#id> [apply] [clampStats] — strip duplicate abilities (admins only; dry-run unless "apply")' },
+  version: { scope: 'both', help: 'version — build stamp for client + server, plus viewport/safe-area diagnostics' },
+  gutter: { scope: 'both', help: 'gutter [px|auto] — inspect/set the bottom-nav safe gutter (persists on this device)' },
 
   // ── Title only ────────────────────────────────────────────────────────
   admin: { scope: 'title', help: 'admin — open admin overlay (admins only)' },
@@ -121,6 +124,97 @@ const sharedImpls = {
         ctx.addLog('note: u/AfternoonNo3552 is also a hardcoded creator admin');
       })
       .catch(e => ctx.addLog(`error: ${e.message}`, 'err'));
+  },
+
+  // Prints the build stamp of the running CLIENT bundle and of the SERVER
+  // bundle, so a stale half (browser cache / partial deploy) is obvious rather
+  // than looking like a code bug. Also dumps viewport + safe-area numbers,
+  // which is what you need when debugging mobile bottom-nav clipping.
+  // Inspect or force the bottom-nav gutter. Reddit's mobile iframe is taller
+  // than the usable screen and the child cannot measure by how much (env() is
+  // 0 inside a cross-origin frame), so when the automatic measurement comes up
+  // short this lets you dial the value in ON THE PHONE and see it immediately,
+  // with no rebuild/redeploy cycle. Persisted per-device in localStorage.
+  gutter(args, ctx) {
+    const raw = (args[0] ?? '').trim();
+    if (!raw) {
+      const g = describeGutter();
+      ctx.addLog(`gutter: applied=${g.applied}px  override=${g.override == null ? 'auto' : g.override + 'px'}`);
+      ctx.addLog(`  inputs: env=${g.envInset}px screenDelta=${g.screenDelta}px innerH=${g.innerHeight} availH=${g.availHeight} screenH=${g.screenHeight}`);
+      ctx.addLog(`  source=${g.source} fallback=${g.fallback}px iframed=${g.iframed} touchPhone=${g.touchPhone}`);
+      ctx.addLog('  usage: gutter <px> to force, gutter auto to return to measurement');
+      return;
+    }
+    if (raw === 'auto') {
+      const applied = setOverride(null);
+      ctx.addLog(`gutter: override cleared -> measuring (applied=${applied}px)`, 'ok');
+      return;
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0 || n > 200) {
+      ctx.addLog('gutter: expected a number 0-200, or "auto"', 'err');
+      return;
+    }
+    const applied = setOverride(n);
+    ctx.addLog(`gutter: override=${n}px -> applied=${applied}px (persists on this device)`, 'ok');
+  },
+
+  version(args, ctx) {
+    const cv = typeof __BUILD_VERSION__ !== 'undefined' ? __BUILD_VERSION__ : 'unknown';
+    const ct = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : 'unknown';
+    ctx.addLog(`client: v${cv}  built ${ct}`);
+
+    // Safe-area probe: env() is only readable by measuring a real element.
+    let inset = 'n/a';
+    try {
+      const probe = document.createElement('div');
+      probe.style.cssText = 'position:fixed;left:-9999px;bottom:0;width:1px;height:env(safe-area-inset-bottom,0px);';
+      document.body.appendChild(probe);
+      inset = `${probe.getBoundingClientRect().height}px`;
+      probe.remove();
+    } catch { /* non-DOM host */ }
+
+    const vv = typeof window !== 'undefined' && window.visualViewport;
+    const framed = typeof window !== 'undefined' && window.self !== window.top;
+    ctx.addLog(`viewport: inner=${window.innerHeight}px visual=${vv ? Math.round(vv.height) + 'px' : 'n/a'} safe-bottom=${inset} iframe=${framed}`);
+
+    // DECISIVE nav-clipping probe. Distinguishes the two possible causes:
+    //  - nav.bottom <= innerHeight -> layout is fine INSIDE the iframe; the iframe
+    //    itself extends past the visible screen (Reddit sizes it; the child cannot
+    //    detect this). Fix is a reserved bottom offset or expanded mode, NOT env().
+    //  - nav.bottom >  innerHeight -> genuine internal overflow, fixable in CSS.
+    try {
+      const nav = document.querySelector('.bnav');
+      if (nav) {
+        const r = nav.getBoundingClientRect();
+        const overflow = Math.round(r.bottom - window.innerHeight);
+        ctx.addLog(`nav: top=${Math.round(r.top)} bottom=${Math.round(r.bottom)} h=${Math.round(r.height)} innerH=${window.innerHeight} overflow=${overflow}px`);
+        ctx.addLog(overflow > 0
+          ? `nav OVERFLOWS iframe by ${overflow}px -> internal layout bug (fixable in CSS)`
+          : `nav fits inside iframe -> clipping is the iframe extending off-screen (not a CSS env() problem)`);
+      } else {
+        ctx.addLog('nav: .bnav not found (are you on the lobby screen?)');
+      }
+      ctx.addLog(`screen: h=${window.screen && window.screen.height} availH=${window.screen && window.screen.availHeight} docClientH=${document.documentElement.clientHeight} dpr=${window.devicePixelRatio}`);
+      const g = describeGutter();
+      ctx.addLog(`gutter: applied=${g.applied}px (env=${g.envInset}px screenDelta=${g.screenDelta}px override=${g.override == null ? 'auto' : g.override + 'px'} source=${g.source} fallback=${g.fallback}px)`);
+    } catch (e) { ctx.addLog(`nav probe failed: ${e.message}`, 'err'); }
+
+    trpc.admin.version.query()
+      .then(r => {
+        ctx.addLog(`server: v${r.version}  built ${r.builtAt}  env=${r.nodeEnv}`);
+        // Compare with tolerance: the client and server halves are emitted by two
+        // separate vite builds, so their stamps can differ by a few ms even when
+        // they are the same build. Exact equality gave a permanent false MISMATCH.
+        const dt = Math.abs(new Date(r.builtAt).getTime() - new Date(ct).getTime());
+        const drifted = !Number.isFinite(dt) || dt > 60000;
+        if (r.version !== cv || drifted) {
+          ctx.addLog('MISMATCH: client and server are from different builds (stale cache or partial deploy)', 'err');
+        } else {
+          ctx.addLog('client and server builds match');
+        }
+      })
+      .catch(e => ctx.addLog(`server version error: ${e.message}`, 'err'));
   },
 
   // Repairs records damaged by the game-over re-send bug (duplicate abilities,

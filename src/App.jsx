@@ -1,5 +1,6 @@
 import React from 'react';
 import { ZOOM_W, TOTAL_H } from './constants.js';
+import { initViewportGutter } from './viewportGutter.js';
 import { requestExpandedMode, getWebViewMode, navigateTo as devvitNavigateTo, context as devvitContext } from '@devvit/web/client';
 
 // Safe wrappers — devvit globals aren't present outside the Reddit app
@@ -92,6 +93,13 @@ export default function App() {
       console.error('[mute] failed to persist preference — will not survive relaunch:', err);
     });
   }, [muted]);
+
+  /* Publish --fw-bottom-gutter so the lobby's bottom nav can clear the phone's
+     gesture bar. On Reddit mobile web our iframe is taller than the usable
+     screen and the child document cannot see that via env() -- see
+     viewportGutter.js for the full measurement rationale. No-op (0px) on
+     desktop and in Farnsworth. (Aug 3) */
+  React.useEffect(() => { initViewportGutter(); }, []);
 
   React.useEffect(() => {
     if (!audioPreferenceLoaded) return;
@@ -513,7 +521,8 @@ export default function App() {
          carries this exact inline style, so the collapse is identical in
          production and in preview. Any container with real text must set its
          own line-height. (Jul 27) */
-      style={{ background: '#111', lineHeight: 0, height: '100vh', position: 'relative', cursor: (isInline && !challengePost) ? 'pointer' : undefined }}
+      className="app-viewport-root"
+      style={{ background: '#111', lineHeight: 0, position: 'relative', cursor: (isInline && !challengePost) ? 'pointer' : undefined }}
       /* Inline splash: any tap launches. Inline challenge card: the window is
          inert — only the CHALLENGE ME button (via onChallenge) launches, and the
          carousel arrows browse. So the root tap-to-expand is disabled whenever a

@@ -847,6 +847,14 @@ export const appRouter = t.router({
         return { users, total };
       }),
 
+    // Build stamp of the SERVER bundle. Compared against the client stamp by
+    // the `version` debug command to catch stale/partial deploys.
+    version: adminProcedure.query(async () => ({
+      version: typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : "unknown",
+      builtAt: typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : "unknown",
+      nodeEnv: typeof process !== "undefined" ? (process.env.NODE_ENV ?? "unknown") : "unknown",
+    })),
+
     // User management
     getAdmins: adminProcedure.query(async () => getAdmins()),
 

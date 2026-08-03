@@ -12,7 +12,10 @@ export default defineConfig([
     files: ['src/server/**/*.{ts,tsx,mjs,cjs,js}'],
     languageOptions: {
       ecmaVersion: 2023,
-      globals: globals.node,
+      // __BUILD_VERSION__/__BUILD_TIME__ are injected by vite `define` at build
+      // time (see vite.config.ts) and declared for tsc in build-globals.d.ts.
+      // ESLint needs them separately or it reports them as no-undef.
+      globals: { ...globals.node, __BUILD_VERSION__: 'readonly', __BUILD_TIME__: 'readonly' },
       parserOptions: {
         project: ['./tools/tsconfig.server.json'],
         tsconfigRootDir: import.meta.dirname,
