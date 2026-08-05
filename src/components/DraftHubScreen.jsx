@@ -7,7 +7,7 @@ export function DraftHubScreen({
   paidPicks = 0,          // banked credit-draft picks (bought, not yet used)
   credits = 0,
   rosterCount = 0,
-  nextDraftCost = null,   // cost of the next paid (credit) draft this month, or null while loading
+  nextDraftCost = null,   // cost of the next paid (credit) draft this week, or null while loading
   onUsePick,
   onBuyDraft,
   onCreditDraft,
@@ -105,7 +105,7 @@ export function DraftHubScreen({
           </div>
         )}
 
-        {/* Buy a draft pick — banks a reusable pick (monthly doubling cost) */}
+        {/* Buy a draft pick — banks a reusable pick (weekly +25% cost) */}
         <div className="dh-credit">
           <button
             className="dh-btn credit"
@@ -121,10 +121,10 @@ export function DraftHubScreen({
           </button>
           <div className="dh-credit-note">
             {nextDraftCost == null
-              ? 'First draft each month is 2,500 CR'
+              ? 'First draft each week is 2,500 CR'
               : canAffordCredit
-                ? 'Adds a pick above · cost doubles each buy · resets monthly'
-                : `Need ${nextDraftCost.toLocaleString()} CR · cost doubles each buy`}
+                ? 'Adds a pick above · cost +25% each buy · resets weekly'
+                : `Need ${nextDraftCost.toLocaleString()} CR · cost +25% each buy`}
           </div>
         </div>
       </div>

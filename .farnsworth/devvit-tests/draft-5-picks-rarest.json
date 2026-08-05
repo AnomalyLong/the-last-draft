@@ -1,8 +1,8 @@
 {
-  "name": "FTUE (lobby coach + intro video) → team setup → 5 picks picking rarest → auto-assign → start",
+  "name": "FTUE (lobby coach) → team setup → 5 picks picking rarest → auto-assign → start",
   "steps": [
     {"action": "reload", "waitMs": 3000, "_comment": "Reset state, wait for app to fully load"},
-    {"action": "waitFor", "selector": ".fw-stage--desktop", "timeout": 8000, "_comment": "Canvas rendered"},
+    {"action": "waitFor", "selector": ".fw-stage--desktop, .fw-stage--mobile, #root", "timeout": 8000, "_comment": "Canvas rendered (runner targets ?view=mobile, so accept either stage)"},
     {"action": "if", "condition": "!!document.querySelector('.lb2-coach')", "steps": [
       {"action": "click", "selector": ".lb2-coach", "_comment": "FTUE coach page 1 (Howdy! Welcome to the MBA!)"},
       {"action": "waitFor", "selector": ".lb2-coach", "timeout": 3000},
@@ -32,7 +32,7 @@
       {"action": "click", "selector": "text=CONTINUE TO DRAFT", "_comment": "Step 3 → draft screen"}
     ], "_comment": "Step through 3-step TeamSetupView wizard"},
     {"action": "waitFor", "selector": ".draft-start-btn", "timeout": 20000, "_comment": "INITIATE DRAFT SEQUENCE button"},
-    {"action": "click", "selector": ".draft-start-btn", "_comment": "Begin anomaly scan + draft"},
+    {"action": "click", "selector": ".draft-start-btn", "_comment": "Begin draft (anomaly scan cinematic disabled)"},
     {"action": "if", "condition": "!!document.querySelector('.draft-coach')", "steps": [
       {"action": "click", "selector": ".draft-coach", "_comment": "Coach page 1"},
       {"action": "waitFor", "selector": ".draft-coach", "timeout": 2000},
@@ -42,10 +42,17 @@
     ], "_comment": "Draft FTUE coach (3 pages) before scan begins"},
     {"action": "while", "max": 10, "until": "window.__pickCount >= 5 || !!document.querySelector('.da-btn.primary.big')", "steps": [
       {"action": "if", "condition": "!document.querySelector('.draft-card-slot .dc-tier-label') || Array.from(document.querySelectorAll('.draft-card-slot .dc-tier-label')).some(l => !l.textContent.trim())", "steps": [
-        {"action": "waitFor", "selector": ".draft-coach", "timeout": 30000, "_comment": "Wait for initial coach (round 1: shown after intro scan)"},
-        {"action": "click", "selector": ".draft-coach", "_comment": "Dismiss coach for face-down stage (round 1 only)"},
+        {"action": "waitFor", "selector": ".draft-card-slot:nth-child(3).phase-back .draft-card-anim", "timeout": 30000, "_comment": "3rd (last-staggered) card materialized => entryDone true, so card clicks register"},
+        {"action": "if", "condition": "[1, 2, 5].includes((window.__pickCount ?? 0) + 1)", "steps": [
+          {"action": "waitFor", "selector": ".draft-coach", "timeout": 15000, "_comment": "getFtueLine('ready') only has a line for picks 1, 2 and the last one"},
+          {"action": "click", "selector": ".draft-coach", "_comment": "Dismiss so the card click isn't swallowed by the coach gate"}
+        ], "_comment": "Picks 3-4 have no ready-stage coach — don't wait for one"},
         {"action": "click", "selector": ".draft-card-slot:nth-child(1) .draft-card-anim", "_comment": "Click first card to flip all 3 face-up"},
         {"action": "sleep", "ms": 7500, "_comment": "Wait ~7s for staggered flip animation"},
+        {"action": "if", "condition": "!document.querySelector('.draft-card-slot .dc-tier-label')", "steps": [
+          {"action": "click", "selector": ".draft-card-slot:nth-child(1) .draft-card-anim", "_comment": "Retry flip if the first click was swallowed"},
+          {"action": "sleep", "ms": 6000}
+        ], "_comment": "Safety retry — flip is a no-op click if a gate ate the first one"},
         {"action": "waitFor", "selector": ".draft-card-slot .dc-tier-label", "timeout": 15000}
       ], "_comment": "Cards face-down — wait for coach (if round 1), dismiss, flip"},
       {"action": "waitFor", "selector": ".draft-coach", "timeout": 15000, "_comment": "Coach reappears after flip (revealed stage)"},

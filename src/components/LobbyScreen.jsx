@@ -651,12 +651,11 @@ export default function LobbyScreen({ username, credits, energy, maxEnergy, home
     }
   };
 
+  // Always report intent upward. App owns the destination decision (see
+  // enterDraftFlow in App.jsx) - this used to branch to onDraft() for FTUE
+  // users, which bypassed App's onPlay router entirely.
   const handlePlay = () => {
-    if (isFtue || !homeRoster.length) {
-      onDraft();
-    } else {
-      onPlay(selectedMode);
-    }
+    onPlay(selectedMode);
   };
 
   // If the user has no roster yet, route any "roster/collection" entry point

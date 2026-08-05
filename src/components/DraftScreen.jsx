@@ -104,6 +104,16 @@ const BURST_DELAY       = 4;
 // Tick at which all 3 cards have finished materializing
 const ENTRY_END_TICK = DNA_ENTRY_DELAY + 2*DNA_START_STAGGER + DNA_DUR + MATERIALIZE_DUR;
 
+// FTUE onboarding simplification: the anomaly-scan + universe-lock cinematic is
+// disabled. AnomalyScan / PlanetOrbit and their timing constants are left intact
+// — flip this to true to bring the whole sequence back.
+const ANOMALY_SCAN_ENABLED = false;
+
+// When the cinematic is skipped, the tick engine starts past the scan/planet
+// window (the same base picks 2-5 already use) so the draft goes straight to the
+// DNA download + card reveal.
+const SCAN_SKIP_TICK = PLANET_WAIT_END + 30;
+
 const BASE_PAIRS  = [['A','T'],['T','A'],['G','C'],['C','G']];
 const NUCLEOTIDES = 'ATCG';
 
@@ -887,7 +897,7 @@ function getFtueLine(phase, pickNum, total, tick, hasAbility = false) {
 
 export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', onStart, onBack, onMenu, onPaidComplete }) {
   // mode: 'free'  → FTUE/free 5-player draft (uses freeDrafts, then assign to lineup)
-  //       'credit'→ paid SINGLE-player draft (server charges the monthly doubling
+  //       'credit'→ paid SINGLE-player draft (server charges the weekly +25%
   //                 cost, the player lands in the collection — no lineup assign).
   const paidMode = mode === 'credit';
   const targetCount = paidMode ? 1 : ROSTER_SIZE;
@@ -989,8 +999,9 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
     const newCards = rollCards([]);
     setCards(newCards);
     setStarted(true);
-    tickBaseRef.current = 0;
-    setTick(0);
+    const base = ANOMALY_SCAN_ENABLED ? 0 : SCAN_SKIP_TICK;
+    tickBaseRef.current = base;
+    setTick(base);
     setPlanetIdx(Math.floor(Math.random()*6));
     setUniverseId(Math.floor(Math.random()*1000).toString().padStart(3,'0'));
     // For FTUE on their first pick, show the coach intro BEFORE running the
@@ -1074,7 +1085,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
       // the DNA card reveal. Universe + planet stay the same across all
       // 5 picks of this draft.
       const nextCards = rollCards(newRoster);
-      const nextBase = PLANET_WAIT_END + 30;
+      const nextBase = SCAN_SKIP_TICK;
       tickBaseRef.current = nextBase;
       setCards(nextCards);
       setFlipTicks([null,null,null]);
@@ -1090,7 +1101,7 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
 
   // ── Backend ──────────────────────────────────────────────────────────────
   // Paid single draft: charge + mint on the server (cost is computed there from
-  // the monthly doubling schedule), then surface the result. The player lands in
+  // the weekly +25% schedule), then surface the result. The player lands in
   // the collection; the user slots it via the Collection screen.
   const handlePaidComplete = async (player) => {
     setSaving(true);
@@ -1397,15 +1408,17 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
                   <span>INITIATE DRAFT SEQUENCE</span>
                   <span className="dsb-bracket">]</span>
                 </button>
-                <div className="draft-start-hint">▸ CLICK TO BEGIN ANOMALY SCAN</div>
+                <div className="draft-start-hint">
+                  {ANOMALY_SCAN_ENABLED ? '▸ CLICK TO BEGIN ANOMALY SCAN' : '▸ CLICK TO BEGIN DRAFT'}
+                </div>
               </div>
             )}
 
-            {/* Anomaly scan overlay */}
-            {started && !coachIntro && <AnomalyScan tick={tick} universeId={universeId} />}
+            {/* Anomaly scan overlay (disabled via ANOMALY_SCAN_ENABLED) */}
+            {ANOMALY_SCAN_ENABLED && started && !coachIntro && <AnomalyScan tick={tick} universeId={universeId} />}
 
-            {/* Planet orbit */}
-            {started && !coachIntro && <PlanetOrbit tick={tick} lockedPlanetIdx={planetIdx} universeId={universeId} />}
+            {/* Planet orbit / universe lock (disabled via ANOMALY_SCAN_ENABLED) */}
+            {ANOMALY_SCAN_ENABLED && started && !coachIntro && <PlanetOrbit tick={tick} lockedPlanetIdx={planetIdx} universeId={universeId} />}
           </div>
 
           {/* ACTIONS */}

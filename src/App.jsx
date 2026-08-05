@@ -342,6 +342,26 @@ export default function App() {
   const [rawLineup, setRawLineup]   = React.useState({});
   const [isFtue, setIsFtue] = React.useState(true); // true until persisted completion flag is received
   const [ftueIntroSeen, setFtueIntroSeen] = React.useState(false);
+  // FTUE onboarding simplification: the intro video screen is disabled. The
+  // scene + component are left intact — flip this to true to bring it back.
+  const FTUE_INTRO_ENABLED = false;
+
+  // Single source of truth for "where does the draft flow start?".
+  // This logic previously existed in three places, one of which was inside
+  // FtueIntroVideo.onDone - so disabling the intro video silently deleted the
+  // only path that sent a brand-new user to team setup, dumping them on the
+  // draft hub instead. Keep this the ONLY place that answers the question.
+  const enterDraftFlow = () => {
+    const hasTeam = homeTeamName && homeTeamName !== 'HOME';
+    if (isFtue && homeRoster.length === 0) {
+      setScene(hasTeam ? 'draft' : 'teamSelect');
+    } else if (isFtue && homeRoster.length === 5) {
+      // Drafted but quit before the first game - straight into the game.
+      setScene('matchmaking');
+    } else {
+      setScene('draftHub');
+    }
+  };
 
   // ── Challenge Me ──────────────────────────────────────────
   // getChallenge resolves context.postId server-side → null when the current
@@ -553,29 +573,22 @@ export default function App() {
             // scene-driven music starts cleanly on mobile (iOS Safari needs
             // play() invoked from a direct gesture handler).
             titleMusic.start();
-            const hasTeam = homeTeamName && homeTeamName !== 'HOME';
             // Energy is only spent entering a game. Drafting and team-select
             // are free, so the gate wraps the matchmaking branches only.
             const noEnergy = serverEnergy != null && serverEnergy <= 0;
-            if (isFtue && !ftueIntroSeen) {
+            if (FTUE_INTRO_ENABLED && isFtue && !ftueIntroSeen) {
               setScene('ftueIntro');
             } else if (homeRoster.length === 5 && noEnergy) {
               setEnergyBlock(true);
-            } else if (isFtue && homeRoster.length === 5) {
-              // FTUE user already drafted but quit before completing their
-              // first game — skip the draft hub and drop them into the game.
+            } else if (homeRoster.length === 5) {
               setScene('matchmaking');
-            } else if (!isFtue && homeRoster.length === 5) {
-              setScene('matchmaking');
-            } else if (isFtue && homeRoster.length === 0) {
-              setScene(hasTeam ? 'draft' : 'teamSelect');
             } else {
-              setScene('draftHub');
+              enterDraftFlow();
             }
           }}
           onCollection={() => setScene('collection')}
           onDraft={() => {
-            if (isFtue && !ftueIntroSeen) setScene('ftueIntro');
+            if (FTUE_INTRO_ENABLED && isFtue && !ftueIntroSeen) setScene('ftueIntro');
             else setScene('draftHub');
           }}
           onAuction={openBattlePass}
@@ -676,16 +689,7 @@ export default function App() {
         <FtueIntroVideo
           onDone={() => {
             setFtueIntroSeen(true);
-            const hasTeam = homeTeamName && homeTeamName !== 'HOME';
-            if (homeRoster.length === 0) {
-              setScene(hasTeam ? 'draft' : 'teamSelect');
-            } else if (isFtue && homeRoster.length === 5) {
-              // FTUE user with a full roster from a prior abandoned session —
-              // straight into the first game.
-              setScene('matchmaking');
-            } else {
-              setScene('draftHub');
-            }
+            enterDraftFlow();
           }}
         />
       )}

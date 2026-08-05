@@ -1,0 +1,118 @@
+{
+  "name": "zz-verify-roster-labels",
+  "description": "Roster: CAPTAIN (not LEADER), LINE UP + COLLECTION section titles, tight gaps, back button on the WINS/LOSSES line.",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "carol",
+      "note": "Test isolation: this test asserts roster DOM and needs a user WITH a roster, starting from the lobby. Without this it inherits whatever screen the previous test left behind."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 20000
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='bnav-collection']"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-state='collection']",
+      "timeout": 10000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='roster-record']",
+      "timeout": 10000
+    },
+    {
+      "action": "sleep",
+      "ms": 900
+    },
+    {
+      "action": "extract",
+      "expression": "document.querySelector('.leader-banner')?.textContent?.trim() ?? 'NO-BANNER'",
+      "into": "banner"
+    },
+    {
+      "action": "extract",
+      "expression": "document.querySelector('[data-testid=\"lineup-title\"]')?.textContent?.trim() ?? 'NO-TITLE'",
+      "into": "lineupTitle"
+    },
+    {
+      "action": "extract",
+      "expression": "document.querySelector('[data-testid=\"collection-title\"]')?.textContent?.trim() ?? 'NO-COLLECTION-TITLE'",
+      "into": "collectionTitle"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var b=document.body.innerText.toUpperCase();return b.includes('LEADER')?'LEADER-STILL-PRESENT':'no-leader-text';})()",
+      "into": "leftoverLeader"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var t=document.querySelector('[data-testid=\"collection-title\"]'),s=document.querySelector('.squad-bar'),h=document.querySelector('.cgw-hint'),g=document.querySelector('.collection-grid');if(!t||!s||!h||!g)return 'MISSING';var tb=t.getBoundingClientRect(),sb=s.getBoundingClientRect(),hb=h.getBoundingClientRect(),gb=g.getBoundingClientRect();return JSON.stringify({belowLineup:tb.top>=sb.bottom-1,aboveHint:tb.bottom<=hb.top+1,aboveGrid:tb.bottom<=gb.top+1,gapFromLineup:Math.round(tb.top-sb.bottom),gapToHint:Math.round(hb.top-tb.bottom),centered:Math.abs((tb.left+tb.right)/2-(gb.left+gb.right)/2)<=2});})()",
+      "into": "collectionTitlePlacement"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var t=document.querySelector('[data-testid=\"collection-title\"]');var l=document.querySelector('[data-testid=\"lineup-title\"]');if(!t||!l)return 'MISSING';var a=getComputedStyle(t),b=getComputedStyle(l);return JSON.stringify({fontMatch:a.fontFamily===b.fontFamily&&a.fontSize===b.fontSize&&a.letterSpacing===b.letterSpacing,colorMatch:a.color===b.color,fontSize:a.fontSize,visible:a.display!=='none'&&a.visibility!=='hidden'&&t.getBoundingClientRect().height>0});})()",
+      "into": "titleStyleParity"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var r=document.querySelector('[data-testid=\"roster-record\"]'),t=document.querySelector('[data-testid=\"lineup-title\"]'),s=document.querySelector('.squad-bar');if(!r||!t||!s)return 'MISSING';var rb=r.getBoundingClientRect(),tb=t.getBoundingClientRect(),sb=s.getBoundingClientRect();var above=Math.round(tb.top-rb.bottom),below=Math.round(sb.top-tb.bottom);return JSON.stringify({above:above,below:below,orderOk:(tb.top>=rb.bottom-1&&tb.bottom<=sb.top+1),tightOk:(above<=20&&below<=20)});})()",
+      "into": "lineupGaps"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var b=document.querySelector('.col-record-row .back-btn'),w=document.querySelector('[data-testid=\"roster-record-wins\"]');if(!b||!w)return 'MISSING';var bb=b.getBoundingClientRect(),wb=w.getBoundingClientRect();var overlap=Math.min(bb.bottom,wb.bottom)-Math.max(bb.top,wb.top);return JSON.stringify({backLeftOfWins:bb.right<=wb.left+1,vOverlapPx:Math.round(overlap),sameLine:overlap>0});})()",
+      "into": "backBtnLine"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var n=document.querySelector('.col-topnav');if(!n)return 'NO-TOPNAV';var r=n.getBoundingClientRect(),cs=getComputedStyle(n);return JSON.stringify({display:cs.display,height:Math.round(r.height)});})()",
+      "into": "topnav"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var s=document.querySelector('.squad-bar');if(!s)return 'MISSING';var cs=getComputedStyle(s);var w=document.querySelector('.collection-grid-wrap');return JSON.stringify({padTop:cs.paddingTop,padBottom:cs.paddingBottom,symmetric:cs.paddingTop===cs.paddingBottom,buffPresent:!!document.querySelector('.sqb-buff'),gridWrapMarginTop:w?getComputedStyle(w).marginTop:'NO-WRAP'});})()",
+      "into": "squadPadding"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var slots=[].slice.call(document.querySelectorAll('.squad-slot'));var t=document.querySelector('[data-testid=\"collection-title\"]');var h=document.querySelector('.cgw-hint');if(!slots.length||!t||!h)return 'MISSING';var lastBottom=Math.max.apply(null,slots.map(function(e){return e.getBoundingClientRect().bottom;}));return JSON.stringify({toCollectionTitle:Math.round(t.getBoundingClientRect().top-lastBottom),toHint:Math.round(h.getBoundingClientRect().top-lastBottom)});})()",
+      "into": "bottomGap"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var slots=[].slice.call(document.querySelectorAll('.squad-slot'));var t=document.querySelector('[data-testid=\"collection-title\"]');if(!slots.length||!t)return 'MISSING';var lastBottom=Math.max.apply(null,slots.map(function(e){return e.getBoundingClientRect().bottom;}));var total=t.getBoundingClientRect().top-lastBottom;return total<=40?'PASS-tight-'+Math.round(total):'FAIL-too-loose-'+Math.round(total);})()",
+      "into": "bottomGapVerdict"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var h=document.querySelector('.cgw-hint');if(!h)return 'MISSING';var cs=getComputedStyle(h);var teal=getComputedStyle(document.documentElement).getPropertyValue('--c-left').trim();return JSON.stringify({text:h.textContent.trim().slice(0,18),color:cs.color,tokenCLeft:teal,isTeal:cs.color==='rgb(25, 230, 196)',notDim:cs.color.indexOf('rgba')===-1});})()",
+      "into": "hintColor"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var h=document.querySelector('.cgw-hint');if(!h)return 'MISSING';var c=getComputedStyle(h).color;var m=c.match(/\\d+/g);if(!m)return 'FAIL-unparsed-'+c;var r=+m[0],g=+m[1],b=+m[2];return (g>180&&b>150&&r<90)?'PASS-teal-'+c:'FAIL-not-teal-'+c;})()",
+      "into": "hintColorVerdict"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/roster-labels.png"
+    },
+    {
+      "action": "click",
+      "selector": ".col-record-row .back-btn"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 10000,
+      "_comment": "ASSERT: relocated back button still navigates to the lobby"
+    }
+  ]
+}

@@ -27,27 +27,33 @@ body.is-mobile .col-topnav {
   height: auto;
   gap: 10px;
 }
-body.is-mobile .col-topnav .back-btn,
+body.is-mobile .col-record-row .back-btn,
 body.is-mobile .col-topnav .filter-btn {
   padding: 8px 10px;
   font-size: 10px;
   letter-spacing: 0.14em;
   gap: 5px;
 }
-body.is-mobile .col-topnav .back-btn span:nth-child(2),
+body.is-mobile .col-record-row .back-btn span:nth-child(2),
 body.is-mobile .col-topnav .filter-btn span:nth-child(2) {
   display: none;
 }
 body.is-mobile .ct-big { font-size: 22px; letter-spacing: 0.22em; }
 body.is-mobile .ct-sub { font-size: 10px; letter-spacing: 0.16em; }
 
+body.is-mobile .col-section-title { font-size: 9px; letter-spacing: 0.24em; padding: 1px 10px 3px; }
+
+/* Back button + record bar on one line */
+body.is-mobile .col-record-row { gap: 8px; }
+
 /* Squad bar mobile */
 body.is-mobile .squad-bar {
   flex-direction: column;
   align-items: stretch;
   gap: 12px;
-  padding: 12px 14px 32px;
+  padding: 12px 14px 12px;
 }
+body.is-mobile .squad-bar:has(.sqb-buff) { padding-bottom: 32px; }
 body.is-mobile .sqb-l {
   flex-direction: column;
   align-items: stretch;

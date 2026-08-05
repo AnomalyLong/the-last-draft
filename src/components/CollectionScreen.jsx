@@ -161,7 +161,7 @@ function SquadSlot({ pos, player, isFirst, selected, onClick }) {
       onMouseEnter={() => playCursor()}
       style={{ '--c': rc.color, '--ca': rc.accent }}
     >
-      {isFirst && <div className="leader-banner">LEADER</div>}
+      {isFirst && <div className="leader-banner">CAPTAIN</div>}
       <div className="squad-portrait" style={{
         background: `radial-gradient(ellipse at 50% 30%, ${rc.color}66, transparent 70%),
                      linear-gradient(180deg, ${rc.color}22, ${rc.color}05)`,
@@ -699,16 +699,21 @@ export function CollectionScreen({ roster = [], lineup: lineupProp = {}, usernam
     <div ref={containerRef} data-state="collection" style={{ position: 'absolute', inset: 0, overflowY: 'auto' }}>
       <div className="collection">
         <div className="col-topnav">
-          <button className="back-btn" onClick={() => { playCancel(); onBack?.(); }} onMouseEnter={() => playCursor()}>
-            <span className="bk-glyph">◀</span>
-          </button>
           <div className="col-title">
             <span className="ct-big">ROSTER</span>
             <span className="ct-sub">PLAYER REGISTRY</span>
           </div>
         </div>
 
-        <RecordBar stats={stats} />
+        {/* Back button rides in the record row so it shares a line with WINS/LOSSES. */}
+        <div className="col-record-row">
+          <button className="back-btn" onClick={() => { playCancel(); onBack?.(); }} onMouseEnter={() => playCursor()}>
+            <span className="bk-glyph">◀</span>
+          </button>
+          <RecordBar stats={stats} />
+        </div>
+
+        <div className="col-section-title" data-testid="lineup-title">LINE UP</div>
 
         <SquadBar
           roster={activeRoster}
@@ -737,6 +742,7 @@ export function CollectionScreen({ roster = [], lineup: lineupProp = {}, usernam
         )}
 
         <div className="collection-grid-wrap">
+          <div className="col-section-title" data-testid="collection-title">COLLECTION</div>
           <div className="cgw-hint">SELECT A PLAYER TO VIEW OR ASSIGN TO LINEUP</div>
           <div className="collection-grid">
             {activeRoster.map(p => {

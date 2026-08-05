@@ -354,6 +354,11 @@
 }
 .ts-sw-chip {
   position: relative;
+  /* Chromium's UA stylesheet sets `align-items: flex-start` on <button>, so this
+     grid would shrink-to-fit its two empty .ts-sw-half children and collapse to
+     0px wide (border-only sliver), hiding the colour entirely. The parent .ts-sw
+     is a flex column, so an explicit width is engine-independent. */
+  width: 100%;
   height: 86px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   overflow: hidden;

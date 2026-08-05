@@ -1,0 +1,95 @@
+{
+  "name": "zz-verify-uniform-swatches",
+  "description": "Regression guard for the uniform colour swatches collapsing to a 0px sliver. Chromium's UA stylesheet puts align-items:flex-start on <button>, so .ts-sw-chip (a grid inside the flex-column .ts-sw button) shrink-to-fits its two empty halves unless it has an explicit width. Asserts each chip fills its button and each colour half actually has painted area. Run bob-reset-dave immediately before this so Play routes to team setup.",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "dave"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 30000
+    },
+    {
+      "action": "while",
+      "max": 5,
+      "until": "!document.querySelector('.lb2-coach')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": ".lb2-coach"
+        },
+        {
+          "action": "sleep",
+          "ms": 700
+        }
+      ]
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='bnav-play']"
+    },
+    {
+      "action": "waitFor",
+      "selector": ".tsetup",
+      "timeout": 20000
+    },
+    {
+      "action": "waitFor",
+      "selector": ".ts-name-input",
+      "timeout": 8000
+    },
+    {
+      "action": "type",
+      "selector": ".ts-name-input",
+      "text": "PROBE"
+    },
+    {
+      "action": "sleep",
+      "ms": 300
+    },
+    {
+      "action": "click",
+      "selector": ".ts-btn.primary"
+    },
+    {
+      "action": "waitFor",
+      "selector": ".ts-swatches",
+      "timeout": 8000
+    },
+    {
+      "action": "sleep",
+      "ms": 600
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var bad=[];document.querySelectorAll('.ts-sw').forEach(function(b){var chip=b.querySelector('.ts-sw-chip');var bw=b.getBoundingClientRect().width;var cw=chip?chip.getBoundingClientRect().width:0;if(cw<bw-2)bad.push(((b.querySelector('.ts-sw-name')||{}).textContent||'?')+' chip='+Math.round(cw)+'/btn='+Math.round(bw));});return bad.length===0?'PASS-all-chips-fill-button':('FAIL-collapsed: '+bad.join(', '));})()",
+      "into": "chipFillVerdict"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var bad=[];document.querySelectorAll('.ts-sw').forEach(function(b){var name=(b.querySelector('.ts-sw-name')||{}).textContent||'?';['lt','rt'].forEach(function(k){var h=b.querySelector('.ts-sw-half.'+k);var r=h?h.getBoundingClientRect():{width:0,height:0};var grad=h?/gradient/.test(getComputedStyle(h).backgroundImage):false;if(r.width<20||r.height<10||!grad)bad.push(name+'.'+k+' '+Math.round(r.width)+'x'+Math.round(r.height)+' grad='+grad);});});return bad.length===0?'PASS-all-16-halves-painted':('FAIL: '+bad.join(', '));})()",
+      "into": "halfPaintVerdict"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var c=document.querySelector('.ts-sw-chip');var cs=getComputedStyle(c);var r=c.getBoundingClientRect();return 'chip='+Math.round(r.width)+'x'+Math.round(r.height)+' cols='+cs.gridTemplateColumns;})()",
+      "into": "chipGeometry"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var all=document.querySelectorAll('.ts-sw');var unlocked=Array.prototype.filter.call(all,function(b){return !b.classList.contains('is-locked');});return 'total='+all.length+' selectable='+unlocked.length+' selectableName='+(unlocked.length?(unlocked[0].querySelector('.ts-sw-name')||{}).textContent:'NONE')+' (locked ones are dimmed by design via UNLOCKED_COLOR)';})()",
+      "into": "lockState"
+    },
+    {
+      "action": "eval",
+      "expression": "(function(){var sw=document.querySelectorAll('.ts-sw');if(sw.length!==8)throw new Error('ASSERT-FAIL expected 8 swatches, got '+sw.length);var bad=[];document.querySelectorAll('.ts-sw-chip').forEach(function(c){var w=c.getBoundingClientRect().width;if(w<=100)bad.push(Math.round(w));});if(bad.length)throw new Error('ASSERT-FAIL '+bad.length+' chip(s) collapsed to border-only slivers: widths=['+bad.join(',')+'] - the UA align-items:flex-start regression is back');return 'ASSERT-OK-8-chips-wide';})()",
+      "_comment": "HARD ASSERT: throws (and fails the step) if any of the 8 chips collapse. 'assert' is not a valid runner action - eval+throw is the working idiom."
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/verify-uniform-swatches.png"
+    }
+  ]
+}

@@ -312,14 +312,14 @@ export const appRouter = t.router({
 
   // ── Draft ───────────────────────────────────────────────────────────────
   draft: t.router({
-    // Cost + count for the user's NEXT paid draft this month (doubling
-    // schedule, server-authoritative). Drives the Draft Hub display.
+    // Cost + count for the user's NEXT paid draft this week (+25% per buy,
+    // server-authoritative). Drives the Draft Hub display.
     cost: publicProcedure.query(async () => {
       const username = await requireUsername();
       return await getNextDraftCost(username);
     }),
 
-    // Buy a draft pick: charges the monthly doubling cost NOW and banks a
+    // Buy a draft pick: charges the weekly +25% cost NOW and banks a
     // reusable pick on the user (persists until consumed via draft.credit).
     buy: publicProcedure.mutation(async () => {
       const username = await requireUsername();

@@ -1,0 +1,81 @@
+{
+  "name": "zz-verify-draft-cost-weekly",
+  "description": "Draft Hub: buy-a-draft copy says +25% each buy / resets weekly (no 'doubles'/'monthly'), price shows first-tier 2,500, and draft.cost returns cost + draftsThisWeek. Self-resets to the lobby first so it can run repeatedly.",
+  "steps": [
+    {
+      "action": "extract",
+      "expression": "(function(){if(document.querySelector('[data-testid=\"lobby-screen\"]'))return 'already-lobby';var b=document.querySelector('.dh-back-btn')||document.querySelector('.back-btn');if(b){b.click();return 'clicked-back-to-lobby';}return 'no-back-found';})()",
+      "into": "resetToLobby"
+    },
+    {
+      "action": "sleep",
+      "ms": 1200
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 20000
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){window.__dc='pending';fetch('/api/trpc/draft.cost?batch=1',{method:'GET'}).then(r=>r.text()).then(t=>{window.__dc=t.slice(0,300);}).catch(e=>{window.__dc='ERR '+e.message;});return 'kicked';})()",
+      "into": "kickCostFetch"
+    },
+    {
+      "action": "sleep",
+      "ms": 2000
+    },
+    {
+      "action": "extract",
+      "expression": "String(window.__dc)",
+      "into": "rawCostResponse"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var t=String(window.__dc);var m=t.match(/\"cost\"\\s*:\\s*(\\d+)/);var w=t.match(/\"draftsThisWeek\"\\s*:\\s*(\\d+)/);return JSON.stringify({serverCost:m?Number(m[1]):'NONE',draftsThisWeek:w?Number(w[1]):'MISSING-FIELD',hasMonthField:t.includes('draftsThisMonth'),firstTier:m?Number(m[1])===2500:false});})()",
+      "into": "serverShape"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='bnav-draft']"
+    },
+    {
+      "action": "sleep",
+      "ms": 1500
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var n=document.querySelector('.dh-credit-note');var b=document.querySelector('.dh-btn.credit');return JSON.stringify({onHub:!!n,note:n?n.textContent.trim():'NO-NOTE',btn:b?b.textContent.trim():'NO-BTN'});})()",
+      "into": "hubCopy"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var n=document.querySelector('.dh-credit-note');if(!n)return 'NO-NOTE';var t=n.textContent.toLowerCase();return JSON.stringify({saysPlus25:t.includes('+25%'),saysWeekly:t.includes('week'),leftoverDoubles:t.includes('doubl'),leftoverMonthly:t.includes('month')});})()",
+      "into": "noteWording"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var t=(document.body.innerText||'').toLowerCase();return JSON.stringify({anyDoubles:t.includes('doubl'),anyMonthly:t.includes('month')});})()",
+      "into": "screenLeftovers"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var n=document.querySelector('.dh-credit-note'),b=document.querySelector('.dh-btn.credit');if(!n||!b)return 'MISSING';var m=(n.textContent+' '+b.textContent).match(/([\\d,]{3,})\\s*CR/);return m?m[1]:'NO-PRICE-SHOWN';})()",
+      "into": "shownPrice"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var t=String(window.__dc);var m=t.match(/\"cost\"\\s*:\\s*(\\d+)/);var n=document.querySelector('.dh-credit-note'),b=document.querySelector('.dh-btn.credit');if(!m||!n||!b)return 'MISSING';var p=(n.textContent+' '+b.textContent).match(/([\\d,]{3,})\\s*CR/);if(!p)return 'NO-PRICE-SHOWN';return Number(p[1].replace(/,/g,''))===Number(m[1])?'MATCH-'+m[1]:'MISMATCH ui='+p[1]+' server='+m[1];})()",
+      "into": "uiMatchesServer"
+    },
+    {
+      "action": "extract",
+      "expression": "(function(){var s=document.querySelector('.dh-credit-note');if(!s)return 'MISSING';var c=getComputedStyle(s);var r=s.getBoundingClientRect();return JSON.stringify({visible:c.display!=='none'&&c.visibility!=='hidden'&&r.height>0,overflows:r.width>window.innerWidth,w:Math.round(r.width),h:Math.round(r.height)});})()",
+      "into": "noteLayout"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/draft-hub-weekly.png"
+    }
+  ]
+}
