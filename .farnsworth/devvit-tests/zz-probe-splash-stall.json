@@ -1,0 +1,46 @@
+{
+  "name": "probe: longest frozen interval in the splash attract loop (measures dead air from the play/defense input gates)",
+  "description": "The feed tile visibly froze on possession changes. Cause was the human-input gates: the play picker parks the possession, and the defense picker sets gamePausedRef with an 8250ms (DEFENSE_PICK_MS) self-dismiss - with no overlay drawn that reads as the court simply stopping. SplashCourt now answers both at GATE_MS=0. This samples player positions every 100ms for 30s and reports the longest run of consecutive samples in which NOTHING moved, which is exactly the dead air a scroller would see. Diagnostic plus one assertion: no freeze longer than 2s.",
+  "steps": [
+    {
+      "action": "eval",
+      "expression": "(() => { location.search = '?mode=inline&t=' + Date.now(); return 'navigating'; })()"
+    },
+    { "action": "sleep", "ms": 2500 },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='splash-court'][data-attract='live']",
+      "timeout": 20000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid^='splash-player-']",
+      "timeout": 10000
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__s = { prev: '', run: 0, max: 0, samples: 0, frozen: 0 }; window.__t0 = Date.now(); return 'reset'; })()"
+    },
+    {
+      "action": "while",
+      "max": 400,
+      "until": "(() => { const s = window.__s; const sig = [...document.querySelectorAll('[data-testid^=\"splash-player-\"]')].map(n => { const g = n.querySelector('g,image,rect'); return n.getAttribute('data-anim') + (n.parentNode.textContent||''); }).join('|') + [...document.querySelectorAll('[data-testid^=\"splash-player-\"] text')].map(t=>t.getAttribute('x')+','+t.getAttribute('y')).join(';'); s.samples++; if (sig === s.prev) { s.run++; if (s.run > s.max) s.max = s.run; s.frozen++; } else { s.run = 0; } s.prev = sig; return Date.now() - window.__t0 > 30000; })()",
+      "steps": [ { "action": "sleep", "ms": 100 } ]
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const s = window.__s; return 'samples=' + s.samples + ' frozenSamples=' + s.frozen + ' longestFreezeMs=' + (s.max * 100); })()",
+      "into": "stallReport"
+    },
+    {
+      "action": "assert",
+      "expression": "window.__s.max * 100 < 2000",
+      "message": "longest frozen interval should be under 2000ms once the input gates are auto-answered"
+    },
+    { "action": "screenshot", "path": "/tmp/splash-stall-probe.png" },
+    {
+      "action": "eval",
+      "expression": "(() => { delete window.__s; delete window.__t0; return 'cleaned'; })()"
+    }
+  ]
+}

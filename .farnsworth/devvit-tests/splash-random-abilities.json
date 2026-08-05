@@ -1,0 +1,105 @@
+{
+  "name": "splash court: all 10 players get random rarity-weighted abilities, and the ability-only animations actually fire in the attract loop",
+  "description": "ABILITIES_PER_PLAYER in SplashCourt.jsx rolls N distinct abilities for every player on both fixture rosters via rollAbilities() in abilityRoll.js. Two things are checked. (1) DETERMINISTIC: every one of the 10 splash-player nodes exposes data-abilities with exactly 2 distinct names, so nobody was missed and nothing duplicated - the whole point of the change is that the sim otherwise only ever plays run/shoot/block/idle. (2) BEHAVIOURAL: sample data-anim until an ability-GATED animation appears (spindunk/ironblock/pickpocket/fadeaway/spin/dash). None of those six can occur without an ability, so seeing one proves useGame's hasAbility() is really reading the roster rows this component builds. Runs in App Desktop/Mobile: the splash normally only mounts inline (real feed or Post View), and Post View is not a WebContentsView, so step 1 navigates to ?mode=inline - App.jsx's DEV-only mode override.",
+  "steps": [
+    {
+      "action": "eval",
+      "expression": "(() => { location.search = '?mode=inline&t=' + Date.now(); return 'navigating to inline'; })()",
+      "_comment": "Post View is not a WebContentsView so the runner cannot attach to it. App.jsx's getMode() honours ?mode=inline in DEV builds, which mounts the same inline branch (SplashCourt) inside a normal webview. The cache-busting t= also guarantees a fresh module load, i.e. a fresh random ability roll."
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='splash-court']",
+      "timeout": 20000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='splash-court'][data-attract='live']",
+      "timeout": 5000,
+      "_comment": "The static ATTRACT mode has no sim, so the animation half of this test would be vacuous."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid^='splash-player-']",
+      "timeout": 10000
+    },
+    {
+      "action": "sleep",
+      "ms": 600
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const ns = [...document.querySelectorAll('[data-testid^=\"splash-player-\"]')]; return JSON.stringify(ns.map(n => n.getAttribute('data-team') + ' ' + n.getAttribute('data-role') + ': ' + n.getAttribute('data-abilities'))); })()",
+      "into": "loadouts",
+      "_comment": "The actual rolled loadouts, for eyeballing the distribution."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-ten,#probe-each-two,#probe-variety').forEach(n=>n.remove()); const ns = [...document.querySelectorAll('[data-testid^=\"splash-player-\"]')]; const lists = ns.map(n => (n.getAttribute('data-abilities')||'').split(',').filter(Boolean)); const every2 = lists.length > 0 && lists.every(l => l.length === 2 && new Set(l).size === 2); const union = new Set(lists.flat()); const mk = id => { const d = document.createElement('div'); d.id = id; document.body.appendChild(d); }; if (ns.length === 10) mk('probe-ten'); if (every2) mk('probe-each-two'); if (union.size >= 3) mk('probe-variety'); return JSON.stringify({players: ns.length, sizes: lists.map(l=>l.length), distinct: [...union]}); })()",
+      "into": "rosterAssertion"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-ten",
+      "timeout": 4000,
+      "_comment": "ASSERTION 1: a full 5v5 is on the floor, so 'everyone' means all 10."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-each-two",
+      "timeout": 4000,
+      "_comment": "ASSERTION 2: every player has exactly ABILITIES_PER_PLAYER abilities and they are distinct - rollAbilities samples without replacement."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-variety",
+      "timeout": 4000,
+      "_comment": "ASSERTION 3: at least 3 different abilities across the 20 draws. Guards against a degenerate roller handing the same ability to everyone (which would still satisfy assertions 1 and 2)."
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/splash-abilities-01-tipoff.png"
+    },
+    {
+      "action": "while",
+      "max": 200,
+      "until": "(() => { window.__anims = window.__anims || {}; document.querySelectorAll('[data-testid^=\"splash-player-\"]').forEach(n => { const a = n.getAttribute('data-anim') || 'idle'; window.__anims[a] = (window.__anims[a] || 0) + 1; }); const gated = ['spindunk','ironblock','pickpocket','fadeaway','spin','dash']; return gated.some(a => window.__anims[a] > 0); })()",
+      "steps": [
+        {
+          "action": "sleep",
+          "ms": 250
+        }
+      ],
+      "_comment": "Poll every 250ms, accumulating every animation state seen into window.__anims. Exits as soon as an ability-gated animation shows up."
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify(window.__anims || {})",
+      "into": "animationsSeen",
+      "_comment": "Full histogram of sampled animation states - shows what the feed tile is actually rendering."
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/splash-abilities-02-inplay.png"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-gated-anim').forEach(n=>n.remove()); const gated = ['spindunk','ironblock','pickpocket','fadeaway','spin','dash']; const seen = gated.filter(a => (window.__anims||{})[a] > 0); if (seen.length) { const d = document.createElement('div'); d.id='probe-gated-anim'; document.body.appendChild(d); } return JSON.stringify({gatedSeen: seen}); })()",
+      "into": "animAssertion"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-gated-anim",
+      "timeout": 4000,
+      "_comment": "ASSERTION 4: at least one animation that is impossible without an ability. This is the end-to-end link: roster row -> hasAbility() -> sprite."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-ten,#probe-each-two,#probe-variety,#probe-gated-anim').forEach(n=>n.remove()); delete window.__anims; return 'cleaned'; })()"
+    }
+  ]
+}

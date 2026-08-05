@@ -774,6 +774,13 @@ export default function LobbyScreen({ username, credits, energy, maxEnergy, home
 
       {/* FTUE coach — pages through intro lines, then points at PLAY. */}
       {isFtue && !coachDismissed && !modal && (
+        <>
+        {/* Tap-anywhere catcher. Deliberately z-index 56 (just above the FTUE
+            dim at 55) rather than above everything: the bottom nav is z-index
+            60, so PLAY stays directly tappable. If this sat on top, the last
+            coach line ("Tap the PLAY button") would be a trap — the tap would
+            dismiss the coach instead of starting the game. */}
+        <div className="lb2-coach-tap" onClick={advanceCoach} />
         <div className="lb2-coach" onClick={advanceCoach}>
           <svg viewBox="0 0 600 112" preserveAspectRatio="xMidYMid meet"
             width="100%" height="112" style={{ display: 'block', cursor: 'pointer' }}>
@@ -787,6 +794,7 @@ export default function LobbyScreen({ username, credits, energy, maxEnergy, home
             />
           </svg>
         </div>
+        </>
       )}
 
       {/* Bottom nav — sole navigation */}

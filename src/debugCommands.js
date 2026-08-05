@@ -18,6 +18,7 @@
 
 import { trpc } from './trpc';
 import { describeGutter, setOverride } from './viewportGutter.js';
+import { SPLASH_VARIANTS, describeSplash, setSplashOverride } from './splashConfig.js';
 
 export const COMMAND_META = {
   // ── Shared ────────────────────────────────────────────────────────────
@@ -29,6 +30,7 @@ export const COMMAND_META = {
   repairPlayers: { scope: 'both', help: 'repairPlayers <user|#id> [apply] [clampStats] — strip duplicate abilities (admins only; dry-run unless "apply")' },
   version: { scope: 'both', help: 'version — build stamp for client + server, plus viewport/safe-area diagnostics' },
   gutter: { scope: 'both', help: 'gutter [px|auto] — inspect/set the bottom-nav safe gutter (persists on this device)' },
+  splash: { scope: 'both', help: 'splash [classic|court|default] — inspect/set which post-view splash this device renders' },
 
   // ── Title only ────────────────────────────────────────────────────────
   admin: { scope: 'title', help: 'admin — open admin overlay (admins only)' },
@@ -157,6 +159,31 @@ const sharedImpls = {
     }
     const applied = setOverride(n);
     ctx.addLog(`gutter: override=${n}px -> applied=${applied}px (persists on this device)`, 'ok');
+  },
+
+  // Swap the inline (feed/post-view) splash between the original galaxy screen
+  // and the live-court attract loop. DEVICE-LOCAL and instant: no rebuild, no
+  // server write, no effect on other players. An already-open post view updates
+  // live via the storage event, so you can A/B the two side by side.
+  splash(args, ctx) {
+    const raw = (args[0] ?? '').trim().toLowerCase();
+    if (!raw) {
+      const s = describeSplash();
+      ctx.addLog(`splash: applied=${s.applied}  (${s.source})`);
+      ctx.addLog(`  default(build)=${s.default}  override=${s.override ?? 'none'}`);
+      ctx.addLog(`  usage: splash ${SPLASH_VARIANTS.join('|')} — or "splash default" to clear`);
+      return;
+    }
+    try {
+      const applied = raw === 'default' || raw === 'auto' || raw === 'clear'
+        ? setSplashOverride(null)
+        : setSplashOverride(raw);
+      const s = describeSplash();
+      ctx.addLog(`splash: ${applied} (${s.source})`, 'ok');
+      ctx.addLog('  post view updates live; other players are unaffected');
+    } catch (e) {
+      ctx.addLog(e.message, 'err');
+    }
   },
 
   version(args, ctx) {

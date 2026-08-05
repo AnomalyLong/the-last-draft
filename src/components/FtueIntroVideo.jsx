@@ -2,6 +2,21 @@ import React from 'react';
 import videoSrc from '../videos/MBAtest1080.mp4';
 import { audioSettings, musicVolume, subscribeAudioSettings } from '../sound/audioSettings.js';
 
+// Every text overlay in here must set its own line-height. The app root
+// (App.jsx, `[data-testid="game-root"]`) applies an inline `lineHeight: 0`
+// — load-bearing for the pixel-art sprite layout, but inherited by ALL
+// descendants, so any container with real text gets zero-height line boxes
+// and stacked lines paint on the SAME baseline instead of below each other.
+//
+// That is exactly how "SKIP INTRO? TAP AGAIN" rendered as an unreadable
+// smear: these prompts are positioned with `left: 50%` and no `right`, so
+// their shrink-to-fit width is capped at ~50% of the container, the string
+// wrapped to "SKIP INTRO? TAP" / "AGAIN", and the two lines overlapped
+// (line 2 left-aligned, so "AGAIN" sat on top of "SKIP "). Fixed on both
+// axes: nowrap prevents the wrap, and an explicit line-height means a
+// future longer string degrades to two readable lines instead of a smear.
+const PROMPT_LINE_HEIGHT = 1.2;
+
 export function FtueIntroVideo({ onDone }) {
   const videoRef = React.useRef(null);
   // Mobile browsers (iOS Safari especially) block autoplay of unmuted media.
@@ -119,6 +134,9 @@ export function FtueIntroVideo({ onDone }) {
           position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
           color: '#ff6b6b', fontFamily: 'monospace', fontSize: 12, textAlign: 'center',
           background: 'rgba(0,0,0,0.8)', padding: '12px 16px', borderRadius: 2,
+          // This one intentionally wraps (arbitrary-length error text + <br/>),
+          // so it needs a real line-height more than any of the others.
+          lineHeight: 1.5, maxWidth: '80%',
         }}>VIDEO ERROR: {error}<br/><br/>(tap anywhere to continue)</div>
       )}
       {needsTap && !error && (
@@ -129,6 +147,7 @@ export function FtueIntroVideo({ onDone }) {
           letterSpacing: 2, pointerEvents: 'none',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
           animation: 'tappulse 1.4s ease-in-out infinite',
+          lineHeight: PROMPT_LINE_HEIGHT, whiteSpace: 'nowrap',
         }}>
           <span style={{ lineHeight: 1 }}>
             {globalMuted ? 'TAP TO CONTINUE' : 'TAP TO ENABLE SOUND'}
@@ -146,6 +165,7 @@ export function FtueIntroVideo({ onDone }) {
           color: '#fff', fontFamily: 'monospace', fontSize: 12,
           background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: 2,
           letterSpacing: 1, pointerEvents: 'none',
+          lineHeight: PROMPT_LINE_HEIGHT, whiteSpace: 'nowrap',
         }}>TAP TO SKIP</div>
       )}
       {confirmSkip && (
@@ -155,6 +175,7 @@ export function FtueIntroVideo({ onDone }) {
           background: 'rgba(0,0,0,0.85)', padding: '8px 14px', borderRadius: 2,
           letterSpacing: 2, pointerEvents: 'none',
           border: '1px solid #ffeb3b',
+          lineHeight: PROMPT_LINE_HEIGHT, whiteSpace: 'nowrap',
         }}>SKIP INTRO? TAP AGAIN</div>
       )}
     </div>

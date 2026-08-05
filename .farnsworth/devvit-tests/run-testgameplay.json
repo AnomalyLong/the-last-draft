@@ -1,0 +1,85 @@
+{
+  "name": "debug `testGamePlay`: sandbox court -> run the real match loop, answering every input gate -> assert both teams score",
+  "description": "`testGamePlay` (useGame.js:2423) drives an automated match, but it is NOT unattended: loopHomeRef parks each home possession on the play picker, which has no auto-dismiss, and level-ups / quarter summaries also block until answered. An earlier version of this test never clicked them, so the sim stalled after one away bucket and looked merely 'slow'. This version answers every gate each pass and asserts 8+ combined points with BOTH teams on the board.",
+  "steps": [
+    { "action": "switchUser", "username": "bob", "_comment": "Needs an admin - DebugConsole only renders when isAdmin (GameScene.jsx)" },
+    { "action": "reload" },
+    { "action": "waitFor", "selector": "[data-testid='lobby-screen']", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']" },
+    { "action": "sleep", "ms": 300 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']" },
+
+    { "action": "waitFor", "selector": "[data-testid='dbg-toggle']", "timeout": 8000 },
+    { "action": "click", "selector": "[data-testid='dbg-toggle']" },
+    { "action": "waitFor", "selector": "[data-testid='debug-panel']", "timeout": 5000 },
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "court" },
+    { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()" },
+    { "action": "waitFor", "selector": "[data-testid='game-court']", "timeout": 15000 },
+    { "action": "waitFor", "selector": "[data-testid='game-root'][data-sandbox='1']", "timeout": 5000 },
+    { "action": "sleep", "ms": 800 },
+
+    { "action": "waitFor", "selector": "[data-testid='dbg-toggle']", "timeout": 8000 },
+    { "action": "click", "selector": "[data-testid='dbg-toggle']" },
+    { "action": "waitFor", "selector": "[data-testid='debug-input']", "timeout": 5000 },
+
+    { "action": "extract", "expression": "(() => { const n = s => (document.querySelector('[data-testid=' + s + ']')||{}).textContent || '?'; return JSON.stringify({home: n('score-home'), away: n('score-away'), clock: n('timer'), q: n('quarter')}); })()", "into": "beforeState", "_comment": "Baseline BEFORE the loop starts - testGamePlay zeroes these at tip-off" },
+
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "testGamePlay" },
+    { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()" },
+    { "action": "sleep", "ms": 1200 },
+
+    { "action": "extract", "expression": "(() => { const t = (document.querySelector('[data-testid=debug-log]')||{}).innerText || ''; return t.indexOf('already running') !== -1 ? 'ERR: loop was already running' : 'accepted'; })()", "into": "commandAccepted", "_comment": "Guard: the command no-ops with 'already running' if a previous loop was never stopped" },
+
+    { "action": "click", "selector": "[data-testid='dbg-toggle']", "_comment": "Close the console so screenshots show the court unobstructed" },
+    { "action": "sleep", "ms": 400 },
+    { "action": "screenshot", "path": "/tmp/testgameplay-01-tipoff.png" },
+
+    {
+      "action": "while",
+      "max": 40,
+      "until": "(() => { const n = s => parseInt(((document.querySelector('[data-testid=' + s + ']')||{}).textContent)||'0',10)||0; return n('score-home') + n('score-away') > 0; })()",
+      "steps": [
+        { "action": "clickIfPresent", "selector": "[data-testid='play-standard']", "_comment": "REQUIRED: loopHomeRef parks the possession on setPlayPickState(true) and resumes only from onPickPlay. PlayPickerOverlay has no auto-dismiss timer, so without this click the loop stalls on the first HOME possession." },
+        { "action": "clickIfPresent", "selector": "[data-testid='defense-guard']", "_comment": "Self-dismisses after DEFENSE_PICK_MS; clicking just keeps the pace up." },
+        { "action": "clickIfPresent", "selector": "[data-testid='levelup-ok']", "_comment": "Stat-upgrade variant of the level-up modal - halts play until dismissed." },
+        { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid^=\"levelup-ability-\"]'); if (!el) return 'none'; el.dispatchEvent(new MouseEvent('click', {bubbles:true})); return 'picked-ability'; })()", "_comment": "Ability variant of the level-up modal - testids are ability names, so match by prefix." },
+        { "action": "clickIfPresent", "selector": "[data-testid='quarter-summary-continue']", "_comment": "onDismissQuarterSummary is what advances the period - nothing else does." },
+        { "action": "sleep", "ms": 500 }
+      ],
+      "_comment": "Phase 1 - play until the FIRST bucket, answering every input gate each pass."
+    },
+
+    { "action": "extract", "expression": "(() => { const n = s => (document.querySelector('[data-testid=' + s + ']')||{}).textContent || '?'; return JSON.stringify({home: n('score-home'), away: n('score-away'), clock: n('timer'), q: n('quarter')}); })()", "into": "firstScoreState" },
+    { "action": "screenshot", "path": "/tmp/testgameplay-02-first-score.png" },
+
+    {
+      "action": "while",
+      "max": 60,
+      "until": "(() => { const n = s => parseInt(((document.querySelector('[data-testid=' + s + ']')||{}).textContent)||'0',10)||0; return n('score-home') + n('score-away') >= 8; })()",
+      "steps": [
+        { "action": "clickIfPresent", "selector": "[data-testid='play-standard']" },
+        { "action": "clickIfPresent", "selector": "[data-testid='defense-guard']" },
+        { "action": "clickIfPresent", "selector": "[data-testid='levelup-ok']" },
+        { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid^=\"levelup-ability-\"]'); if (!el) return 'none'; el.dispatchEvent(new MouseEvent('click', {bubbles:true})); return 'picked-ability'; })()" },
+        { "action": "clickIfPresent", "selector": "[data-testid='quarter-summary-continue']" },
+        { "action": "sleep", "ms": 500 }
+      ],
+      "_comment": "Phase 2 - keep answering gates until the teams have traded buckets (8+ combined points). A stalled loop can pass phase 1 on a single away possession; it cannot reach 8."
+    },
+
+    { "action": "screenshot", "path": "/tmp/testgameplay-03-midgame.png" },
+    { "action": "extract", "expression": "(() => { const n = s => (document.querySelector('[data-testid=' + s + ']')||{}).textContent || '?'; return JSON.stringify({home: n('score-home'), away: n('score-away'), clock: n('timer'), q: n('quarter')}); })()", "into": "afterState" },
+
+    { "action": "eval", "expression": "(() => { document.querySelectorAll('#probe-gameplay-ok,#probe-bothscored').forEach(n=>n.remove()); const n = s => parseInt(((document.querySelector('[data-testid=' + s + ']')||{}).textContent)||'0',10)||0; const home = n('score-home'), away = n('score-away'); if (home + away >= 8) { const d = document.createElement('div'); d.id='probe-gameplay-ok'; document.body.appendChild(d); } if (home > 0 && away > 0) { const d2 = document.createElement('div'); d2.id='probe-bothscored'; document.body.appendChild(d2); } return JSON.stringify({home, away}); })()", "into": "assertion" },
+    { "action": "waitFor", "selector": "#probe-gameplay-ok", "timeout": 4000, "_comment": "ASSERTION 1: 8+ combined points - the loop is driving repeated possessions, not one lucky bucket before a stall." },
+    { "action": "waitFor", "selector": "#probe-bothscored", "timeout": 4000, "_comment": "ASSERTION 2: BOTH teams scored - proves possession alternates, i.e. the home-side play picker is being answered and loopHomeRef completes." },
+    { "action": "eval", "expression": "(() => { document.querySelectorAll('#probe-gameplay-ok,#probe-bothscored').forEach(n=>n.remove()); return 'cleaned'; })()" },
+
+    { "action": "waitFor", "selector": "[data-testid='dbg-toggle']", "timeout": 8000 },
+    { "action": "click", "selector": "[data-testid='dbg-toggle']" },
+    { "action": "waitFor", "selector": "[data-testid='debug-input']", "timeout": 5000 },
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "stopGamePlay" },
+    { "action": "eval", "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()" },
+    { "action": "sleep", "ms": 500, "_comment": "Leave the loop stopped (useGame.js:2466) so the next run isn't rejected as 'already running'" }
+  ]
+}

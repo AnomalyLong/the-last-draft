@@ -2,7 +2,7 @@ import React from 'react';
 import './DraftScreen.css';
 import { JERSEY_BASE, SKIN_PALETTES, SKIN_PIXEL, HAIR_PIXEL, BEARD_PIXEL, resolvePalette } from '../constants.js';
 import { IDLE_FRAMES, RUN_FRAMES } from '../sprites/index.js';
-import { ABILITIES } from '../abilities.js';
+import { rollAbilityForPlayer } from '../abilityRoll.js';
 import { playSelect, playCancel, playFlip, playCursor, playMenuSelect2 } from '../sound/ui.js';
 import { playRare } from '../sound/basketball.js';
 import { trpc } from '../trpc.js';
@@ -76,15 +76,6 @@ function generateDraftPool() {
       return { id:id++, pos, name:`${firsts[i-1]} ${lastName}`, lastName, ...stats, ovr, palette };
     })
   );
-}
-function rollAbilityForPlayer(ovr) {
-  const bonus  = Math.max(0, Math.floor((ovr-65)/5)) * 0.05;
-  const chance = Math.min(0.55, 0.25+bonus);
-  if (ovr < 76 && Math.random() >= chance) return null;
-  const lw = ovr>=75 ? 15 : ovr>=70 ? 8 : 3;
-  const ew = ovr>=70 ? 25 : 18;
-  const pool = ABILITIES.flatMap(a => Array(a.rarity===3 ? lw : a.rarity===2 ? ew : 40).fill(a));
-  return pool[Math.floor(Math.random()*pool.length)];
 }
 
 // ─── Animation timing ──────────────────────────────────────────────────────

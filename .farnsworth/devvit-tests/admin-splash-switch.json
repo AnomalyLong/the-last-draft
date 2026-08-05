@@ -1,0 +1,118 @@
+{
+  "name": "admin-splash-switch",
+  "description": "Admin panel -> Config -> 'Post view splash': verify the device-local switch flips the active post-view splash between 'court' and 'classic', persists to localStorage, and resets to the shipped default. Runs as u/bob (admin) - the DBG console and admin panel are admin-gated.",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "bob",
+      "_comment": "DBG + admin panel are admin-only; whoever ran last may not be an admin (carol is not)."
+    },
+    {
+      "action": "sleep",
+      "ms": 2500,
+      "_comment": "switchUser restarts the dev server"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=DBG",
+      "timeout": 8000,
+      "_comment": "DBG toggle is admin-gated (App.jsx gates on isAdmin) - run as an admin user e.g. bob"
+    },
+    {
+      "action": "if",
+      "condition": "!document.querySelector('[data-testid=debug-input]')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "text=DBG"
+        },
+        {
+          "action": "waitFor",
+          "selector": "[data-testid=debug-input]",
+          "timeout": 5000
+        }
+      ]
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=debug-input]",
+      "text": "admin"
+    },
+    {
+      "action": "sleep",
+      "ms": 200
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); if (!el) throw new Error('no debug input'); if (el.value !== 'admin') { const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'admin'); el.dispatchEvent(new Event('input', { bubbles: true })); } el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); return 'submitted'; })()",
+      "name": "press Enter on 'admin'"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=ADMIN PANEL",
+      "timeout": 8000
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-config]",
+      "_comment": "Config tab hosts both the server feature flags and the local splash switch"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=admin-splash-switch]",
+      "timeout": 8000,
+      "_comment": "ASSERT: switch renders. It sits ABOVE the flags block and is rendered in both ConfigPanel branches, so it must appear even if the flag fetch fails."
+    },
+    {
+      "action": "eval",
+      "expression": "JSON.stringify({ source: document.querySelector('[data-testid=splash-source]')?.textContent.trim(), court: document.querySelector('[data-testid=splash-state-court]')?.dataset.on, classic: document.querySelector('[data-testid=splash-state-classic]')?.dataset.on, stored: window.localStorage.getItem('fw_inline_splash') })",
+      "name": "baseline (expect court ACTIVE, no stored override)"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=splash-pick-classic]",
+      "_comment": "Switch the post view to the original galaxy splash"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=splash-state-classic][data-on='1']",
+      "timeout": 4000,
+      "_comment": "ASSERT: classic became ACTIVE. Times out (= failure) if the click did not take."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=splash-state-court][data-on='0']",
+      "timeout": 4000,
+      "_comment": "ASSERT: court went inactive - the two are mutually exclusive, not both-on"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const v = window.localStorage.getItem('fw_inline_splash'); if (v !== 'classic') throw new Error('override not persisted: ' + JSON.stringify(v)); return 'persisted=' + v; })()",
+      "name": "ASSERT override written to localStorage"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/admin-splash-switch-classic.png"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=splash-clear]",
+      "_comment": "'Follow shipped default' - clears the device override"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=splash-state-court][data-on='1']",
+      "timeout": 4000,
+      "_comment": "ASSERT: back to DEFAULT_SPLASH ('court'). Also leaves this device clean for later tests."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const v = window.localStorage.getItem('fw_inline_splash'); if (v !== null) throw new Error('override not cleared: ' + JSON.stringify(v)); return 'cleared'; })()",
+      "name": "ASSERT override removed from localStorage"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/admin-splash-switch-default.png"
+    }
+  ]
+}

@@ -1298,6 +1298,16 @@
    FTUE COACH
    ───────────────────────────────────────────────────────── */
 
+/* Tap-anywhere target for the FTUE coach. Sits above the dim (55) but BELOW
+   the bottom nav (60) so the PLAY button the coach points at is still a
+   one-tap action instead of being swallowed by this layer. */
+.lb2-coach-tap {
+  position: absolute;
+  inset: 0;
+  z-index: 56;
+  cursor: pointer;
+}
+
 .lb2-coach {
   position: absolute;
   left: 12px;

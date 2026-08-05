@@ -455,6 +455,7 @@ const FTUE_DLG_X   = FTUE_CHAR_X + 22;            // dialog left edge (under cha
 const FTUE_DLG_Y   = FTUE_CHAR_Y + 13;
 const FTUE_DLG_H   = 19;
 const FTUE_DLG_W   = ZOOM_W - FTUE_DLG_X - 4;    // extends to near right edge
+const FTUE_BLEED   = ZOOM_W;                      // overdraw past viewBox for letterbox taps
 
 // Messages must fit within ~56 chars (FTUE_DLG_W minus left/right padding)
 const FTUE_MESSAGES = [
@@ -471,7 +472,17 @@ function FtueIntroDialog({ cameraX, onDone }) {
 
   return (
     <g>
-      <rect x={cameraX} y={0} width={ZOOM_W} height={TOTAL_H} fill="#000" opacity={0.55} />
+      {/* Dim doubles as the tap target so the whole screen advances the coach,
+          not just the bubble's own hitbox. Bleeds past the viewBox to cover the
+          xMidYMid letterbox. Sibling of BballTip, so no double-advance. */}
+      <rect
+        data-testid="levelup-ftue-tap"
+        x={cameraX - FTUE_BLEED} y={-FTUE_BLEED}
+        width={ZOOM_W + FTUE_BLEED * 2} height={TOTAL_H + FTUE_BLEED * 2}
+        fill="#000" opacity={0.55}
+        style={{ cursor: 'pointer' }}
+        onClick={advance}
+      />
       <BballTip
         text={FTUE_MESSAGES[page]}
         charX={cameraX + FTUE_CHAR_X} charY={FTUE_CHAR_Y} scale={FTUE_SCALE}

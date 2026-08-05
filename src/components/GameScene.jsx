@@ -26,9 +26,8 @@ import { PlayPickerOverlay } from './PlayPickerOverlay.jsx';
 import { DefensePickerOverlay } from './DefensePickerOverlay.jsx';
 import { DefenseFtueOverlay } from './DefenseFtueOverlay.jsx';
 import { OptionsOverlay } from './OptionsOverlay.jsx';
-import { SpecialMoveCard } from './SpecialMoveCard.jsx';
+import { SpecialMoveCards } from './SpecialMoveCards.jsx';
 import { BballTip } from './BballTip.jsx';
-import { DASH_FRAMES, FADEAWAY_FRAMES, SPIN_MOVE_FRAMES, PICKPOCKET_FRAMES, IRON_BLOCK_FRAMES, PICK_FRAMES, DUNKSPIN_FRAMES } from '../sprites/index.js';
 
 // BballTip layout constants (game-screen space, inside cameraX group)
 const TIP_CHAR_X = 10;
@@ -41,6 +40,7 @@ const TIP_DLG_Y  = TIP_CHAR_Y + 13;
 const TIP_DLG_H  = 19;
 const TIP_TEXT_X = TIP_CHAR_X + TIP_CHAR_W + 6;
 const TIP_TEXT_Y = TIP_DLG_Y + Math.floor((TIP_DLG_H - 7) / 2);
+const TIP_BLEED  = ZOOM_W; // overdraw past viewBox so letterbox taps still dismiss
 
 const POS_ORDER = ['PG', 'SG', 'SF', 'PF', 'C'];
 
@@ -283,13 +283,7 @@ export function GameScene({
 
         {/* Special-move cards render AFTER the HUD so they sit on top of the
             score / credits / buttons instead of being painted under them. */}
-        {(() => { const ib = players.find(p => p.isIronBlocking); return ib ? <SpecialMoveCard key={`ib-${ib.id}`} player={ib} frames={IRON_BLOCK_FRAMES} label="IRON BLOCK!" jerseyColor={ib.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#CC3333" bgColor="#FFD0D0" anchorX={6} anchorY={17} /> : null; })()}
-        {(() => { const pp = players.find(p => p.isPickPocketing); return pp ? <SpecialMoveCard key={`pp-${pp.id}`} player={pp} frames={PICKPOCKET_FRAMES} label="PICK POCKET!" jerseyColor={pp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={133} accentColor="#00FF44" bgColor="#C8FFD8" anchorX={9} anchorY={17} /> : null; })()}
-        {(() => { const sp = players.find(p => p.isSpinning);   return sp ? <SpecialMoveCard key={`spin-${sp.id}`}  player={sp} frames={SPIN_MOVE_FRAMES} label="SPIN MOVE!"   jerseyColor={sp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#F5C800" bgColor="#F5E6C8" anchorX={21} anchorY={28} /> : null; })()}
-        {(() => { const dp = players.find(p => p.isDashing);    return dp ? <SpecialMoveCard key={`dash-${dp.id}`}  player={dp} frames={DASH_FRAMES}      label="SPEED BURST!" jerseyColor={dp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={60} accentColor="#44AAFF" bgColor="#C8E8FF" anchorX={9}  anchorY={17} /> : null; })()}
-        {(() => { const fp = players.find(p => p.isFadingAway); return fp ? <SpecialMoveCard key={`fade-${fp.id}`} player={fp} frames={FADEAWAY_FRAMES}  label="FADEAWAY!"    jerseyColor={fp.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#FF8C00" bgColor="#FFF0CC" anchorX={9}  anchorY={12} /> : null; })()}
-        {(() => { const pk = players.find(p => p.isPicking);    return pk ? <SpecialMoveCard key={`pick-${pk.id}`} player={pk} frames={PICK_FRAMES}      label="SET PICK!"    jerseyColor={pk.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={80} accentColor="#C060E0" bgColor="#E8D0FF" anchorX={5}  anchorY={8}  /> : null; })()}
-        {(() => { const sd = players.find(p => p.isSpinDunking); return sd ? <SpecialMoveCard key={`sd-${sd.id}`}   player={sd} frames={DUNKSPIN_FRAMES}  label="SPIN DUNK!"   jerseyColor={sd.team === 'home' ? JERSEY_HOME : JERSEY_AWAY} cameraX={cameraX} frameDurationMs={130} accentColor="#FF3399" bgColor="#FFD6E8" spriteScale={3} anchorX={8}  anchorY={14} /> : null; })()}
+        <SpecialMoveCards players={players} cameraX={cameraX} withTestIds />
 
         <QuarterBanner text={quarterAnnouncement} cameraX={cameraX} />
 
@@ -308,8 +302,18 @@ export function GameScene({
           >
             {gameTip && (
               <>
-                {/* Inner full-viewport dim — matches the level-up overlay for consistent coverage */}
-                <rect x={0} y={0} width={ZOOM_W} height={TOTAL_H} fill="#000" opacity={0.65} />
+                {/* Inner full-viewport dim — matches the level-up overlay for
+                    consistent coverage, and doubles as the tap target so the
+                    whole screen dismisses the tip rather than just the bubble.
+                    Bleeds past the viewBox to cover the xMidYMid letterbox. */}
+                <rect
+                  data-testid="game-tip-tap"
+                  x={-TIP_BLEED} y={-TIP_BLEED}
+                  width={ZOOM_W + TIP_BLEED * 2} height={TOTAL_H + TIP_BLEED * 2}
+                  fill="#000" opacity={0.65}
+                  style={{ cursor: 'pointer' }}
+                  onClick={onDismissGameTip}
+                />
                 <BballTip
                   text={gameTip}
                   charX={TIP_CHAR_X} charY={TIP_CHAR_Y} scale={TIP_SCALE}

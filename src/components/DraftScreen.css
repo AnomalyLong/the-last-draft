@@ -1609,5 +1609,8 @@
   .dc-ability.has::before { left: 3px; }
   .dc-ability.has::after  { right: 3px; }
   .dc-portrait { min-height: 0; }
-  .dc-sprite-wrap { transform: scale(0.42); }
+  /* 2x the previous 0.42 — at 0.84 the visual sprite (46x67) still sits
+     inside its own 55x80 layout box, so it cannot overlap the name/stats
+     below no matter how tight .dc-portrait gets. */
+  .dc-sprite-wrap { transform: scale(0.84); }
 }

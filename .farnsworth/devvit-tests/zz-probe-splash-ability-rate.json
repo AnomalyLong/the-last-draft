@@ -1,0 +1,62 @@
+{
+  "name": "probe: how often do ability-gated animations actually appear in the splash attract loop, and what did the 10 players roll",
+  "description": "Diagnostic, not an assertion. splash-random-abilities passed but needed ~36s of sampling to catch a single gated animation, which is far longer than a feed impression lasts. This samples a fixed 60s window and reports (a) each player's rolled loadout and (b) a compact histogram of ONLY the ability-gated animations plus the underlying event counts (shoot/dunk/block/steal) they piggyback on - so it is clear whether the limiting factor is the abilities or the sim's event rate.",
+  "steps": [
+    {
+      "action": "eval",
+      "expression": "(() => { location.search = '?mode=inline&t=' + Date.now(); return 'navigating'; })()"
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='splash-court'][data-attract='live']",
+      "timeout": 20000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid^='splash-player-']",
+      "timeout": 10000
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const c={}; [...document.querySelectorAll('[data-testid^=\"splash-player-\"]')].forEach(n=>(n.getAttribute('data-abilities')||'').split(',').filter(Boolean).forEach(a=>c[a]=(c[a]||0)+1)); return Object.entries(c).map(([k,v])=>k.split(' ').map(w=>w[0]).join('')+v).join(' '); })()",
+      "into": "abilityCountsAcrossRoster"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__a = {}; window.__samples = 0; window.__t0 = Date.now(); return 'reset'; })()"
+    },
+    {
+      "action": "while",
+      "max": 200,
+      "until": "(() => { window.__samples++; document.querySelectorAll('[data-testid^=\"splash-player-\"]').forEach(n => { const a = n.getAttribute('data-anim') || 'idle'; window.__a[a] = (window.__a[a]||0)+1; }); return Date.now() - window.__t0 > 45000; })()",
+      "steps": [
+        {
+          "action": "sleep",
+          "ms": 200
+        }
+      ]
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const a=window.__a; const k=['spindunk','ironblock','pickpocket','fadeaway','spin','dash']; return k.map(x=>x.slice(0,2)+(a[x]||0)).join(' '); })()",
+      "into": "gatedAnimFrames"
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const a=window.__a; const k=['shoot','dunk','block','steal','idle','run']; return k.map(x=>x.slice(0,2)+(a[x]||0)).join(' '); })()",
+      "into": "baseEventFrames"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/splash-ability-probe.png"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { delete window.__a; delete window.__samples; delete window.__t0; return 'cleaned'; })()"
+    }
+  ]
+}

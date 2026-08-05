@@ -1,0 +1,117 @@
+{
+  "name": "splash court: special-move cards render in the inline feed tile, positioned in screen space, and the play rotation unlocks SET PICK!",
+  "description": "SHOW_MOVE_CARDS in SplashCourt.jsx mounts the shared SpecialMoveCards set (the same seven the real game raises - table lives in components/SpecialMoveCards.jsx so the feed tile and the match cannot drift). Three things are checked. (1) CARDS APPEAR AT ALL: poll for any [data-testid^='special-card-'] node during the attract loop. (2) SCREEN SPACE: GameScene shifts its viewBox by cameraX so it passes cameraX to cancel it; SplashCourt instead translates the FIELD by -cameraX inside a fixed viewBox, so its cards must sit outside the field group with cameraX=0. If that were wrong the card would be double-panned off screen, so the outer transform must be exactly translate(0, 0) and the card box must be centred on SPLASH_CARD_CY (120), not the in-game default 74. (3) SET PICK! REQUIRES THE PLAY ROTATION: isPicking is set only by triggerPickAndRoll, which useGame reaches only when play?.id === 'pickroll'. The splash used to answer onPickPlay(null), which falls through to motion offence, so that card was unreachable; AUTO_PLAY='rotate' cycles the real PLAYS table. Seeing special-card-pick proves the rotation is landing. Runs in App Desktop/Mobile via App.jsx's DEV-only ?mode=inline override, because Post View is not a WebContentsView and the runner cannot attach to it.",
+  "steps": [
+    {
+      "action": "eval",
+      "expression": "(() => { location.search = '?mode=inline&t=' + Date.now(); return 'navigating to inline'; })()",
+      "_comment": "Mounts the same inline branch (SplashCourt) inside a normal webview. Cache-busting t= forces a fresh module load and therefore a fresh ability roll."
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='splash-court'][data-attract='live']",
+      "timeout": 20000,
+      "_comment": "ATTRACT='static' has no sim, so every assertion below would be vacuous."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid^='splash-player-']",
+      "timeout": 10000
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/splash-cards-01-tipoff.png"
+    },
+    {
+      "action": "while",
+      "max": 240,
+      "until": "(() => { window.__cards = window.__cards || {}; window.__geom = window.__geom || {}; const ns = [...document.querySelectorAll(\"[data-testid^='special-card-']\")]; ns.forEach(n => { const k = n.getAttribute('data-testid'); window.__cards[k] = (window.__cards[k] || 0) + 1; if (!window.__geom[k]) { let b = null; try { b = n.getBBox(); } catch (e) {} window.__geom[k] = { tf: n.getAttribute('transform'), cx: b ? Math.round(b.x + b.width / 2) : null, cy: b ? Math.round(b.y + b.height / 2) : null }; } }); return ns.length > 0; })()",
+      "steps": [
+        {
+          "action": "sleep",
+          "ms": 200
+        }
+      ],
+      "_comment": "Poll every 200ms, accumulating every card testid seen plus the geometry of the first sighting of each. Exits the instant a card is actually on screen so the next step can photograph it."
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/splash-cards-02-card-onscreen.png",
+      "_comment": "Taken immediately after the loop exits, while a card is still up (a card lives 1-3s)."
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({ seen: window.__cards || {}, geom: window.__geom || {} })",
+      "into": "firstCard"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-card-seen,#probe-card-screenspace').forEach(n => n.remove()); const seen = Object.keys(window.__cards || {}); const g = window.__geom || {}; const mk = id => { const d = document.createElement('div'); d.id = id; document.body.appendChild(d); }; if (seen.length > 0) mk('probe-card-seen'); const bad = seen.filter(k => { const e = g[k]; if (!e) return true; const tfOk = /translate\\(\\s*0\\s*,\\s*0\\s*\\)/.test(e.tf || ''); const cyOk = e.cy !== null && e.cy >= 100 && e.cy <= 140; const cxOk = e.cx !== null && e.cx >= 184 && e.cx <= 224; return !(tfOk && cyOk && cxOk); }); if (seen.length > 0 && bad.length === 0) mk('probe-card-screenspace'); return JSON.stringify({ seen, bad, geom: g }); })()",
+      "into": "geomAssertion"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-card-seen",
+      "timeout": 4000,
+      "_comment": "ASSERTION 1: at least one special-move card rendered in the inline splash."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-card-screenspace",
+      "timeout": 4000,
+      "_comment": "ASSERTION 2: every card seen had transform translate(0, 0) (cameraX not double-applied) and its box centred on x=204 +/-20, y=120 +/-20 - i.e. SPLASH_CARD_CY, not the in-game 74 that would collide with the title."
+    },
+    {
+      "action": "while",
+      "max": 300,
+      "until": "(() => { window.__cards = window.__cards || {}; document.querySelectorAll(\"[data-testid^='special-card-']\").forEach(n => { const k = n.getAttribute('data-testid'); window.__cards[k] = (window.__cards[k] || 0) + 1; }); document.querySelectorAll(\"[data-testid^='splash-player-']\").forEach(n => { const a = n.getAttribute('data-anim') || 'idle'; window.__anims = window.__anims || {}; window.__anims[a] = (window.__anims[a] || 0) + 1; }); return !!window.__cards['special-card-pick']; })()",
+      "steps": [
+        {
+          "action": "sleep",
+          "ms": 200
+        }
+      ],
+      "_comment": "Keep sampling until the SET PICK! card shows. pickroll is every third home possession under AUTO_PLAY='rotate', so this needs a couple of possessions."
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({ cards: window.__cards || {}, anims: window.__anims || {} })",
+      "into": "cardHistogram",
+      "_comment": "Which cards fired and how the animation mix looked - shows what the feed tile actually renders."
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/splash-cards-03-later.png"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-pick-card,#probe-card-variety').forEach(n => n.remove()); const c = window.__cards || {}; const mk = id => { const d = document.createElement('div'); d.id = id; document.body.appendChild(d); }; if (c['special-card-pick']) mk('probe-pick-card'); if (Object.keys(c).length >= 2) mk('probe-card-variety'); return JSON.stringify({ cards: Object.keys(c) }); })()",
+      "into": "pickAssertion"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-pick-card",
+      "timeout": 4000,
+      "_comment": "ASSERTION 3: SET PICK! appeared. Impossible with the old onPickPlay(null) wiring, so this specifically proves AUTO_PLAY='rotate' is feeding real plays into the loop."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-card-variety",
+      "timeout": 4000,
+      "_comment": "ASSERTION 4: at least two DIFFERENT cards fired, so this is not one lucky animation on repeat."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-card-seen,#probe-card-screenspace,#probe-pick-card,#probe-card-variety').forEach(n => n.remove()); delete window.__cards; delete window.__geom; delete window.__anims; return 'cleaned'; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { location.href = location.origin + location.pathname; return 'cleared ?mode=inline'; })()",
+      "_comment": "The query string survives reloads, so leaving it set would silently boot later app-view tests into the splash."
+    }
+  ]
+}

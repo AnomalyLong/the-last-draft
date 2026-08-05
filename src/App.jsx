@@ -5,6 +5,17 @@ import { requestExpandedMode, getWebViewMode, navigateTo as devvitNavigateTo, co
 
 // Safe wrappers — devvit globals aren't present outside the Reddit app
 function getMode() {
+  // Dev-only override so the inline (feed) splash is reachable in a normal
+  // webview. Outside Reddit getWebViewMode() throws and we fall back to
+  // 'expanded', which means App ALWAYS renders the game — the inline branch (and
+  // therefore SplashCourt) can only be seen in a real feed or in Farnsworth's
+  // Post View, and Post View is not a WebContentsView, so no automated test can
+  // reach it. `?mode=inline` opens the splash anywhere. Same test-seam
+  // convention as notifStatus.js; stripped from production by the DEV guard.
+  if (import.meta.env?.DEV && typeof window !== 'undefined') {
+    const forced = new URLSearchParams(window.location.search).get('mode');
+    if (forced === 'inline' || forced === 'expanded') return forced;
+  }
   try { return getWebViewMode(); } catch { return 'expanded'; }
 }
 function tryExpand(nativeEvent) {
@@ -28,7 +39,8 @@ function toAwayPlayers(roster = []) {
   }));
 }
 
-import { TitleScreen, SplashScreen, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FeaturedEventsScreen, BattlePassScreen, FtueIntroVideo } from './components/index.js';
+import { getInlineSplash, subscribeSplash } from './splashConfig.js';
+import { TitleScreen, SplashScreen, SplashCourt, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FeaturedEventsScreen, BattlePassScreen, FtueIntroVideo } from './components/index.js';
 import { TitleStrip } from './components/TitleStrip.jsx';
 
 // Column wrapper that pins the global TitleStrip (lobby header) above a
@@ -52,23 +64,18 @@ import { useGame } from './useGame.js';
 import OPPONENTS from './opponents.json';
 import { trpc } from './trpc';
 import { runCommand } from './debugCommands.js';
-import { SKIN_PALETTES } from './constants.js';
-
-// Deterministic palette index for non-persisted opponents — same name always
-// renders the same look. Hash uses the same FNV-ish loop as elsewhere.
-function paletteFromName(name = '') {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
-  return Math.abs(h) % SKIN_PALETTES.length;
-}
-// Assigns a deterministic palette to each player in an opponents-style roster
-// (opponents.json bots or challenge teams). Skips entries that already have one.
-function withDerivedPalette(players = []) {
-  return players.map(p => p.palette != null ? p : { ...p, palette: paletteFromName(p.name) });
-}
+// Palette derivation lives in teamPalette.js so SplashCourt (inline feed
+// splash) derives identical looks for the same fixture roster.
+import { withDerivedPalette } from './teamPalette.js';
 
 export default function App() {
   const isInline = React.useMemo(() => getMode() === 'inline', []);
+  // Which inline splash to paint. Resolved synchronously so the FIRST paint in
+  // the feed is already the right one (see splashConfig.js), then kept in sync
+  // so an admin flipping `splash` from the expanded view updates an open post
+  // view live instead of on the next impression.
+  const [inlineSplash, setInlineSplash] = React.useState(getInlineSplash);
+  React.useEffect(() => subscribeSplash(setInlineSplash), []);
   const [scene, setScene] = React.useState('loading'); // 'loading' | 'title' | 'options' | 'teamSelect' | 'draft' | 'game' | 'collection'
   const [musicVol, setMusicVol] = React.useState(1.0);
   const [sfxVol, setSfxVol] = React.useState(1.0);
@@ -746,7 +753,7 @@ export default function App() {
           style={{ imageRendering: 'pixelated', display: 'block' }}
         >
           {isInline && !challengePost && (
-            <SplashScreen />
+            inlineSplash === 'court' ? <SplashCourt /> : <SplashScreen />
           )}
           {!isInline && scene === 'loading' && (
             <LoadingScreen onDone={() => setScene('title')} />

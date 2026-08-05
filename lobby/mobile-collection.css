@@ -145,8 +145,13 @@ body.is-mobile .detail-portrait {
   min-height: 220px;
   align-self: stretch;
 }
-body.is-mobile .detail-portrait .dp-sprite { width: 120px; }
-body.is-mobile .detail-portrait .dp-floor { top: calc(50% + 74px); }
+/* Sprite grid is 11×16px, so rendered height = width × 1.4545. At 120px the
+   sprite was 174px tall in a 220px stage — only 23px of slack per side, and
+   dpHover's -4px lift pushed the head under .dp-tag (which occupies 10–24px)
+   while the feet landed on .dp-id. 80px → 116px tall, ~52px slack per side.
+   .dp-floor is positioned so the disc centre sits ~5px above the feet. */
+body.is-mobile .detail-portrait .dp-sprite { width: 80px; }
+body.is-mobile .detail-portrait .dp-floor { top: calc(50% + 46px); }
 body.is-mobile .detail-portrait .dp-tag { font-size: 12px; letter-spacing: 0.2em; top: 10px; }
 body.is-mobile .detail-portrait .dp-id { font-size: 9px; letter-spacing: 0.2em; bottom: 8px; }
 body.is-mobile .detail-l {
@@ -223,5 +228,7 @@ body.is-xs .detail-portrait {
   min-height: 180px;
   align-self: auto;
 }
-body.is-xs .detail-portrait .dp-sprite { width: 100px; }
-body.is-xs .detail-portrait .dp-floor { top: calc(50% + 50px); }
+/* Same 1.4545 ratio in a shorter 180px stage: 100px → 145px tall left only
+   17px of slack and overlapped .dp-tag harder than the is-mobile tier. */
+body.is-xs .detail-portrait .dp-sprite { width: 68px; }
+body.is-xs .detail-portrait .dp-floor { top: calc(50% + 38px); }

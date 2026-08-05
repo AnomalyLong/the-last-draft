@@ -3,7 +3,7 @@ import { ZOOM_W, TOTAL_H } from '../constants.js';
 import { PixelTextC } from './PixelText.jsx';
 import { useRafTick } from './useRafTick.js';
 
-const PLAYS = [
+export const PLAYS = [
   { id: 'standard', tag: 'MOTION',  name: 'Standard',    desc: ['Motion', 'Offense'], color: '#20c8a0', tint: 'rgba(32,200,160,0.13)' },
   { id: 'pickroll', tag: 'SCREEN',  name: 'Pick & Roll', desc: ['Screen', '& Drive'], color: '#c060e0', tint: 'rgba(192,96,224,0.16)' },
   { id: 'iso',      tag: 'ISO',     name: 'Isolation',   desc: ['1-on-1', 'Matchup'], color: '#e8c060', tint: 'rgba(232,192,96,0.20)' },

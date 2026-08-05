@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { trpc } from '../trpc';
+import { SPLASH_VARIANTS, describeSplash, setSplashOverride, subscribeSplash } from '../splashConfig.js';
 
 const S = {
   // lineHeight is REQUIRED here, not cosmetic. The app root
@@ -1150,6 +1151,87 @@ function NotificationsPanel() {
   );
 }
 
+// ── Post-view splash switch ───────────────────────────────────────────────
+// DEVICE-LOCAL, deliberately. This is NOT a server feature flag and is styled
+// apart from them so nobody reads it as one: the inline splash mounts on every
+// feed impression, so resolving it over the network would cost a round trip per
+// impression and visibly swap after first paint. See splashConfig.js.
+const SPLASH_META = {
+  classic: {
+    label: 'Classic splash',
+    desc: 'Original galaxy backdrop + bubble court. The pre-existing post view.',
+  },
+  court: {
+    label: 'Live court',
+    desc: 'WOLVES vs HAWKS attract loop running the real match sim, with special-move cards.',
+  },
+};
+
+function SplashSwitch() {
+  const [state, setState] = useState(() => describeSplash());
+  const [err, setErr] = useState(null);
+
+  // Reflect changes made elsewhere (the `splash` debug command, another tab).
+  useEffect(() => subscribeSplash(() => setState(describeSplash())), []);
+
+  const pick = (v) => {
+    setErr(null);
+    try { setSplashOverride(v); } catch (e) { setErr(e.message); }
+    setState(describeSplash());
+  };
+
+  return (
+    <div data-testid="admin-splash-switch">
+      <div style={S.heading}>Post view splash — this device only</div>
+      <div style={{ color: '#445', fontSize: 11, marginBottom: 12 }}>
+        Swaps what the feed/post view renders. Applies instantly to an open post
+        view and survives reloads on this device. Other players keep the shipped
+        default ({SPLASH_META[state.default]?.label ?? state.default}).
+      </div>
+
+      {SPLASH_VARIANTS.map(v => {
+        const on = state.applied === v;
+        const meta = SPLASH_META[v] ?? { label: v, desc: '' };
+        return (
+          <div key={v} style={{ border: `1px solid ${on ? '#2a4a70' : '#1a2030'}`, borderRadius: 6, padding: 12, marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <span data-testid={`splash-state-${v}`} data-on={on ? '1' : '0'}
+                style={S.tag(on ? '#1c5c2c' : '#333c4c')}>
+                {on ? 'ACTIVE' : 'off'}
+              </span>
+              <span style={{ color: '#ccd', fontSize: 12 }}>{meta.label}</span>
+              <code style={{ color: '#445', fontSize: 10 }}>{v}</code>
+              <div style={{ flex: 1 }} />
+              <button data-testid={`splash-pick-${v}`} disabled={on}
+                onClick={() => pick(v)}
+                style={on ? { ...S.btn('#10203a'), color: '#556', cursor: 'default' } : S.btn('#1a3a6a')}>
+                {on ? 'Showing' : 'Show this'}
+              </button>
+            </div>
+            <div style={{ color: on ? '#6a8' : '#667', fontSize: 11, lineHeight: 1.4 }}>{meta.desc}</div>
+          </div>
+        );
+      })}
+
+      <div style={{ ...S.row, marginBottom: 0 }}>
+        <span data-testid="splash-source" style={{ color: '#556', fontSize: 11, flex: 1 }}>
+          active: <b style={{ color: '#8a9ab0' }}>{state.applied}</b> · {state.source}
+        </span>
+        {/* S.btn() has no :disabled styling, so a disabled reset button looked
+            identical to an actionable one. Mute it when there's nothing to reset. */}
+        <button data-testid="splash-clear" disabled={!state.override}
+          style={state.override
+            ? S.btn()
+            : { ...S.btn('#0d1424'), color: '#39435a', cursor: 'default' }}
+          onClick={() => pick(null)}>
+          Follow shipped default
+        </button>
+      </div>
+      {err && <div style={S.error}>{err}</div>}
+    </div>
+  );
+}
+
 // Human-readable copy for each flag in core/featureFlags.ts FLAG_DEFAULTS.
 // `on`/`off` describe the player-facing effect so an operator knows what
 // flipping the switch actually does before they flip it.
@@ -1181,8 +1263,13 @@ function ConfigPanel() {
   // Surface load failures. Previously this returned a bare "loading flags…"
   // on error too: `msg` is only rendered in the main return below, which a
   // failed load never reaches — so an error looked like a permanent spinner.
+  // Defined once, used in both returns: the splash switch is purely local, so it
+  // must still be reachable when the server flag fetch fails.
+  const localSection = <><SplashSwitch /><hr style={S.divider} /></>;
+
   if (!flags) return (
     <div data-testid="admin-config-loading" style={{ fontSize: 12 }}>
+      {localSection}
       {msg && !msg.ok
         ? <div style={S.error}>Failed to load flags: {msg.text}</div>
         : <span style={{ color: '#556' }}>loading flags…</span>}
@@ -1193,6 +1280,7 @@ function ConfigPanel() {
 
   return (
     <div data-testid="admin-config-panel">
+      {localSection}
       <div style={S.heading}>Feature flags — {names.length} flag{names.length !== 1 ? 's' : ''}</div>
       <div style={{ color: '#445', fontSize: 11, marginBottom: 14 }}>
         Takes effect immediately — no redeploy. Enforced server-side, so disabling

@@ -1,0 +1,124 @@
+{
+  "name": "in-game special-move cards survive the SpecialMoveCards refactor: three debug-triggered moves each raise their card at the in-game position",
+  "description": "REGRESSION GUARD. GameScene's seven special-move cards were inline JSX; they now come from the shared SPECIAL_MOVE_CARDS table in components/SpecialMoveCards.jsx (so the inline feed splash renders the identical set and the two cannot drift). The splash test proves the shared component works in the splash - it says nothing about the game, which is the surface that already shipped. This drives three moves from the debug console in the court sandbox and checks each raises its card with the right label. It also pins the two things the refactor could plausibly have broken: the default card centre must still be y=74 (the HUD band - the card is meant to cover the HUD, so the new optional cy prop must not have moved the default), and the outer transform must still be a translate() cancelling GameScene's viewBox pan, unlike the splash which passes 0. Requires an admin (bob): DebugConsole only renders when isAdmin. The console is deliberately left OPEN while firing commands - it must be re-opened after 'court' because the scene change unmounts it - so the screenshots show the console panel; the assertions are DOM-based and unaffected.",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "bob",
+      "_comment": "DebugConsole only renders when isAdmin (GameScene.jsx)."
+    },
+    { "action": "reload" },
+    { "action": "waitFor", "selector": "[data-testid='lobby-screen']", "timeout": 20000 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']" },
+    { "action": "sleep", "ms": 300 },
+    { "action": "clickIfPresent", "selector": "[data-testid='coach-continue']" },
+    { "action": "waitFor", "selector": "[data-testid='dbg-toggle']", "timeout": 8000 },
+    { "action": "click", "selector": "[data-testid='dbg-toggle']" },
+    { "action": "waitFor", "selector": "[data-testid='debug-panel']", "timeout": 5000 },
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "court" },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()"
+    },
+    { "action": "waitFor", "selector": "[data-testid='game-court']", "timeout": 15000 },
+    { "action": "waitFor", "selector": "[data-testid='game-root'][data-sandbox='1']", "timeout": 5000 },
+    { "action": "sleep", "ms": 800 },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='dbg-toggle']",
+      "timeout": 8000,
+      "_comment": "Entering the court remounts the scene, which unmounts the console - it has to be re-opened here or every querySelector for debug-input comes back null."
+    },
+    { "action": "click", "selector": "[data-testid='dbg-toggle']" },
+    { "action": "waitFor", "selector": "[data-testid='debug-input']", "timeout": 5000 },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__gcards = {}; window.__grab = () => { document.querySelectorAll(\"[data-testid^='special-card-']\").forEach(n => { const k = n.getAttribute('data-testid'); if (window.__gcards[k]) return; let b = null; try { b = n.getBBox(); } catch (e) {} window.__gcards[k] = { tf: n.getAttribute('transform'), cy: b ? Math.round(b.y + b.height / 2) : null, label: (n.querySelector('text') || {}).textContent || null }; }); return Object.keys(window.__gcards); }; return 'helper installed'; })()",
+      "_comment": "Read-only snapshot of any card currently mounted, keyed by testid so the first sighting's geometry is kept."
+    },
+
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "testHomePG" },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()"
+    },
+    { "action": "sleep", "ms": 1500 },
+
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "testSpinMove" },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()"
+    },
+    {
+      "action": "while",
+      "max": 40,
+      "until": "(() => { window.__grab(); return !!window.__gcards['special-card-spin']; })()",
+      "steps": [ { "action": "sleep", "ms": 150 } ]
+    },
+    { "action": "screenshot", "path": "/tmp/game-cards-01-spin.png" },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='special-card-spin']",
+      "timeout": 6000,
+      "_comment": "ASSERTION 1: the SPIN MOVE! card is in the live DOM of the game scene, not just captured by the poller."
+    },
+
+    { "action": "sleep", "ms": 2500 },
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "testSpeedBurst" },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()"
+    },
+    {
+      "action": "while",
+      "max": 40,
+      "until": "(() => { window.__grab(); return !!window.__gcards['special-card-dash']; })()",
+      "steps": [ { "action": "sleep", "ms": 150 } ]
+    },
+    { "action": "screenshot", "path": "/tmp/game-cards-02-dash.png" },
+
+    { "action": "sleep", "ms": 2500 },
+    { "action": "type", "selector": "[data-testid=debug-input]", "text": "testSpinDunk" },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true})); return 'sent'; })()"
+    },
+    {
+      "action": "while",
+      "max": 80,
+      "until": "(() => { window.__grab(); return !!window.__gcards['special-card-sd']; })()",
+      "steps": [ { "action": "sleep", "ms": 150 } ],
+      "_comment": "testSpinDunk first drives the carrier to the rim, so the card lands several seconds after the command."
+    },
+    { "action": "screenshot", "path": "/tmp/game-cards-03-spindunk.png" },
+
+    { "action": "extract", "expression": "JSON.stringify(window.__gcards)", "into": "cardsSeen" },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-g-three,#probe-g-labels,#probe-g-geom').forEach(n => n.remove()); const g = window.__gcards || {}; const want = ['special-card-spin','special-card-dash','special-card-sd']; const mk = id => { const d = document.createElement('div'); d.id = id; document.body.appendChild(d); }; const have = want.filter(k => g[k]); if (have.length === 3) mk('probe-g-three'); const wantLabels = { 'special-card-spin': 'SPIN MOVE!', 'special-card-dash': 'SPEED BURST!', 'special-card-sd': 'SPIN DUNK!' }; const badLabel = have.filter(k => (g[k].label || '').trim() !== wantLabels[k]); if (have.length === 3 && badLabel.length === 0) mk('probe-g-labels'); const badGeom = have.filter(k => { const e = g[k]; const cyOk = e.cy !== null && e.cy >= 54 && e.cy <= 94; const tfOk = /^translate\\(/.test((e.tf || '').trim()); return !(cyOk && tfOk); }); if (have.length === 3 && badGeom.length === 0) mk('probe-g-geom'); return JSON.stringify({ have, badLabel, badGeom, geom: g }); })()",
+      "into": "assertions"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-g-three",
+      "timeout": 4000,
+      "_comment": "ASSERTION 2: all three debug-driven moves raised their card - the shared table is wired to the right per-player flags (isSpinning / isDashing / isSpinDunking)."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-g-labels",
+      "timeout": 4000,
+      "_comment": "ASSERTION 3: each card carries its correct label, so the table rows were not transposed during extraction (a swap would still render three cards)."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-g-geom",
+      "timeout": 4000,
+      "_comment": "ASSERTION 4: cards still centre on y=74 +/-20 (the in-game HUD band, i.e. the new cy prop's default is unchanged) and still carry a translate() to cancel the viewBox pan."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-g-three,#probe-g-labels,#probe-g-geom').forEach(n => n.remove()); delete window.__gcards; delete window.__grab; return 'cleaned'; })()"
+    }
+  ]
+}

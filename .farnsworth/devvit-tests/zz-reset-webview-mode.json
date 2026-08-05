@@ -1,0 +1,10 @@
+{
+  "name": "housekeeping: clear ?mode=inline from the webview URL",
+  "description": "splash-random-abilities navigates the webview to ?mode=inline, and a plain reload PRESERVES the query string - so any later app-view test would boot into the inline splash and time out waiting for the lobby. This clears it and confirms the normal expanded app comes back.",
+  "steps": [
+    { "action": "eval", "expression": "(() => { if (location.search) { location.search = ''; return 'cleared'; } return 'already-clean'; })()" },
+    { "action": "sleep", "ms": 2500 },
+    { "action": "waitFor", "selector": "[data-testid='lobby-screen']", "timeout": 25000, "_comment": "Expanded mode again: App renders the real game, not SplashCourt." },
+    { "action": "eval", "expression": "(() => document.querySelector('[data-testid=splash-court]') ? 'ERR: still inline' : 'expanded ok')()" }
+  ]
+}
