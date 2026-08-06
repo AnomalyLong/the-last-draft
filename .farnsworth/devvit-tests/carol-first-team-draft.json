@@ -1,6 +1,6 @@
 {
-  "name": "u/carol drafts her first team: FTUE → team setup (Cardinals) → 5 picks (rarest of 3) → auto-assign lineup",
-  "_note": "Adapted from bob-first-team-draft. Must run start-to-finish in ONE run: draft progress does NOT persist mid-draft (an interrupted run resets roster to 0/5). Keeps bob's corrected tier map (UNCOMMON:1) rather than the draft-5-picks-rarest version which maps UNCOMMON:0.",
+  "name": "u/carol drafts her first team via PLAY: FTUE → team setup (Cardinals) → 5 picks (rarest of 3) → auto-assign lineup",
+  "_note": "Updated to enter via [data-testid='bnav-play'] instead of bnav-draft. bnav-draft always lands on the draft hub (App.jsx onDraft bypasses enterDraftFlow by design) so it never exercised the FTUE router fix (LobbyScreen.handlePlay -> App.enterDraftFlow), which is the exact path that regressed earlier ('clicked Play for the first time -> went straight to the draft screen'). For isFtue + 0 roster + no team, Play now routes straight to teamSelect (.tsetup), skipping the hub entirely - the dh-btn.primary branch below is dead on this path but left in so the test still works if routing ever changes to go through the hub. Draft progress does NOT persist mid-draft (an interrupted run resets roster to 0/5) - must run start-to-finish in ONE run. Keeps bob-first-team-draft's corrected tier map (UNCOMMON:1) rather than the draft-5-picks-rarest version which maps UNCOMMON:0.",
   "steps": [
     {"action": "switchUser", "username": "carol"},
     {"action": "waitFor", "selector": "[data-testid='lobby-screen']", "timeout": 30000},
@@ -13,7 +13,7 @@
 
     {"action": "extract", "expression": "JSON.stringify({roster: (document.querySelector('[data-testid=roster-strip-empty]') ? 'empty' : 'has-players'), energy: document.querySelector('.lb2-ts-energy')?.textContent?.trim() ?? 'none'})", "into": "preDraft"},
 
-    {"action": "click", "selector": "[data-testid='bnav-draft']"},
+    {"action": "click", "selector": "[data-testid='bnav-play']"},
     {"action": "waitFor", "selector": "[data-testid='ftue-intro-video'], .dh-btn.primary, .tsetup, .draft-start-btn", "timeout": 20000},
 
     {"action": "if", "condition": "!!document.querySelector(\"[data-testid='ftue-intro-video']\")", "steps": [
@@ -30,6 +30,8 @@
       {"action": "click", "selector": ".dh-btn.primary"},
       {"action": "waitFor", "selector": ".tsetup, .draft-start-btn", "timeout": 15000}
     ]},
+
+    {"action": "extract", "expression": "(() => { const tsetup=!!document.querySelector('.tsetup'); const draft=!!document.querySelector('.draft-start-btn'); return tsetup?'PASS-play-routed-to-teamSetup':(draft?'INFO-already-had-team-went-straight-to-draft':'FAIL-unexpected-scene'); })()", "into": "routingVerdict"},
 
     {"action": "if", "condition": "!!document.querySelector('.ts-name-input')", "steps": [
       {"action": "type", "selector": ".ts-name-input", "text": "Cardinals"},
@@ -87,3 +89,4 @@
     {"action": "extract", "expression": "JSON.stringify({primaryLabel: document.querySelector('.da-btn.primary.big')?.textContent.trim(), picks: (window.__picks||[]).length})", "into": "assignState"}
   ]
 }
+

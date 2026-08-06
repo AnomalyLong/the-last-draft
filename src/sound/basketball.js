@@ -21,10 +21,23 @@ import {
   audioSettings, musicVolume, sfxVolume, notifyAudioSettingsChanged,
 } from './audioSettings.js';
 
+// Every Audio() below is constructed LAZILY (on first actual play/start),
+// not at module-import time. This module is statically imported by App.jsx
+// (needed for game/lobby playback) AND by SplashCourt.jsx (needed only for
+// the mute icon's setMuted/isMuted) — and App.jsx itself loads on the inline
+// (feed post) view too, since post view and expanded/game view share one
+// bundle. Eagerly `new Audio(src)`-ing ~7.5MB of game+title music and SFX
+// used to mean the feed post fetched all of it before a user ever tapped in,
+// even though nothing in the inline view ever calls play(). Deferring
+// construction to first use means importing this module costs nothing; the
+// fetch only happens when a sound is actually going to play. (Aug 5)
 function makeSound(src, baseVol = 0.8) {
-  const proto = new Audio(src);
-  proto.preload = 'auto';
+  let proto = null;
   return () => {
+    if (!proto) {
+      proto = new Audio(src);
+      proto.preload = 'auto';
+    }
     const a = proto.cloneNode();
     a.volume = baseVol * sfxVolume();
     a.play().catch(() => {});
@@ -33,54 +46,70 @@ function makeSound(src, baseVol = 0.8) {
 
 // Looping dribble sound with a gap between bounces — call start()/stop() to control.
 const BOUNCE_BASE = 0.6;
-const _bounce = new Audio(bounceSound);
-_bounce.volume = BOUNCE_BASE;
+let _bounce = null;
 let _bounceActive = false;
 let _bounceTimer  = null;
-_bounce.addEventListener('ended', () => {
-  if (!_bounceActive) return;
-  _bounceTimer = setTimeout(() => {
+function getBounce() {
+  if (_bounce) return _bounce;
+  _bounce = new Audio(bounceSound);
+  _bounce.volume = BOUNCE_BASE;
+  _bounce.addEventListener('ended', () => {
     if (!_bounceActive) return;
-    _bounce.currentTime = 0;
-    _bounce.play().catch(() => {});
-  }, 180);
-});
+    _bounceTimer = setTimeout(() => {
+      if (!_bounceActive) return;
+      _bounce.currentTime = 0;
+      _bounce.play().catch(() => {});
+    }, 180);
+  });
+  return _bounce;
+}
 export const bounceBall = {
   start() {
     if (_bounceActive) return;
+    const b = getBounce();
     _bounceActive = true;
-    _bounce.currentTime = 0;
-    _bounce.play().catch(() => {});
+    b.currentTime = 0;
+    b.play().catch(() => {});
   },
   stop() {
     _bounceActive = false;
     clearTimeout(_bounceTimer);
-    _bounce.pause();
-    _bounce.currentTime = 0;
+    if (_bounce) { _bounce.pause(); _bounce.currentTime = 0; }
   },
-  applyVolume() { _bounce.volume = BOUNCE_BASE * sfxVolume(); },
+  applyVolume() { if (_bounce) _bounce.volume = BOUNCE_BASE * sfxVolume(); },
 };
 
 const BG_BASE = 0.35;
-const _bgMusic = new Audio(gameMusicSrc);
-_bgMusic.loop = true;
-_bgMusic.volume = BG_BASE;
+let _bgMusic = null;
+function getBgMusic() {
+  if (_bgMusic) return _bgMusic;
+  _bgMusic = new Audio(gameMusicSrc);
+  _bgMusic.loop = true;
+  _bgMusic.volume = BG_BASE;
+  return _bgMusic;
+}
 export const bgMusic = {
-  start() { _bgMusic.play().catch(() => {}); },
-  stop()  { _bgMusic.pause(); _bgMusic.currentTime = 0; },
-  applyVolume() { _bgMusic.volume = BG_BASE * musicVolume(); },
+  start() { getBgMusic().play().catch(() => {}); },
+  stop()  { if (_bgMusic) { _bgMusic.pause(); _bgMusic.currentTime = 0; } },
+  applyVolume() { if (_bgMusic) _bgMusic.volume = BG_BASE * musicVolume(); },
 };
 
 const TITLE_BASE = 0.40;
-const _titleMusic = new Audio(titleMusicSrc);
-_titleMusic.loop = true;
-_titleMusic.volume = TITLE_BASE;
+let _titleMusic = null;
 let _titlePending = false;
+function getTitleMusic() {
+  if (_titleMusic) return _titleMusic;
+  _titleMusic = new Audio(titleMusicSrc);
+  _titleMusic.loop = true;
+  _titleMusic.volume = TITLE_BASE;
+  return _titleMusic;
+}
 export const titleMusic = {
   start() {
-    if (!_titleMusic.paused) return;
-    _titleMusic.currentTime = 0;
-    _titleMusic.play().catch(() => {
+    const t = getTitleMusic();
+    if (!t.paused) return;
+    t.currentTime = 0;
+    t.play().catch(() => {
       if (_titlePending) return;
       _titlePending = true;
       const resume = () => {
@@ -89,7 +118,7 @@ export const titleMusic = {
         document.removeEventListener('click',      resume);
         document.removeEventListener('touchstart', resume);
         if (!wasPending) return; // stop() canceled us before the user interacted
-        _titleMusic.play().catch(() => {});
+        t.play().catch(() => {});
       };
       document.addEventListener('click',      resume, { once: true });
       document.addEventListener('touchstart', resume, { once: true });
@@ -97,10 +126,9 @@ export const titleMusic = {
   },
   stop() {
     _titlePending = false;
-    _titleMusic.pause();
-    _titleMusic.currentTime = 0;
+    if (_titleMusic) { _titleMusic.pause(); _titleMusic.currentTime = 0; }
   },
-  applyVolume() { _titleMusic.volume = TITLE_BASE * musicVolume(); },
+  applyVolume() { if (_titleMusic) _titleMusic.volume = TITLE_BASE * musicVolume(); },
 };
 
 // ── Global mute ──────────────────────────────────────────────────────────
@@ -111,11 +139,14 @@ export const titleMusic = {
 // browser storage in the Devvit iframe.
 // Re-applies every live channel owned by this module, then notifies external
 // subscribers (FTUE typing loop, intro video, ...) so they re-read too. Call
-// this after any mutation of audioSettings.
+// this after any mutation of audioSettings. Guarded with null-checks because
+// a channel may never have been constructed yet (e.g. mute tapped from the
+// inline splash, before anything has played) — nothing to re-apply to, and
+// nothing should be force-constructed just to flip a flag.
 export function applyAllVolumes() {
-  _bounce.volume     = BOUNCE_BASE * sfxVolume();
-  _bgMusic.volume    = BG_BASE     * musicVolume();
-  _titleMusic.volume = TITLE_BASE  * musicVolume();
+  if (_bounce)     _bounce.volume     = BOUNCE_BASE * sfxVolume();
+  if (_bgMusic)    _bgMusic.volume    = BG_BASE     * musicVolume();
+  if (_titleMusic) _titleMusic.volume = TITLE_BASE  * musicVolume();
   notifyAudioSettingsChanged();
 }
 

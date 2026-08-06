@@ -7,12 +7,17 @@ import menuMove3Sound   from './ui/sfx_menu_move3.wav';
 import menuSelect2Sound from './ui/sfx_menu_select2.wav';
 import { sfxVolume } from './audioSettings.js';
 
-// Pre-loads the audio file at module init time so the browser decodes it
-// immediately. Each play clones the pre-loaded node — fast and overlap-safe.
+// Pre-loads the audio file on first PLAY, not on import — see basketball.js
+// for why (the inline/feed post view shares this bundle and never plays any
+// of these, so importing the module must not cost a network fetch). Each
+// play clones the (by-then) pre-loaded node — fast and overlap-safe.
 function makeSound(src, baseVol = 0.7) {
-  const proto = new Audio(src);
-  proto.preload = 'auto';
+  let proto = null;
   return () => {
+    if (!proto) {
+      proto = new Audio(src);
+      proto.preload = 'auto';
+    }
     const a = proto.cloneNode();
     a.volume = baseVol * sfxVolume();
     a.play().catch(() => {});
