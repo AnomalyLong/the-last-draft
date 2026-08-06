@@ -7,7 +7,7 @@ import OPPONENTS from '../opponents.json';
 import { withDerivedPalette } from '../teamPalette.js';
 import { rollAbilities } from '../abilityRoll.js';
 import { useGame } from '../useGame.js';
-import { setMuted, isMuted } from '../sound/basketball.js';
+import { setAudioSuspended } from '../sound/audioSettings.js';
 import { Court } from './Court.jsx';
 import { Player } from './Player.jsx';
 import { Ball } from './Ball.jsx';
@@ -364,14 +364,24 @@ function SplashCourtLive() {
   const game = useGame({ homeRoster: HOME_ROSTER, awayRoster: AWAY_ROSTER, isFtue: false });
   const { handleCommand, onPickPlay, onPickDefense, onDismissStatUpgrade, onDismissQuarterSummary } = game;
 
-  // Silence first — testGamePlay calls bgMusic.start() immediately. Autoplay is
-  // blocked in the feed anyway, but a tap that expands the post must not leave a
-  // second music channel running. Restore on unmount so this never leaks into a
-  // real session.
+  // Suspend ALL audio for the lifetime of the inline splash — see
+  // audioSettings.setAudioSuspended. Two reasons this is suspend and not mute:
+  //
+  //  1. Bytes. This is a real sim: testGamePlay calls bgMusic.start()
+  //     immediately, and the possessions below call playLeap/playJumpball/etc.
+  //     as they play out. Muting set volume 0 but still constructed each Audio,
+  //     so the feed post fetched the files anyway. Suspend returns before
+  //     construction, so a feed post fetches zero audio.
+  //  2. Correctness. Mute could be clobbered: user.init resolves after mount
+  //     and calls setMuted(user.muted), which unmutes the splash again for
+  //     anyone whose saved preference is unmuted. Suspend is owned by this
+  //     view, so init can't touch it.
+  //
+  // Released on unmount (a tap expanding the post) so the real session has
+  // sound, at whatever mute setting the user actually saved.
   React.useEffect(() => {
-    const prev = isMuted();
-    setMuted(true);
-    return () => setMuted(prev);
+    setAudioSuspended(true);
+    return () => setAudioSuspended(false);
   }, []);
 
   React.useEffect(() => { handleCommand('testGamePlay'); }, []); // eslint-disable-line react-hooks/exhaustive-deps

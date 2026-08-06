@@ -9,6 +9,36 @@ export const audioSettings = { music: 1.0, sfx: 1.0, muted: false };
 export const musicVolume = () => (audioSettings.muted ? 0 : audioSettings.music);
 export const sfxVolume   = () => (audioSettings.muted ? 0 : audioSettings.sfx);
 
+// ── Suspend (no-audio views) ──────────────────────────────────────────────
+// DISTINCT FROM MUTE, and deliberately not stored on audioSettings:
+//
+//   muted    — a user preference. Volume 0, but the audio element is still
+//              constructed, which means the browser still FETCHES the file.
+//   suspended— "this view never plays audio at all." Every play/start entry
+//              point returns BEFORE `new Audio(src)`, so nothing is fetched.
+//
+// This exists for the inline (feed post) view. It shares one bundle with the
+// expanded game view, and SplashCourt runs a real, silenced sim — which calls
+// playLeap/playJumpball/etc. as it plays out. Muting those set volume to 0 but
+// still pulled each .wav over the network on first call. Worse, mute could not
+// even be relied on: user.init resolves a few hundred ms after mount and calls
+// setMuted(savedMuted), unmuting the splash again for anyone whose saved
+// preference is unmuted. Suspend is owned by the view, not the user, so init
+// can't clobber it.
+//
+// Module-scoped rather than a field on audioSettings so it can never be
+// serialised into a user's saved preferences by accident. (Aug 5)
+let _suspended = false;
+
+/** Suspend/resume ALL audio construction+playback. Returns the new state. */
+export function setAudioSuspended(s) {
+  _suspended = !!s;
+  return _suspended;
+}
+
+/** True when the current view must not construct or play any audio. */
+export function isAudioSuspended() { return _suspended; }
+
 // ── Change notification ───────────────────────────────────────────────────
 // One-shot SFX read the helpers above at play time, so they're always
 // correct. Anything *already playing* (looping sfx, music, <video>) has a

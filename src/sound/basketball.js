@@ -19,21 +19,29 @@ import blockSound      from './block.wav';
 import pickSound       from './basketball/pick.wav';
 import {
   audioSettings, musicVolume, sfxVolume, notifyAudioSettingsChanged,
+  isAudioSuspended,
 } from './audioSettings.js';
 
 // Every Audio() below is constructed LAZILY (on first actual play/start),
 // not at module-import time. This module is statically imported by App.jsx
-// (needed for game/lobby playback) AND by SplashCourt.jsx (needed only for
-// the mute icon's setMuted/isMuted) — and App.jsx itself loads on the inline
+// (needed for game/lobby playback), and App.jsx itself loads on the inline
 // (feed post) view too, since post view and expanded/game view share one
 // bundle. Eagerly `new Audio(src)`-ing ~7.5MB of game+title music and SFX
 // used to mean the feed post fetched all of it before a user ever tapped in,
 // even though nothing in the inline view ever calls play(). Deferring
 // construction to first use means importing this module costs nothing; the
 // fetch only happens when a sound is actually going to play. (Aug 5)
+//
+// Lazy construction alone is NOT enough for the inline view: SplashCourt runs
+// a real sim that genuinely calls these functions. Hence the second layer —
+// isAudioSuspended() short-circuits every entry point BEFORE `new Audio`, so a
+// view that opts out fetches nothing at all. See audioSettings.js. (Aug 5)
 function makeSound(src, baseVol = 0.8) {
   let proto = null;
   return () => {
+    // Suspended views must not even construct the element — that is what
+    // triggers the network fetch. Checked before `new Audio`, not after.
+    if (isAudioSuspended()) return;
     if (!proto) {
       proto = new Audio(src);
       proto.preload = 'auto';
@@ -65,6 +73,7 @@ function getBounce() {
 }
 export const bounceBall = {
   start() {
+    if (isAudioSuspended()) return;
     if (_bounceActive) return;
     const b = getBounce();
     _bounceActive = true;
@@ -89,7 +98,7 @@ function getBgMusic() {
   return _bgMusic;
 }
 export const bgMusic = {
-  start() { getBgMusic().play().catch(() => {}); },
+  start() { if (isAudioSuspended()) return; getBgMusic().play().catch(() => {}); },
   stop()  { if (_bgMusic) { _bgMusic.pause(); _bgMusic.currentTime = 0; } },
   applyVolume() { if (_bgMusic) _bgMusic.volume = BG_BASE * musicVolume(); },
 };
@@ -106,6 +115,7 @@ function getTitleMusic() {
 }
 export const titleMusic = {
   start() {
+    if (isAudioSuspended()) return;
     const t = getTitleMusic();
     if (!t.paused) return;
     t.currentTime = 0;

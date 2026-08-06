@@ -2,7 +2,7 @@ import React from 'react';
 import { BballChar } from './BballChar.jsx';
 import { PixelText } from './PixelText.jsx';
 import typingSound from '../sound/typing1.ogg';
-import { sfxVolume, subscribeAudioSettings } from '../sound/audioSettings.js';
+import { sfxVolume, subscribeAudioSettings, isAudioSuspended } from '../sound/audioSettings.js';
 
 // ── Audio ──────────────────────────────────────────────────────────────────────
 // Two alternating nodes chained back-to-back to fake a seamless loop. Volume is
@@ -10,20 +10,36 @@ import { sfxVolume, subscribeAudioSettings } from '../sound/audioSettings.js';
 // the global mute is respected, and re-applied on settings changes so muting
 // mid-sentence goes silent immediately instead of at the next chain hop.
 const TYPING_BASE = 0.5;
-const _ta = [new Audio(typingSound), new Audio(typingSound)];
+// Constructed LAZILY, on first actual play — never at module scope. BballTip is
+// imported by LobbyScreen/GameScene/DraftScreen, all of which hang off App.jsx,
+// and App.jsx also loads on the inline (feed post) view. Module-scope
+// `new Audio(typingSound)` therefore put two typing1.ogg nodes on every feed
+// impression. It happened not to fetch in Chrome (these never set
+// preload='auto', so the load is deferred) — but that is a browser heuristic,
+// not a guarantee, and it is exactly the pattern that cost ~7.5MB in
+// basketball.js. See audioSettings.js for suspend vs mute. (Aug 5)
+let _ta = null;
 let _taActive = false;
 let _taChainTimer = null;
 
+function _getTa() {
+  if (!_ta) {
+    _ta = [new Audio(typingSound), new Audio(typingSound)];
+    _applyTypingVolume();
+  }
+  return _ta;
+}
+
 function _applyTypingVolume() {
+  if (!_ta) return; // nothing constructed yet — nothing to re-apply to
   const v = TYPING_BASE * sfxVolume();
   _ta.forEach(a => { a.volume = v; });
 }
-_applyTypingVolume();
 subscribeAudioSettings(_applyTypingVolume);
 
 function _chainPlay(idx) {
   if (!_taActive) return;
-  const a = _ta[idx];
+  const a = _getTa()[idx];
   a.currentTime = 0;
   a.volume = TYPING_BASE * sfxVolume();
   a.play().catch(() => {});
@@ -36,8 +52,14 @@ function _chainPlay(idx) {
 }
 
 const _typingAudio = {
-  play()  { _taActive = true; clearTimeout(_taChainTimer); _chainPlay(0); return Promise.resolve(); },
-  pause() { _taActive = false; clearTimeout(_taChainTimer); _ta.forEach(a => { a.pause(); a.currentTime = 0; }); },
+  play()  {
+    if (isAudioSuspended()) return Promise.resolve();
+    _taActive = true; clearTimeout(_taChainTimer); _chainPlay(0); return Promise.resolve();
+  },
+  pause() {
+    _taActive = false; clearTimeout(_taChainTimer);
+    if (_ta) _ta.forEach(a => { a.pause(); a.currentTime = 0; });
+  },
 };
 
 // ─── BballTip ─────────────────────────────────────────────────────────────────

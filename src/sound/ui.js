@@ -5,7 +5,7 @@ import cancelSound from './ui/cancel.mp3';
 import flipSound      from './ui/flip.wav';
 import menuMove3Sound   from './ui/sfx_menu_move3.wav';
 import menuSelect2Sound from './ui/sfx_menu_select2.wav';
-import { sfxVolume } from './audioSettings.js';
+import { sfxVolume, isAudioSuspended } from './audioSettings.js';
 
 // Pre-loads the audio file on first PLAY, not on import — see basketball.js
 // for why (the inline/feed post view shares this bundle and never plays any
@@ -14,6 +14,7 @@ import { sfxVolume } from './audioSettings.js';
 function makeSound(src, baseVol = 0.7) {
   let proto = null;
   return () => {
+    if (isAudioSuspended()) return;
     if (!proto) {
       proto = new Audio(src);
       proto.preload = 'auto';
