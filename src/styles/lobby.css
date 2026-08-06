@@ -1585,6 +1585,16 @@
   .lb2-ts-events-label { display: none; }
   .lb2-ts-events-icon { display: block; }
 
+  /* On phones the bare calendar glyph belongs with the other status icons
+     rather than floating between the title and the credits readout, so it is
+     re-ordered to sit immediately right of the notification bell. Flex order
+     only (no DOM change) keeps the desktop EVENTS chip where it is and leaves
+     the [data-testid="title-events"] node untouched for tests. */
+  .lb2-ts-events { order: 2; padding: 4px 0 4px 1px; }
+  .lb2-ts-right  { order: 1; }
+  /* Match the right-cluster spacing so the calendar reads as part of it. */
+  .lb2-title-strip { gap: 7px; }
+
   .lb2-ts-energy { gap: 4px; }
   .lb2-ts-right { gap: 7px; }
 }
