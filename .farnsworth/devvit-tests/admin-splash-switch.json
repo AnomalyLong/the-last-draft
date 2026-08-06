@@ -13,6 +13,23 @@
       "_comment": "switchUser restarts the dev server"
     },
     {
+      "action": "eval",
+      "_id": "reset-mode",
+      "expression": "(() => { if (location.search) { location.search = ''; return 'reset to expanded from: ' + location.search; } return 'already expanded'; })()",
+      "_comment": "SELF-HEALING: this test needs the EXPANDED view (DBG + admin panel are not rendered inline). Do not assume the previous test left the webview clean - zz-verify-postview-zero-audio sets ?mode=inline and never restores it."
+    },
+    {
+      "action": "sleep",
+      "ms": 2500,
+      "_comment": "clearing location.search reloads the webview"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 25000,
+      "_comment": "Confirm we are really expanded before touching admin UI."
+    },
+    {
       "action": "waitFor",
       "selector": "text=DBG",
       "timeout": 8000,
