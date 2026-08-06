@@ -15,3 +15,8 @@ coverage
 test-results/
 tmp/
 .farnsworth-clipboard/
+
+# Devvit CLI-managed; holds DEVVIT_AUTH_TOKEN. See docs/build-flags.md
+.env
+.env.local
+.env.*.local
