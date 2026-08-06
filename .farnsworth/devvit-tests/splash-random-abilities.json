@@ -100,6 +100,16 @@
     {
       "action": "eval",
       "expression": "(() => { document.querySelectorAll('#probe-ten,#probe-each-two,#probe-variety,#probe-gated-anim').forEach(n=>n.remove()); delete window.__anims; return 'cleaned'; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { if (!location.search) return 'already-clean'; location.href = location.origin + location.pathname; return 'restored expanded view'; })()",
+      "_comment": "TEARDOWN: this test navigates the shared webview to ?mode=inline, and a reload PRESERVES the query string - so without this, every later test that expects the expanded app (none of them declare a `url`) boots into the inline splash and times out. Same idiom already used at the end of splash-special-move-cards.json."
+    },
+    {
+      "action": "sleep",
+      "ms": 2500,
+      "_comment": "Let the reload land so the next test starts from the expanded view. Deliberately does NOT waitFor lobby-screen: a teardown must never be able to fail the test it is attached to."
     }
   ]
 }
