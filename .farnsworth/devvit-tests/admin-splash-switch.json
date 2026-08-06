@@ -1,6 +1,6 @@
 {
   "name": "admin-splash-switch",
-  "description": "Admin panel -> Config -> 'Post view splash': verify the device-local switch flips the active post-view splash between 'court' and 'classic', persists to localStorage, and resets to the shipped default. Runs as u/bob (admin) - the DBG console and admin panel are admin-gated.",
+  "description": "Admin panel -> Config -> 'Post view splash': verify the GLOBAL switch (server/core/inlineSplash.ts) flips what every player sees in the post view, persists to redis (read back over /api/trpc/config.getInlineSplash), mirrors into the local cache for synchronous first paint, warns when a device override is masking it, and resets to the shipped default. Runs as u/bob (admin) - the DBG console and admin panel are admin-gated.",
   "steps": [
     {
       "action": "switchUser",
@@ -17,6 +17,11 @@
       "selector": "text=DBG",
       "timeout": 8000,
       "_comment": "DBG toggle is admin-gated (App.jsx gates on isAdmin) - run as an admin user e.g. bob"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.localStorage.removeItem('fw_inline_splash'); window.dispatchEvent(new CustomEvent('fw-inline-splash-change')); return 'device override cleared'; })()",
+      "name": "pre-clean: drop any device override left by the `splash` debug command"
     },
     {
       "action": "if",
@@ -55,7 +60,7 @@
     {
       "action": "click",
       "selector": "[data-testid=admin-tab-config]",
-      "_comment": "Config tab hosts both the server feature flags and the local splash switch"
+      "_comment": "Config tab hosts both the server feature flags and the global splash switch"
     },
     {
       "action": "waitFor",
@@ -64,55 +69,122 @@
       "_comment": "ASSERT: switch renders. It sits ABOVE the flags block and is rendered in both ConfigPanel branches, so it must appear even if the flag fetch fails."
     },
     {
+      "action": "waitFor",
+      "selector": "[data-testid=splash-source]",
+      "timeout": 8000,
+      "_comment": "The switch loads its own state from admin.getInlineSplash; splash-source only exists after that query lands (before it, the panel shows 'loading splash setting...')."
+    },
+    {
       "action": "eval",
-      "expression": "JSON.stringify({ source: document.querySelector('[data-testid=splash-source]')?.textContent.trim(), court: document.querySelector('[data-testid=splash-state-court]')?.dataset.on, classic: document.querySelector('[data-testid=splash-state-classic]')?.dataset.on, stored: window.localStorage.getItem('fw_inline_splash') })",
-      "name": "baseline (expect court ACTIVE, no stored override)"
+      "expression": "JSON.stringify({ source: document.querySelector('[data-testid=splash-source]')?.textContent.trim(), court: document.querySelector('[data-testid=splash-state-court]')?.dataset.on, classic: document.querySelector('[data-testid=splash-state-classic]')?.dataset.on, globalCache: window.localStorage.getItem('fw_inline_splash_global'), deviceOverride: window.localStorage.getItem('fw_inline_splash') })",
+      "name": "baseline (LIVE variant + cache state before any change)"
     },
     {
       "action": "click",
       "selector": "[data-testid=splash-pick-classic]",
-      "_comment": "Switch the post view to the original galaxy splash"
+      "_comment": "Show the original galaxy splash to EVERYONE"
     },
     {
       "action": "waitFor",
       "selector": "[data-testid=splash-state-classic][data-on='1']",
-      "timeout": 4000,
-      "_comment": "ASSERT: classic became ACTIVE. Times out (= failure) if the click did not take."
+      "timeout": 6000,
+      "_comment": "ASSERT: classic went LIVE. Times out (= failure) if the mutation did not take."
     },
     {
       "action": "waitFor",
       "selector": "[data-testid=splash-state-court][data-on='0']",
       "timeout": 4000,
-      "_comment": "ASSERT: court went inactive - the two are mutually exclusive, not both-on"
+      "_comment": "ASSERT: court went off - the two are mutually exclusive, not both-on"
     },
     {
       "action": "eval",
-      "expression": "(() => { const v = window.localStorage.getItem('fw_inline_splash'); if (v !== 'classic') throw new Error('override not persisted: ' + JSON.stringify(v)); return 'persisted=' + v; })()",
-      "name": "ASSERT override written to localStorage"
+      "expression": "(() => { const v = window.localStorage.getItem('fw_inline_splash_global'); if (v !== 'classic') throw new Error('global not mirrored into local cache: ' + JSON.stringify(v)); return 'cached=' + v; })()",
+      "name": "ASSERT global mirrored locally (this is what the feed paints synchronously)"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__splashProbe = window.__splashProbe || {}; window.__splashProbe['afterSet'] = 'pending'; fetch('/api/trpc/config.getInlineSplash', { method: 'GET' }).then(async (r) => { window.__splashProbe['afterSet'] = r.status + ' :: ' + (await r.text()); }).catch((e) => { window.__splashProbe['afterSet'] = 'THREW ' + e.message; }); return 'fired'; })()",
+      "name": "fire server read-back (afterSet)",
+      "_comment": "Async eval RETURN VALUES come back as {} in this runner, so a throw inside an async fn is invisible and the assertion would silently pass. Stash on window, sleep, then assert in a SYNC eval below."
+    },
+    {
+      "action": "sleep",
+      "ms": 1200
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const v = window.__splashProbe && window.__splashProbe['afterSet']; if (!v || v === 'pending') throw new Error('probe did not resolve: ' + JSON.stringify(v)); if (!/^200 /.test(v)) throw new Error('bad status: ' + v.slice(0, 200)); if (!/classic/.test(v)) throw new Error('server does not report classic: ' + v.slice(0, 300)); return 'server says: ' + v.slice(0, 160); })()",
+      "name": "ASSERT redis holds it - a cold client (any other player) resolves classic"
     },
     {
       "action": "screenshot",
-      "path": "/tmp/admin-splash-switch-classic.png"
+      "path": "/tmp/admin-splash-switch-global-classic.png"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.localStorage.setItem('fw_inline_splash', 'court'); window.dispatchEvent(new CustomEvent('fw-inline-splash-change')); return 'device override set to court while global=classic'; })()",
+      "name": "simulate the trap: a leftover `splash` debug override on the admin's own device"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=splash-mask-warning]",
+      "timeout": 4000,
+      "_comment": "ASSERT: the panel says out loud that THIS device is showing something other than the global setting - the 'I flipped it and nothing happened' case."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=splash-state-classic][data-on='1']",
+      "timeout": 4000,
+      "_comment": "ASSERT: the LIVE badge still tracks the SERVER value, not the local override. The two layers must not be conflated."
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/admin-splash-switch-masked.png"
     },
     {
       "action": "click",
       "selector": "[data-testid=splash-clear]",
-      "_comment": "'Follow shipped default' - clears the device override"
+      "_comment": "'Clear local override' - only rendered while an override exists"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const v = window.localStorage.getItem('fw_inline_splash'); if (v !== null) throw new Error('device override not cleared: ' + JSON.stringify(v)); if (document.querySelector('[data-testid=splash-mask-warning]')) throw new Error('warning still shown after clearing override'); return 'override cleared, warning gone'; })()",
+      "name": "ASSERT clearing the local override removes it and the warning"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=splash-follow-default]",
+      "_comment": "Clears the GLOBAL override so everyone follows DEFAULT_SPLASH again - also leaves redis clean for later tests"
     },
     {
       "action": "waitFor",
       "selector": "[data-testid=splash-state-court][data-on='1']",
-      "timeout": 4000,
-      "_comment": "ASSERT: back to DEFAULT_SPLASH ('court'). Also leaves this device clean for later tests."
+      "timeout": 6000,
+      "_comment": "ASSERT: back to DEFAULT_SPLASH ('court') for everyone."
     },
     {
       "action": "eval",
-      "expression": "(() => { const v = window.localStorage.getItem('fw_inline_splash'); if (v !== null) throw new Error('override not cleared: ' + JSON.stringify(v)); return 'cleared'; })()",
-      "name": "ASSERT override removed from localStorage"
+      "expression": "(() => { const v = window.localStorage.getItem('fw_inline_splash_global'); if (v !== null) throw new Error('global cache not cleared: ' + JSON.stringify(v)); return 'cache cleared - device follows build default again'; })()",
+      "name": "ASSERT local cache cleared when the global override is removed"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__splashProbe = window.__splashProbe || {}; window.__splashProbe['afterClear'] = 'pending'; fetch('/api/trpc/config.getInlineSplash', { method: 'GET' }).then(async (r) => { window.__splashProbe['afterClear'] = r.status + ' :: ' + (await r.text()); }).catch((e) => { window.__splashProbe['afterClear'] = 'THREW ' + e.message; }); return 'fired'; })()",
+      "name": "fire server read-back (afterClear)",
+      "_comment": "Async eval RETURN VALUES come back as {} in this runner, so a throw inside an async fn is invisible and the assertion would silently pass. Stash on window, sleep, then assert in a SYNC eval below."
+    },
+    {
+      "action": "sleep",
+      "ms": 1200
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const v = window.__splashProbe && window.__splashProbe['afterClear']; if (!v || v === 'pending') throw new Error('probe did not resolve: ' + JSON.stringify(v)); if (!/^200 /.test(v)) throw new Error('bad status: ' + v.slice(0, 200)); if (/classic/.test(v)) throw new Error('server STILL reports classic: ' + v.slice(0, 300)); return 'server says: ' + v.slice(0, 160); })()",
+      "name": "ASSERT redis override removed (teardown verified, not assumed)"
     },
     {
       "action": "screenshot",
-      "path": "/tmp/admin-splash-switch-default.png"
+      "path": "/tmp/admin-splash-switch-global-default.png"
     }
   ]
 }

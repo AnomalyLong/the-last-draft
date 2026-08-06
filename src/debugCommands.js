@@ -30,7 +30,7 @@ export const COMMAND_META = {
   repairPlayers: { scope: 'both', help: 'repairPlayers <user|#id> [apply] [clampStats] — strip duplicate abilities (admins only; dry-run unless "apply")' },
   version: { scope: 'both', help: 'version — build stamp for client + server, plus viewport/safe-area diagnostics' },
   gutter: { scope: 'both', help: 'gutter [px|auto] — inspect/set the bottom-nav safe gutter (persists on this device)' },
-  splash: { scope: 'both', help: 'splash [classic|court|default] — inspect/set which post-view splash this device renders' },
+  splash: { scope: 'both', help: 'splash [classic|court|default] — inspect/set the post-view splash on THIS device (global setting: admin panel → Config)' },
 
   // ── Title only ────────────────────────────────────────────────────────
   admin: { scope: 'title', help: 'admin — open admin overlay (admins only)' },
@@ -165,12 +165,19 @@ const sharedImpls = {
   // and the live-court attract loop. DEVICE-LOCAL and instant: no rebuild, no
   // server write, no effect on other players. An already-open post view updates
   // live via the storage event, so you can A/B the two side by side.
+  //
+  // NOTE this override WINS over the global admin setting on this device. To
+  // change what everyone sees, use the admin panel → Config tab; to stop
+  // masking it here, run `splash default`.
   splash(args, ctx) {
     const raw = (args[0] ?? '').trim().toLowerCase();
     if (!raw) {
       const s = describeSplash();
       ctx.addLog(`splash: applied=${s.applied}  (${s.source})`);
-      ctx.addLog(`  default(build)=${s.default}  override=${s.override ?? 'none'}`);
+      ctx.addLog(`  default(build)=${s.default}  global(admin)=${s.global ?? 'none'}  override(device)=${s.override ?? 'none'}`);
+      // HUD.jsx only styles 'cmd' and 'err'; anything else is plain green, so
+      // the warning has to carry its own emphasis in the text.
+      if (s.override) ctx.addLog(`  NOTE device override masks global=${s.global ?? s.default} — run "splash default" to follow it`);
       ctx.addLog(`  usage: splash ${SPLASH_VARIANTS.join('|')} — or "splash default" to clear`);
       return;
     }
@@ -180,7 +187,7 @@ const sharedImpls = {
         : setSplashOverride(raw);
       const s = describeSplash();
       ctx.addLog(`splash: ${applied} (${s.source})`, 'ok');
-      ctx.addLog('  post view updates live; other players are unaffected');
+      ctx.addLog('  this device only; post view updates live. Global switch: admin panel → Config');
     } catch (e) {
       ctx.addLog(e.message, 'err');
     }

@@ -14,93 +14,140 @@
 // A verbatim copy of the original splash also lives in backups/ at the repo
 // root, in case SplashScreen.jsx itself is ever edited.
 //
-// ── Which one ships ──────────────────────────────────────────────────────────
-// DEFAULT_SPLASH is the build-time answer: what every ordinary player gets.
-// Change this one string to change what ships.
+// ── Resolution order (highest wins) ─────────────────────────────────────────
+//   1. DEVICE OVERRIDE   localStorage, set by the `splash` debug command or the
+//                        admin panel's "preview on this device" control. Affects
+//                        only the browser it was set in. For A/B-ing on a real
+//                        device without touching what players see.
+//   2. GLOBAL SETTING    server-side, set by an admin (AdminOverlay → Config).
+//                        This is what EVERY player gets. Stored in redis
+//                        (server/core/inlineSplash.ts) and mirrored into
+//                        localStorage here so it can be read synchronously.
+//   3. DEFAULT_SPLASH    the build-time answer (shared/splash.ts).
 //
-// On top of that there is a DEVICE-LOCAL override (localStorage), driven by the
-// `splash` debug command and the Admin panel → Config tab. That override is for
-// comparing the two views on a real device without a rebuild; it affects only
-// the browser it was set in and never other players.
+// ── Why the global value is cached locally ──────────────────────────────────
+// The inline splash mounts on every feed impression, for everyone scrolling
+// past. Blocking first paint on a trpc round trip would mean a blank cell in
+// the feed, and painting first then applying the answer would visibly swap one
+// splash for the other. So: paint the CACHED global answer synchronously (zero
+// cost, correct for every impression after the first), fire the query once in
+// the background, and write the result back to the cache. The only visible swap
+// is the very first impression after an admin changes the setting — which is
+// exactly the case where a swap is the honest thing to show.
 //
-// WHY DEVICE-LOCAL AND NOT A SERVER FEATURE FLAG: the inline splash mounts on
-// every feed impression, for everyone scrolling past. A server flag would mean a
-// trpc round trip per impression, and because that answer arrives after first
-// paint the feed would visibly render one splash and then swap to the other.
-// localStorage is readable synchronously, so the correct splash is the first
-// thing painted and the cost stays zero. (Same reason viewportGutter.js persists
-// its override locally.) If a global no-redeploy switch is wanted later, the
-// place for it is core/featureFlags.ts + a value baked into the post payload at
-// submit time, NOT a fetch on the render path.
+// The fetch itself lives in App.jsx (next to config.getFlags) so this module
+// stays free of network imports; it calls applyGlobalSplash() with the answer.
 
-export const SPLASH_VARIANTS = ['classic', 'court'];
+import { SPLASH_VARIANTS, DEFAULT_SPLASH, isSplashVariant } from './shared/splash';
 
-/** What ships to ordinary players. */
-export const DEFAULT_SPLASH = 'court';
+export { SPLASH_VARIANTS, DEFAULT_SPLASH };
 
-const STORAGE_KEY = 'fw_inline_splash';
-// Fired on the *same* document when the override changes. The native 'storage'
+const STORAGE_KEY = 'fw_inline_splash';        // layer 1: this device only
+const GLOBAL_CACHE_KEY = 'fw_inline_splash_global'; // layer 2: cached server answer
+// Fired on the *same* document when anything changes. The native 'storage'
 // event only reaches OTHER documents on the origin, so without this the tab that
 // made the change would be the one tab that didn't react.
 const LOCAL_EVENT = 'fw-inline-splash-change';
 
-const isValid = (v) => typeof v === 'string' && SPLASH_VARIANTS.includes(v);
+const WATCHED_KEYS = [STORAGE_KEY, GLOBAL_CACHE_KEY];
 
-/** The device-local override, or null when following DEFAULT_SPLASH. */
-export function readSplashOverride() {
+const read = (key) => {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return isValid(raw) ? raw : null;
+    const raw = window.localStorage.getItem(key);
+    return isSplashVariant(raw) ? raw : null;
   } catch {
     // Storage blocked (private mode / partitioned third-party frame).
     return null;
   }
-}
+};
 
-/**
- * Set the override. Pass null to clear it and return to DEFAULT_SPLASH.
- * Returns the variant now in effect. Throws on an unknown name so a typo in
- * the debug console reports itself instead of silently doing nothing.
- */
-export function setSplashOverride(variant) {
-  if (variant != null && !isValid(variant)) {
-    throw new Error(`unknown splash "${variant}" — expected ${SPLASH_VARIANTS.join(' | ')}`);
-  }
+const write = (key, value) => {
   try {
-    if (variant == null) window.localStorage.removeItem(STORAGE_KEY);
-    else window.localStorage.setItem(STORAGE_KEY, variant);
+    if (value == null) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, value);
   } catch {
     /* storage blocked — the notify below still updates this document */
   }
+};
+
+const notify = () => {
   try {
     window.dispatchEvent(new CustomEvent(LOCAL_EVENT));
   } catch {
     /* non-DOM host */
   }
+};
+
+/** Layer 1: the device-local override, or null when not set. */
+export function readSplashOverride() {
+  return read(STORAGE_KEY);
+}
+
+/** Layer 2: last known global setting, or null if never fetched / cleared. */
+export function readGlobalSplash() {
+  return read(GLOBAL_CACHE_KEY);
+}
+
+/**
+ * Set the device-local override. Pass null to clear it and fall back to the
+ * global setting. Returns the variant now in effect. Throws on an unknown name
+ * so a typo in the debug console reports itself instead of silently doing
+ * nothing.
+ */
+export function setSplashOverride(variant) {
+  if (variant != null && !isSplashVariant(variant)) {
+    throw new Error(`unknown splash "${variant}" — expected ${SPLASH_VARIANTS.join(' | ')}`);
+  }
+  write(STORAGE_KEY, variant);
+  notify();
   return getInlineSplash();
 }
 
-/** The variant to render right now: override if set, else the shipped default. */
+/**
+ * Record the global setting fetched from (or just written to) the server.
+ * Pass null when the server reports no override, so this device stops using a
+ * stale cached value and follows DEFAULT_SPLASH again.
+ *
+ * Called by App.jsx on boot and by the admin panel right after a successful
+ * mutation, which is what makes an already-open post view swap live instead of
+ * waiting for the next impression.
+ */
+export function applyGlobalSplash(variant) {
+  const next = isSplashVariant(variant) ? variant : null;
+  if (next === readGlobalSplash()) return getInlineSplash(); // no-op, no re-render
+  write(GLOBAL_CACHE_KEY, next);
+  notify();
+  return getInlineSplash();
+}
+
+/** The variant to render right now. */
 export function getInlineSplash() {
-  return readSplashOverride() ?? DEFAULT_SPLASH;
+  return readSplashOverride() ?? readGlobalSplash() ?? DEFAULT_SPLASH;
 }
 
 /** Everything behind the current decision, for the `splash` command's report. */
 export function describeSplash() {
   const override = readSplashOverride();
+  const global = readGlobalSplash();
   return {
-    applied: override ?? DEFAULT_SPLASH,
+    applied: override ?? global ?? DEFAULT_SPLASH,
     override,
+    global,
     default: DEFAULT_SPLASH,
-    source: override ? 'override (this device)' : 'default (build)',
+    // A device override MASKS the global setting — the single most confusing
+    // state there is ("admin flipped it and nothing happened"), so name it.
+    masked: override != null && global != null && override !== global,
+    source: override
+      ? 'override (this device)'
+      : global
+        ? 'global (admin)'
+        : 'default (build)',
   };
 }
 
 /**
- * Subscribe to override changes. Fires for changes made in this document AND in
- * any other document on the origin — which is what makes toggling from the
- * expanded game view update an already-open inline/post view live, instead of
- * waiting for the next feed impression.
+ * Subscribe to changes. Fires for changes made in this document AND in any
+ * other document on the origin.
  *
  * Returns an unsubscribe function.
  */
@@ -109,7 +156,7 @@ export function subscribeSplash(onChange) {
   const handler = (e) => {
     // Ignore unrelated keys so we don't re-render on every localStorage write
     // the app makes (audio prefs, gutter, ...).
-    if (e && e.type === 'storage' && e.key && e.key !== STORAGE_KEY) return;
+    if (e && e.type === 'storage' && e.key && !WATCHED_KEYS.includes(e.key)) return;
     onChange(getInlineSplash());
   };
   window.addEventListener('storage', handler);

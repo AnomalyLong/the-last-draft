@@ -65,6 +65,8 @@ import {
 import { countDecrement, countGet, countIncrement } from './core/count';
 import { getMyPass, adminGrantPass, adminRevokePass, retryFounderFlair } from './core/battlePass';
 import { getFlags, setFlag, getFlagLog, isFlagName, FLAG_DEFAULTS } from './core/featureFlags';
+import { getInlineSplashSetting, setInlineSplashSetting, getInlineSplashLog } from './core/inlineSplash';
+import { SPLASH_VARIANTS } from '../shared/splash';
 
 const t = initTRPC.context<Context>().create({ transformer });
 export const router = t.router;
@@ -635,6 +637,15 @@ export const appRouter = t.router({
     getFlags: publicProcedure.query(async () => {
       return await getFlags();
     }),
+
+    // Which splash the post/feed view should render, for everyone. The
+    // client paints its cached copy first and reconciles with this, so
+    // this query is never on the critical path of a feed impression.
+    // See src/splashConfig.js.
+    getInlineSplash: publicProcedure.query(async () => {
+      const s = await getInlineSplashSetting();
+      return { applied: s.applied, override: s.override, default: s.default };
+    }),
   }),
 
   // ── Admin ────────────────────────────────────────────────────────────────
@@ -661,6 +672,21 @@ export const appRouter = t.router({
           throw new TRPCError({ code: 'BAD_REQUEST', message: `Unknown flag: ${input.flag}` });
         }
         return await setFlag(input.flag, input.enabled, ctx.adminUsername);
+      }),
+
+    // ── Global inline splash ───────────────────────────────────────────
+    getInlineSplash: adminProcedure.query(async () => {
+      const [setting, log] = await Promise.all([getInlineSplashSetting(), getInlineSplashLog(20)]);
+      return { ...setting, log };
+    }),
+
+    // variant: null clears the override and follows the build default.
+    setInlineSplash: adminProcedure
+      .input(z.object({
+        variant: z.enum(SPLASH_VARIANTS).nullable(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return await setInlineSplashSetting(input.variant, ctx.adminUsername);
       }),
 
     createAnnouncement: adminProcedure

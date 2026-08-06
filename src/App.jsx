@@ -39,7 +39,7 @@ function toAwayPlayers(roster = []) {
   }));
 }
 
-import { getInlineSplash, subscribeSplash } from './splashConfig.js';
+import { getInlineSplash, subscribeSplash, applyGlobalSplash } from './splashConfig.js';
 import { TitleScreen, SplashScreen, SplashCourt, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FeaturedEventsScreen, BattlePassScreen, FtueIntroVideo } from './components/index.js';
 import { TitleStrip } from './components/TitleStrip.jsx';
 
@@ -76,6 +76,16 @@ export default function App() {
   // view live instead of on the next impression.
   const [inlineSplash, setInlineSplash] = React.useState(getInlineSplash);
   React.useEffect(() => subscribeSplash(setInlineSplash), []);
+  // Reconcile the cached global setting with the server's current answer. Runs
+  // in BOTH modes: inline so the feed converges on what the admin chose, and
+  // expanded so an admin's own device caches the value it just set. A failure
+  // is silent on purpose — we keep painting the cached/default splash rather
+  // than blanking a feed cell over a flaky query.
+  React.useEffect(() => {
+    trpc.config.getInlineSplash.query()
+      .then((r) => applyGlobalSplash(r?.override ?? null))
+      .catch(() => {});
+  }, []);
   const [scene, setScene] = React.useState('loading'); // 'loading' | 'title' | 'options' | 'teamSelect' | 'draft' | 'game' | 'collection'
   const [musicVol, setMusicVol] = React.useState(1.0);
   const [sfxVol, setSfxVol] = React.useState(1.0);

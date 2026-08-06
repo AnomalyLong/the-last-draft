@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { trpc } from '../trpc';
-import { SPLASH_VARIANTS, describeSplash, setSplashOverride, subscribeSplash } from '../splashConfig.js';
+import { SPLASH_VARIANTS, describeSplash, setSplashOverride, subscribeSplash, applyGlobalSplash } from '../splashConfig.js';
 
 const S = {
   // lineHeight is REQUIRED here, not cosmetic. The app root
@@ -1152,10 +1152,15 @@ function NotificationsPanel() {
 }
 
 // ── Post-view splash switch ───────────────────────────────────────────────
-// DEVICE-LOCAL, deliberately. This is NOT a server feature flag and is styled
-// apart from them so nobody reads it as one: the inline splash mounts on every
-// feed impression, so resolving it over the network would cost a round trip per
-// impression and visibly swap after first paint. See splashConfig.js.
+// GLOBAL: writes the redis-backed setting in server/core/inlineSplash.ts, so
+// picking a variant here changes what EVERY player sees in the feed/post view.
+// Not a boolean, so it is not part of the feature-flag list, but it is the same
+// kind of live operator control and sits in the same tab.
+//
+// It is not a fetch on the render path: the client caches the answer in
+// localStorage and paints that synchronously on each impression. See
+// splashConfig.js. That means an open post view swaps as soon as it hears about
+// the change, and a cold feed impression is correct with zero added latency.
 const SPLASH_META = {
   classic: {
     label: 'Classic splash',
@@ -1168,44 +1173,104 @@ const SPLASH_META = {
 };
 
 function SplashSwitch() {
-  const [state, setState] = useState(() => describeSplash());
+  const fmt = (ts) => ts ? new Date(ts).toLocaleString() : '—';
+  // Server truth (what everyone gets) + this device's resolved view of it.
+  const [server, setServer] = useState(null);   // null = loading
+  const [local, setLocal] = useState(() => describeSplash());
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
-  // Reflect changes made elsewhere (the `splash` debug command, another tab).
-  useEffect(() => subscribeSplash(() => setState(describeSplash())), []);
+  const load = () => trpc.admin.getInlineSplash.query()
+    .then((d) => {
+      setServer(d);
+      // Keep this device's cache honest with what we just read.
+      applyGlobalSplash(d.override ?? null);
+      setErr(null);
+    })
+    .catch((e) => setErr(e?.message || String(e)));
 
-  const pick = (v) => {
+  useEffect(() => { load(); }, []);
+  // Reflect local changes (the `splash` debug command, another tab).
+  useEffect(() => subscribeSplash(() => setLocal(describeSplash())), []);
+
+  const pick = async (v) => {
     setErr(null);
-    try { setSplashOverride(v); } catch (e) { setErr(e.message); }
-    setState(describeSplash());
+    setBusy(true);
+    try {
+      const next = await trpc.admin.setInlineSplash.mutate({ variant: v });
+      setServer((prev) => ({ ...(prev || {}), ...next }));
+      // Push it into this document immediately so an open post view swaps now
+      // instead of on its next impression.
+      applyGlobalSplash(next.override ?? null);
+      setLocal(describeSplash());
+    } catch (e) {
+      setErr(e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const clearDeviceOverride = () => {
+    setErr(null);
+    try { setSplashOverride(null); } catch (e) { setErr(e.message); }
+    setLocal(describeSplash());
+  };
+
+  if (!server) {
+    return (
+      <div data-testid="admin-splash-switch">
+        <div style={S.heading}>Post view splash — everyone</div>
+        {err
+          ? <div style={S.error}>Failed to load splash setting: {err}</div>
+          : <span style={{ color: '#556', fontSize: 12 }}>loading splash setting…</span>}
+      </div>
+    );
+  }
 
   return (
     <div data-testid="admin-splash-switch">
-      <div style={S.heading}>Post view splash — this device only</div>
+      <div style={S.heading}>Post view splash — everyone</div>
       <div style={{ color: '#445', fontSize: 11, marginBottom: 12 }}>
-        Swaps what the feed/post view renders. Applies instantly to an open post
-        view and survives reloads on this device. Other players keep the shipped
-        default ({SPLASH_META[state.default]?.label ?? state.default}).
+        Swaps what the feed/post view renders for <b style={{ color: '#8a9ab0' }}>all players</b>.
+        Takes effect on the next feed impression, and immediately on any post
+        view that is already open. No redeploy.
       </div>
 
+      {/* The "admin flipped it and nothing happened" trap: a leftover device
+          override from the `splash` debug command wins over the global value on
+          THIS device, so the admin's own post view would not move. Say so. */}
+      {local.override && (
+        <div style={{ border: '1px solid #6a5a1a', background: '#241f0d', borderRadius: 6, padding: 10, marginBottom: 10 }}>
+          <div data-testid="splash-mask-warning" style={{ color: '#e0c060', fontSize: 11, lineHeight: 1.45 }}>
+            This device has a local override (<code>{local.override}</code>) from the
+            <code style={{ margin: '0 4px' }}>splash</code> debug command. Your own post
+            view shows that, not the global setting{server.applied !== local.override ? ` (${server.applied})` : ''}.
+            Other players are unaffected.
+          </div>
+          <button data-testid="splash-clear" onClick={clearDeviceOverride}
+            style={{ ...S.btn('#4a3a10'), marginTop: 8 }}>
+            Clear local override
+          </button>
+        </div>
+      )}
+
       {SPLASH_VARIANTS.map(v => {
-        const on = state.applied === v;
+        const on = server.applied === v;
         const meta = SPLASH_META[v] ?? { label: v, desc: '' };
         return (
           <div key={v} style={{ border: `1px solid ${on ? '#2a4a70' : '#1a2030'}`, borderRadius: 6, padding: 12, marginBottom: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
               <span data-testid={`splash-state-${v}`} data-on={on ? '1' : '0'}
                 style={S.tag(on ? '#1c5c2c' : '#333c4c')}>
-                {on ? 'ACTIVE' : 'off'}
+                {on ? 'LIVE' : 'off'}
               </span>
               <span style={{ color: '#ccd', fontSize: 12 }}>{meta.label}</span>
               <code style={{ color: '#445', fontSize: 10 }}>{v}</code>
               <div style={{ flex: 1 }} />
-              <button data-testid={`splash-pick-${v}`} disabled={on}
+              <button data-testid={`splash-pick-${v}`} disabled={on || busy}
                 onClick={() => pick(v)}
-                style={on ? { ...S.btn('#10203a'), color: '#556', cursor: 'default' } : S.btn('#1a3a6a')}>
-                {on ? 'Showing' : 'Show this'}
+                style={(on || busy) ? { ...S.btn('#10203a'), color: '#556', cursor: 'default' } : S.btn('#1a3a6a')}>
+                {on ? 'Showing' : busy ? '…' : 'Show everyone'}
               </button>
             </div>
             <div style={{ color: on ? '#6a8' : '#667', fontSize: 11, lineHeight: 1.4 }}>{meta.desc}</div>
@@ -1215,12 +1280,16 @@ function SplashSwitch() {
 
       <div style={{ ...S.row, marginBottom: 0 }}>
         <span data-testid="splash-source" style={{ color: '#556', fontSize: 11, flex: 1 }}>
-          active: <b style={{ color: '#8a9ab0' }}>{state.applied}</b> · {state.source}
+          everyone: <b style={{ color: '#8a9ab0' }}>{server.applied}</b>
+          {' · '}
+          {server.override
+            ? <>set by u/{server.admin || '?'}{server.at ? ` · ${fmt(server.at)}` : ''}</>
+            : <>following shipped default</>}
         </span>
         {/* S.btn() has no :disabled styling, so a disabled reset button looked
             identical to an actionable one. Mute it when there's nothing to reset. */}
-        <button data-testid="splash-clear" disabled={!state.override}
-          style={state.override
+        <button data-testid="splash-follow-default" disabled={!server.override || busy}
+          style={(server.override && !busy)
             ? S.btn()
             : { ...S.btn('#0d1424'), color: '#39435a', cursor: 'default' }}
           onClick={() => pick(null)}>
@@ -1228,6 +1297,17 @@ function SplashSwitch() {
         </button>
       </div>
       {err && <div style={S.error}>{err}</div>}
+
+      {server.log?.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ color: '#445', fontSize: 11, marginBottom: 4 }}>Recent changes</div>
+          {server.log.slice(0, 5).map((e, i) => (
+            <div key={i} style={{ color: '#556', fontSize: 10 }}>
+              {fmt(e.at)} · u/{e.admin} → {e.variant ?? 'shipped default'}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1263,8 +1343,8 @@ function ConfigPanel() {
   // Surface load failures. Previously this returned a bare "loading flags…"
   // on error too: `msg` is only rendered in the main return below, which a
   // failed load never reaches — so an error looked like a permanent spinner.
-  // Defined once, used in both returns: the splash switch is purely local, so it
-  // must still be reachable when the server flag fetch fails.
+  // Defined once, used in both returns: the splash switch loads its own state,
+  // so it must still be reachable when the server FLAG fetch fails.
   const localSection = <><SplashSwitch /><hr style={S.divider} /></>;
 
   if (!flags) return (
