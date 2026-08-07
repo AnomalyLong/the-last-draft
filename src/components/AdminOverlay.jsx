@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { trpc } from '../trpc';
 import { SPLASH_VARIANTS, describeSplash, setSplashOverride, subscribeSplash, applyGlobalSplash } from '../splashConfig.js';
+import { DRAFT_PRICING_FIELDS, DRAFT_PRICING_BOUNDS, tiersFor } from '../shared/draftPricing';
 
 const S = {
   // lineHeight is REQUIRED here, not cosmetic. The app root
@@ -171,6 +172,11 @@ function UserPanel() {
         trpc.admin.getUserRoster.query(target).catch(() => null),
         trpc.admin.getUserPass.query(target).catch(() => null),
       ]);
+      // The server resolves "carol" -> "u/carol" (or vice versa) depending on
+      // how the record was keyed. Adopt the canonical name it echoes back, so
+      // the credit/reset buttons below write to the record we just loaded
+      // instead of creating a phantom under the as-typed spelling.
+      if (data?.username) setUsername(data.username);
       setUser(data);
       setRoster(rosterData);
       setPass(passData);
@@ -284,11 +290,11 @@ function UserPanel() {
 
       <UsernameDatalist id="admin-usernames" users={users} />
       <div style={{ ...S.row, marginBottom: 4 }}>
-        <input style={S.input} placeholder="Reddit username" value={username}
+        <input data-testid="admin-user-input" style={S.input} placeholder="Reddit username" value={username}
           list="admin-usernames" autoComplete="off"
           onChange={e => setUsername(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()} />
-        <button style={S.btn()} onClick={() => load()} disabled={busy || !username.trim()}>Load</button>
+        <button data-testid="admin-user-load" style={S.btn()} onClick={() => load()} disabled={busy || !username.trim()}>Load</button>
       </div>
       {msg && <div style={msg.ok ? S.success : S.error}>{msg.text}</div>}
 
@@ -321,9 +327,9 @@ function UserPanel() {
           }
         </div>
         <div style={S.row}>
-          <input style={{ ...S.input, width: 100 }} placeholder="Credits" value={credits}
+          <input data-testid="admin-credits-input" style={{ ...S.input, width: 100 }} placeholder="Credits" value={credits}
             onChange={e => setCredits(e.target.value)} type="number" />
-          <button style={S.btn('#4a3a1a')} onClick={setC} disabled={busy || !credits}>Set Credits</button>
+          <button data-testid="admin-set-credits" style={S.btn('#4a3a1a')} onClick={setC} disabled={busy || !credits}>Set Credits</button>
         </div>
         <div style={S.row}>
           <input style={{ ...S.input, width: 100 }} placeholder="# Drafts" value={freeDrafts}
@@ -854,11 +860,11 @@ function MissionsPanel() {
         onPick={(u) => load(u)} busy={busy} />
       <UsernameDatalist id="admin-mission-usernames" users={users} />
       <div style={S.row}>
-        <input style={S.input} placeholder="Reddit username" value={username}
+        <input data-testid="admin-mission-user-input" style={S.input} placeholder="Reddit username" value={username}
           list="admin-mission-usernames" autoComplete="off"
           onChange={e => setUsername(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && load()} />
-        <button style={S.btn()} onClick={() => load()} disabled={busy || !username.trim()}>Load</button>
+        <button data-testid="admin-mission-user-load" style={S.btn()} onClick={() => load()} disabled={busy || !username.trim()}>Load</button>
         {missions && (
           <button style={S.danger} onClick={resetAll} disabled={busy}>Reset All (current period)</button>
         )}
@@ -1312,6 +1318,230 @@ function SplashSwitch() {
   );
 }
 
+// ── Paid draft pricing ────────────────────────────────────────────────────
+// GLOBAL: writes the redis-backed config in server/core/draftPricing.ts, so
+// changing a number here changes what EVERY player pays for their next paid
+// draft pick. No redeploy.
+//
+// The preview table is computed with the SAME tiersFor() the server charges
+// with (shared/draftPricing.ts) — so what an operator sees before saving is
+// exactly what players will be billed, not a re-implementation of the curve.
+//
+// A BLANK input means "follow the shipped default" rather than 0. The default
+// shows as the placeholder, so an operator can always see what they're
+// falling back to, and clearing a box is how you un-override one field.
+function DraftPricingPanel() {
+  const fmt = (ts) => ts ? new Date(ts).toLocaleString() : '—';
+  const [server, setServer] = useState(null);   // null = loading
+  const [draft, setDraft] = useState({ firstCost: '', stepPct: '', roundTo: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [ok, setOk] = useState(null);
+
+  // Seed the inputs from the OVERRIDES only. Fields following the default stay
+  // blank, so hitting Save doesn't silently pin a default value as an explicit
+  // override (which would then stop tracking future default changes).
+  const seed = (d) => setDraft({
+    firstCost: d.override?.firstCost != null ? String(d.override.firstCost) : '',
+    stepPct: d.override?.stepPct != null ? String(d.override.stepPct) : '',
+    roundTo: d.override?.roundTo != null ? String(d.override.roundTo) : '',
+  });
+
+  const load = () => trpc.admin.getDraftPricing.query()
+    .then((d) => { setServer(d); seed(d); setErr(null); })
+    .catch((e) => setErr(e?.message || String(e)));
+
+  useEffect(() => { load(); }, []);
+
+  // Per-field validation. Blank is always valid (= follow default); anything
+  // else must parse to an integer inside the bounds the server enforces.
+  const fieldErr = (f) => {
+    const raw = draft[f].trim();
+    if (raw === '') return null;
+    if (!/^-?\d+$/.test(raw)) return 'whole number';
+    const b = (server?.bounds || DRAFT_PRICING_BOUNDS)[f];
+    const n = Number(raw);
+    if (n < b.min || n > b.max) return b.min + '–' + b.max;
+    return null;
+  };
+  const errs = DRAFT_PRICING_FIELDS.map(fieldErr);
+  const anyErr = errs.some(Boolean);
+
+  // What the ladder WOULD be if saved: parsed value where valid, else default.
+  const effective = server ? DRAFT_PRICING_FIELDS.reduce((acc, f) => {
+    const raw = draft[f].trim();
+    acc[f] = (raw !== '' && !fieldErr(f)) ? Number(raw) : server.default[f];
+    return acc;
+  }, {}) : null;
+
+  const dirty = server ? DRAFT_PRICING_FIELDS.some((f) => {
+    const cur = server.override?.[f];
+    const raw = draft[f].trim();
+    return raw === '' ? cur != null : Number(raw) !== cur;
+  }) : false;
+
+  const save = async () => {
+    if (anyErr) return;
+    setErr(null); setOk(null); setBusy(true);
+    try {
+      // Send every field: a blanked box must clear its override, which needs an
+      // explicit null rather than an omission (omitted = leave untouched).
+      const patch = {};
+      for (const f of DRAFT_PRICING_FIELDS) {
+        const raw = draft[f].trim();
+        patch[f] = raw === '' ? null : Number(raw);
+      }
+      const next = await trpc.admin.setDraftPricing.mutate(patch);
+      setServer((prev) => ({ ...(prev || {}), ...next }));
+      seed(next);
+      setOk('Saved — first draft ' + next.applied.firstCost.toLocaleString()
+        + ' CR, ' + (next.applied.stepPct === 0
+          ? 'flat (same every buy)'
+          : '+' + next.applied.stepPct + '% per buy'));
+    } catch (e) {
+      setErr(e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resetAll = async () => {
+    setErr(null); setOk(null); setBusy(true);
+    try {
+      const next = await trpc.admin.resetDraftPricing.mutate();
+      setServer((prev) => ({ ...(prev || {}), ...next }));
+      seed(next);
+      setOk('Reset to shipped defaults');
+    } catch (e) {
+      setErr(e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const META = {
+    firstCost: { label: 'First draft of the week', unit: 'CR' },
+    stepPct: { label: 'Rise per extra buy', unit: '%' },
+    roundTo: { label: 'Round each tier to', unit: 'CR' },
+  };
+
+  if (!server) {
+    return (
+      <div data-testid="admin-draft-pricing">
+        <div style={S.heading}>Paid draft pricing — everyone</div>
+        {err
+          ? <div style={S.error}>Failed to load draft pricing: {err}</div>
+          : <span style={{ color: '#556', fontSize: 12 }}>loading draft pricing…</span>}
+      </div>
+    );
+  }
+
+  const preview = effective ? tiersFor(effective) : server.tiers;
+
+  return (
+    <div data-testid="admin-draft-pricing">
+      <div style={S.heading}>Paid draft pricing — everyone</div>
+      <div style={{ color: '#445', fontSize: 11, marginBottom: 12 }}>
+        Sets what <b style={{ color: '#8a9ab0' }}>all players</b> pay for a bought
+        draft pick. The counter resets 00:00 UTC Monday, so each player's next
+        price depends on how many they've already bought this week. Charged
+        server-side — a stale client can't pay the old price.
+      </div>
+
+      {DRAFT_PRICING_FIELDS.map((f, i) => {
+        const overridden = server.override?.[f] != null;
+        const fe = errs[i];
+        return (
+          <div key={f} style={{ ...S.row, marginBottom: 10 }}>
+            <span style={{ color: '#ccd', fontSize: 12, width: 170 }}>{META[f].label}</span>
+            <input
+              data-testid={'dp-input-' + f}
+              style={{ ...S.input, width: 90, borderColor: fe ? '#7a2a2a' : '#2a3a58' }}
+              placeholder={String(server.default[f])}
+              value={draft[f]}
+              onChange={(e) => { setOk(null); setDraft((d) => ({ ...d, [f]: e.target.value })); }}
+            />
+            <span style={{ color: '#556', fontSize: 11 }}>{META[f].unit}</span>
+            <span data-testid={'dp-state-' + f} data-on={overridden ? '1' : '0'}
+              style={S.tag(overridden ? '#1c5c2c' : '#333c4c')}>
+              {overridden ? 'SET' : 'default'}
+            </span>
+            {fe && <span data-testid={'dp-err-' + f} style={{ color: '#f06060', fontSize: 11 }}>{fe}</span>}
+          </div>
+        );
+      })}
+
+      <div style={{ color: '#445', fontSize: 11, margin: '4px 0 8px' }}>
+        Leave a box blank to follow the shipped default (shown as the greyed
+        number). Clearing a box un-sets that field.
+      </div>
+
+      {/* Ladder preview — computed with the shared tiersFor(), the same
+          function that prices the real charge. Labelled PREVIEW while dirty so
+          an operator never mistakes an unsaved curve for the live one. */}
+      <div style={{ border: '1px solid ' + (dirty ? '#6a5a1a' : '#1a2030'), borderRadius: 6, padding: 10, marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <span data-testid="dp-preview-state" data-dirty={dirty ? '1' : '0'}
+            style={S.tag(dirty ? '#6a5a1a' : '#1c3c5c')}>
+            {dirty ? 'PREVIEW — NOT SAVED' : 'LIVE NOW'}
+          </span>
+          <span style={{ color: '#556', fontSize: 11 }}>price of each buy this week</span>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {preview.map((c, i) => (
+            <span key={i} data-testid={'dp-tier-' + i}
+              style={{ background: '#0d1424', border: '1px solid #1e2e48', borderRadius: 4, padding: '3px 7px', fontSize: 11, color: dirty ? '#e0c060' : '#8a9ab0' }}>
+              <span style={{ color: '#445' }}>#{i + 1}</span> {c.toLocaleString()}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ ...S.row, marginBottom: 0 }}>
+        <button data-testid="dp-save" disabled={busy || anyErr || !dirty}
+          style={(!busy && !anyErr && dirty) ? S.btn('#1c5c2c') : { ...S.btn('#10203a'), color: '#556', cursor: 'default' }}
+          onClick={save}>
+          {busy ? '…' : 'Apply to everyone'}
+        </button>
+        <button data-testid="dp-reset"
+          disabled={busy || Object.keys(server.override || {}).length === 0}
+          style={(!busy && Object.keys(server.override || {}).length > 0)
+            ? S.btn()
+            : { ...S.btn('#0d1424'), color: '#39435a', cursor: 'default' }}
+          onClick={resetAll}>
+          Follow shipped defaults
+        </button>
+        {dirty && !anyErr && <span style={{ color: '#e0c060', fontSize: 11 }}>unsaved changes</span>}
+      </div>
+
+      <div data-testid="dp-source" style={{ color: '#556', fontSize: 11, marginTop: 8 }}>
+        everyone: <b style={{ color: '#8a9ab0' }}>{server.applied.firstCost.toLocaleString()} CR</b>
+        {server.applied.stepPct === 0
+          ? <> flat (same every buy)</>
+          : <>{' then +'}<b style={{ color: '#8a9ab0' }}>{server.applied.stepPct}%</b> per buy</>}
+        {' · '}
+        {Object.keys(server.override || {}).length > 0
+          ? <>set by u/{String(server.admin || '?').replace(/^u\//, '')}{server.at ? ' · ' + fmt(server.at) : ''}</>
+          : <>following shipped defaults</>}
+      </div>
+
+      {err && <div data-testid="dp-error" style={S.error}>{err}</div>}
+      {ok && <div data-testid="dp-ok" style={S.success}>{ok}</div>}
+
+      {server.log?.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ color: '#445', fontSize: 11, marginBottom: 4 }}>Recent changes</div>
+          {server.log.slice(0, 5).map((e, i) => (
+            <div key={i} style={{ color: '#556', fontSize: 10 }}>
+              {fmt(e.at)} · u/{String(e.admin).replace(/^u\//, '')} → {e.applied.firstCost.toLocaleString()} CR +{e.applied.stepPct}%
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Human-readable copy for each flag in core/featureFlags.ts FLAG_DEFAULTS.
 // `on`/`off` describe the player-facing effect so an operator knows what
 // flipping the switch actually does before they flip it.
@@ -1345,7 +1575,7 @@ function ConfigPanel() {
   // failed load never reaches — so an error looked like a permanent spinner.
   // Defined once, used in both returns: the splash switch loads its own state,
   // so it must still be reachable when the server FLAG fetch fails.
-  const localSection = <><SplashSwitch /><hr style={S.divider} /></>;
+  const localSection = <><SplashSwitch /><hr style={S.divider} /><DraftPricingPanel /><hr style={S.divider} /></>;
 
   if (!flags) return (
     <div data-testid="admin-config-loading" style={{ fontSize: 12 }}>

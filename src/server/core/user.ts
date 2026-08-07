@@ -96,6 +96,28 @@ export const getUser = async (username: string): Promise<UserData | null> => {
   return { ...parseUser(raw), gamesPlayed };
 };
 
+// Records are keyed by the EXACT username string that created them (userKey is
+// `user:${username}` with no normalization). The Devvit emulator reports the
+// current user WITH a "u/" prefix, production Reddit reports the bare handle —
+// so the same person is `user:u/carol` locally and `user:carol` in prod.
+//
+// Admin tools are typed by hand, so accept either form: probe the string as
+// given, then the toggled form, and return whichever key actually exists. This
+// deliberately does NOT rewrite the stored key (that would orphan live data) —
+// it only tells callers the canonical name to address.
+const toggleUserPrefix = (username: string): string =>
+  /^u\//i.test(username) ? username.replace(/^u\//i, '') : `u/${username}`;
+
+export const resolveUsername = async (username: string): Promise<string | null> => {
+  const typed = username.trim();
+  if (!typed) return null;
+  for (const candidate of [typed, toggleUserPrefix(typed)]) {
+    const raw = await redis.hGetAll(userKey(candidate));
+    if (raw?.redditId) return candidate;
+  }
+  return null;
+};
+
 // Computes current energy (with regen), deducts 1, returns false if empty.
 // hIncrBy is atomic, so concurrent requests can't both win when energy=1.
 export const deductEnergy = async (username: string): Promise<{ success: boolean; energy: number }> => {

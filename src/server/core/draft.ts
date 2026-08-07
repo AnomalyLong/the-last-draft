@@ -2,19 +2,28 @@ import { redis } from '@devvit/web/server';
 import { mintPlayer, type PlayerRarity, type PlayerAbility } from './player';
 import { spendCredits } from './user';
 import { recordDraftCompletion } from './missions';
+import {
+  costForIndex,
+  getDraftPricing,
+  type DraftPricing,
+} from './draftPricing';
 
 const userKey = (username: string) => `user:${username}`;
 
 // ── Credit-draft pricing ─────────────────────────────────────────────────────
-// Paid drafts get 25% more expensive each time, and the counter resets WEEKLY.
-// The FIRST draft of the week is 2,500, then each subsequent draft costs 25%
-// more than the previous tier (3,125 → 3,900 → 4,875 → …), rounded to the
-// nearest 25 CR so the prices stay readable. The counter resets at 00:00 UTC
-// Monday. Cost is computed server-side from the stored count — the client never
+// Paid drafts get progressively more expensive, and the counter resets WEEKLY.
+// The first draft of the week is the cheapest; each subsequent draft costs a
+// fixed percentage more than the previous tier, rounded to keep prices
+// readable. The counter resets at 00:00 UTC Monday.
+//
+// The NUMBERS live in core/draftPricing.ts — a redis-backed config an admin can
+// retune live (AdminOverlay → Config), falling back to shipped defaults. Nothing
+// here hardcodes a price or a rate, and neither does the client: the escalation
+// rate and first-draft price are returned alongside the cost so Draft Hub copy
+// can never claim a percentage the server isn't charging.
+//
+// Cost is always computed server-side from the stored count — the client never
 // supplies it.
-const FIRST_DRAFT_COST = 2500;
-const DRAFT_COST_STEP = 1.25;   // +25% per buy (was 2.0 — doubling)
-const COST_ROUND_TO = 25;       // round each tier to the nearest 25 CR
 const draftCountKey = (username: string) => `user:draftCounts:${username}`;
 const DRAFT_COUNT_TTL = 21 * 24 * 60 * 60; // ~3 weeks — old week fields are harmless, this just caps growth
 
@@ -33,14 +42,17 @@ const weekKey = (now = Date.now()): string => {
   return `w${y}-${m}-${day}`;
 };
 
-// Cost of the (idx)-th paid draft this week, 0-indexed:
-//   idx 0 → 2,500   1 → 3,125   2 → 3,900   3 → 4,875   4 → 6,100 …
-// Rounding is applied to the exact compounded value each time (not carried
-// forward), so tiers never drift from the true 1.25^n curve.
-export const draftCostForIndex = (idx: number): number => {
-  const raw = FIRST_DRAFT_COST * Math.pow(DRAFT_COST_STEP, Math.max(0, idx));
-  return Math.round(raw / COST_ROUND_TO) * COST_ROUND_TO;
-};
+/**
+ * Cost of the (idx)-th paid draft this week, 0-indexed.
+ *
+ * Pass `pricing` when you already hold a config read — pricing a ladder from a
+ * single snapshot is how callers avoid tearing if an admin edits the config
+ * mid-transaction.
+ */
+export const draftCostForIndex = async (
+  idx: number,
+  pricing?: DraftPricing,
+): Promise<number> => costForIndex(idx, pricing ?? (await getDraftPricing()));
 
 // How many paid drafts the user has done THIS week.
 export const getWeeklyDraftCount = async (username: string): Promise<number> => {
@@ -49,11 +61,28 @@ export const getWeeklyDraftCount = async (username: string): Promise<number> => 
 };
 
 // Cost + count for the user's NEXT paid draft (drives the Draft Hub display).
+// The pricing FACTS ride along so client copy renders the real configured
+// numbers instead of a hardcoded "+25%" / "2,500".
 export const getNextDraftCost = async (
   username: string,
-): Promise<{ cost: number; draftsThisWeek: number }> => {
-  const count = await getWeeklyDraftCount(username);
-  return { cost: draftCostForIndex(count), draftsThisWeek: count };
+): Promise<{
+  cost: number;
+  draftsThisWeek: number;
+  stepPct: number;
+  firstCost: number;
+  roundTo: number;
+}> => {
+  const [count, pricing] = await Promise.all([
+    getWeeklyDraftCount(username),
+    getDraftPricing(),
+  ]);
+  return {
+    cost: costForIndex(count, pricing),
+    draftsThisWeek: count,
+    stepPct: pricing.stepPct,
+    firstCost: pricing.firstCost,
+    roundTo: pricing.roundTo,
+  };
 };
 
 type DraftPlayerParams = {
@@ -85,19 +114,25 @@ export const freeDraft = async (
   return player;
 };
 
-// Buys a draft pick: charges the weekly +25% cost NOW (server-computed — never
-// trusted from the client) and banks one reusable pick on the user. The banked
-// pick PERSISTS until consumed (so a user can buy and walk away, then draft
-// later). The weekly counter is incremented here — pricing happens at
-// purchase. Reserved-first so two rapid buys can't both bill the cheaper tier;
-// the reservation is rolled back if the user can't afford it.
+// Buys a draft pick: charges the escalating weekly cost NOW (server-computed
+// from the live pricing config — never trusted from the client) and banks one
+// reusable pick on the user. The banked pick PERSISTS until consumed (so a user
+// can buy and walk away, then draft later). The weekly counter is incremented
+// here — pricing happens at purchase. Reserved-first so two rapid buys can't
+// both bill the cheaper tier; the reservation is rolled back if the user can't
+// afford it.
+//
+// Pricing is read ONCE and used for both the charge and the quoted next cost, so
+// an admin retuning prices mid-purchase can't bill tier N at the old rate while
+// quoting tier N+1 at the new one.
 export const buyDraftPick = async (
   username: string,
 ): Promise<{ cost: number; paidPicks: number; nextCost: number }> => {
   const wk = weekKey();
+  const pricing = await getDraftPricing();
   const idx = (await redis.hIncrBy(draftCountKey(username), wk, 1)) - 1;
   if (idx === 0) await redis.expire(draftCountKey(username), DRAFT_COUNT_TTL);
-  const cost = draftCostForIndex(idx);
+  const cost = costForIndex(idx, pricing);
 
   const spent = await spendCredits(username, cost, `draftpick:${wk}:${idx}`);
   if (!spent.success) {
@@ -106,7 +141,7 @@ export const buyDraftPick = async (
   }
 
   const paidPicks = await redis.hIncrBy(userKey(username), 'paidPicks', 1);
-  return { cost, paidPicks, nextCost: draftCostForIndex(idx + 1) };
+  return { cost, paidPicks, nextCost: costForIndex(idx + 1, pricing) };
 };
 
 // Consumes one banked paid pick to mint a player — NO charge here (payment

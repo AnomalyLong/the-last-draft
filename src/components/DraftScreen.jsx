@@ -897,8 +897,9 @@ function getFtueLine(phase, pickNum, total, tick, hasAbility = false) {
 
 export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', onStart, onBack, onMenu, onPaidComplete }) {
   // mode: 'free'  → FTUE/free 5-player draft (uses freeDrafts, then assign to lineup)
-  //       'credit'→ paid SINGLE-player draft (server charges the weekly +25%
-  //                 cost, the player lands in the collection — no lineup assign).
+  //       'credit'→ paid SINGLE-player draft (server charges the escalating
+  //                 weekly cost, the player lands in the collection — no
+  //                 lineup assign).
   const paidMode = mode === 'credit';
   const targetCount = paidMode ? 1 : ROSTER_SIZE;
 
@@ -1101,8 +1102,9 @@ export function DraftScreen({ homeTeamName='HOME', isFtue=false, mode='free', on
 
   // ── Backend ──────────────────────────────────────────────────────────────
   // Paid single draft: charge + mint on the server (cost is computed there from
-  // the weekly +25% schedule), then surface the result. The player lands in
-  // the collection; the user slots it via the Collection screen.
+  // the weekly escalation schedule in core/draftPricing.ts), then surface the
+  // result. The player lands in the collection; the user slots it via the
+  // Collection screen.
   const handlePaidComplete = async (player) => {
     setSaving(true);
     try {

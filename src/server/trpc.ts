@@ -4,7 +4,7 @@ import { Context } from './context';
 import { context, reddit, redis } from '@devvit/web/server';
 import { z } from 'zod';
 
-import { getOrCreateUser, getUser, grantFreeDrafts, setTeamName, setMutedPreference, userKey, ledgerKey, gamesKey, MAX_ENERGY, computeEnergy, USERS_INDEX_KEY } from './core/user';
+import { getOrCreateUser, getUser, resolveUsername, grantFreeDrafts, setTeamName, setMutedPreference, userKey, ledgerKey, gamesKey, MAX_ENERGY, computeEnergy, USERS_INDEX_KEY } from './core/user';
 import { getPlayer, getUserRoster, getUserLineup, setLineupSlot, setLineup, updatePlayerProgress, buildRosterForUser, transferPlayer, repairPlayerRecord, ROLES, type Role, rosterKey, lineupKey } from './core/player';
 import { SKIN_PALETTES } from '../shared/palettes';
 import { createChallengePost, canCreateChallengePost, getChallengePost, listChallengeResults, getMyChallenge, challengePostKey } from './core/post';
@@ -66,6 +66,13 @@ import { countDecrement, countGet, countIncrement } from './core/count';
 import { getMyPass, adminGrantPass, adminRevokePass, retryFounderFlair } from './core/battlePass';
 import { getFlags, setFlag, getFlagLog, isFlagName, FLAG_DEFAULTS } from './core/featureFlags';
 import { getInlineSplashSetting, setInlineSplashSetting, getInlineSplashLog } from './core/inlineSplash';
+import {
+  getDraftPricingSetting,
+  setDraftPricing,
+  resetDraftPricing,
+  getDraftPricingLog,
+  DRAFT_PRICING_BOUNDS,
+} from './core/draftPricing';
 import { SPLASH_VARIANTS } from '../shared/splash';
 
 const t = initTRPC.context<Context>().create({ transformer });
@@ -314,15 +321,18 @@ export const appRouter = t.router({
 
   // ── Draft ───────────────────────────────────────────────────────────────
   draft: t.router({
-    // Cost + count for the user's NEXT paid draft this week (+25% per buy,
-    // server-authoritative). Drives the Draft Hub display.
+    // Cost + count for the user's NEXT paid draft this week (escalating per
+    // buy, server-authoritative). Returns the live pricing facts (stepPct,
+    // firstCost) too, so Draft Hub copy renders the configured rate rather
+    // than a hardcoded one. Drives the Draft Hub display.
     cost: publicProcedure.query(async () => {
       const username = await requireUsername();
       return await getNextDraftCost(username);
     }),
 
-    // Buy a draft pick: charges the weekly +25% cost NOW and banks a
-    // reusable pick on the user (persists until consumed via draft.credit).
+    // Buy a draft pick: charges the escalating weekly cost NOW (priced from
+    // the live config) and banks a reusable pick on the user (persists until
+    // consumed via draft.credit).
     buy: publicProcedure.mutation(async () => {
       const username = await requireUsername();
       try {
@@ -689,6 +699,52 @@ export const appRouter = t.router({
         return await setInlineSplashSetting(input.variant, ctx.adminUsername);
       }),
 
+    // ── Draft pricing ──────────────────────────────────────────────────
+    // The escalating paid-draft price ladder. Live-tunable; every field
+    // independently falls back to the shipped default. See
+    // core/draftPricing.ts for why out-of-bounds stored values are ignored
+    // rather than clamped.
+    getDraftPricing: adminProcedure.query(async () => {
+      const [setting, log] = await Promise.all([
+        getDraftPricingSetting(),
+        getDraftPricingLog(20),
+      ]);
+      return { ...setting, log, bounds: DRAFT_PRICING_BOUNDS };
+    }),
+
+    // Each field is optional; null CLEARS that field back to the shipped
+    // default. Bounds are enforced in core (throws) as well as here, so a
+    // direct call can't sneak a nonsense price past the UI.
+    setDraftPricing: adminProcedure
+      .input(z.object({
+        firstCost: z.number().int()
+          .min(DRAFT_PRICING_BOUNDS.firstCost.min)
+          .max(DRAFT_PRICING_BOUNDS.firstCost.max)
+          .nullable().optional(),
+        stepPct: z.number().int()
+          .min(DRAFT_PRICING_BOUNDS.stepPct.min)
+          .max(DRAFT_PRICING_BOUNDS.stepPct.max)
+          .nullable().optional(),
+        roundTo: z.number().int()
+          .min(DRAFT_PRICING_BOUNDS.roundTo.min)
+          .max(DRAFT_PRICING_BOUNDS.roundTo.max)
+          .nullable().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await setDraftPricing(input, ctx.adminUsername);
+        } catch (e: any) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: e?.message ?? 'Invalid pricing',
+          });
+        }
+      }),
+
+    resetDraftPricing: adminProcedure.mutation(async ({ ctx }) => {
+      return await resetDraftPricing(ctx.adminUsername);
+    }),
+
     createAnnouncement: adminProcedure
       .input(z.object({
         tag: z.string().min(1).max(12),
@@ -788,16 +844,22 @@ export const appRouter = t.router({
     getUser: adminProcedure
       .input(z.string())
       .query(async ({ input }) => {
-        const user = await getUser(input);
+        // Accepts "carol" or "u/carol" — see resolveUsername. `username` is
+        // echoed back as the canonical stored key so the caller can retarget
+        // subsequent writes (setCredits, reset, ...) at the record it just read.
+        const resolved = await resolveUsername(input);
+        if (!resolved) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input}" not found` });
+        const user = await getUser(resolved);
         if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input}" not found` });
-        return user;
+        return { ...user, username: resolved };
       }),
 
     getUserRoster: adminProcedure
       .input(z.string())
       .query(async ({ input }) => {
-        const ids = await getUserRoster(input);
-        const lineup = await getUserLineup(input);
+        const target = (await resolveUsername(input)) ?? input;
+        const ids = await getUserRoster(target);
+        const lineup = await getUserLineup(target);
         const idToRole = new Map(Object.entries(lineup).map(([role, id]) => [id, role]));
         const players = await Promise.all(ids.map(id => getPlayer(id)));
         return players.filter(Boolean).map(p => ({ ...p, lineupRole: idToRole.get(p!.id) ?? null }));
@@ -902,7 +964,7 @@ export const appRouter = t.router({
     // season record but leaves credits and the founder flag alone.
     getUserPass: adminProcedure
       .input(z.string())
-      .query(async ({ input }) => await getMyPass(input)),
+      .query(async ({ input }) => await getMyPass((await resolveUsername(input)) ?? input)),
 
     grantPass: adminProcedure
       .input(z.object({ username: z.string(), tier: z.enum(['basic', 'premium']) }))
@@ -1019,17 +1081,21 @@ export const appRouter = t.router({
     getUserMissions: adminProcedure
       .input(z.string())
       .query(async ({ input }) => {
-        const user = await getUser(input);
+        // Accepts "carol" or "u/carol" - see resolveUsername. Read and write
+        // must use the SAME resolved key or progress lands on a phantom user.
+        const target = (await resolveUsername(input)) ?? input;
+        const user = await getUser(target);
         if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input}" not found` });
-        return listMissions(input);
+        return listMissions(target);
       }),
 
     resetUserMissions: adminProcedure
       .input(z.string())
       .mutation(async ({ input }) => {
-        const user = await getUser(input);
+        const target = (await resolveUsername(input)) ?? input;
+        const user = await getUser(target);
         if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input}" not found` });
-        await resetUserMissions(input);
+        await resetUserMissions(target);
         return { success: true };
       }),
 
@@ -1041,9 +1107,10 @@ export const appRouter = t.router({
         progress: z.number().int().min(0),
       }))
       .mutation(async ({ input }) => {
-        const user = await getUser(input.username);
+        const target = (await resolveUsername(input.username)) ?? input.username;
+        const user = await getUser(target);
         if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input.username}" not found` });
-        await adminSetMissionProgress(input.username, input.type, input.missionId, input.progress);
+        await adminSetMissionProgress(target, input.type, input.missionId, input.progress);
         return { success: true };
       }),
 
@@ -1054,25 +1121,28 @@ export const appRouter = t.router({
         missionId: z.string(),
       }))
       .mutation(async ({ input }) => {
-        const user = await getUser(input.username);
+        const target = (await resolveUsername(input.username)) ?? input.username;
+        const user = await getUser(target);
         if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input.username}" not found` });
-        return await adminCompleteMission(input.username, input.type, input.missionId);
+        return await adminCompleteMission(target, input.type, input.missionId);
       }),
 
     completeBpMission: adminProcedure
       .input(z.object({ username: z.string(), missionId: z.string() }))
       .mutation(async ({ input }) => {
-        const user = await getUser(input.username);
+        const target = (await resolveUsername(input.username)) ?? input.username;
+        const user = await getUser(target);
         if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${input.username}" not found` });
-        return await adminCompleteBpMission(input.username, input.missionId);
+        return await adminCompleteBpMission(target, input.missionId);
       }),
 
     getBpMissions: adminProcedure
       .input(z.string())
       .query(async ({ input: username }) => {
-        const user = await getUser(username);
+        const target = (await resolveUsername(username)) ?? username;
+        const user = await getUser(target);
         if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: `User "${username}" not found` });
-        return { missions: await listBpMissions(username), catalog: BP_MISSIONS };
+        return { missions: await listBpMissions(target), catalog: BP_MISSIONS };
       }),
   }),
 

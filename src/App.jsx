@@ -154,11 +154,17 @@ export default function App() {
   // resolves so the panel never flashes a misleading 0-0.
   const [serverStats, setServerStats] = React.useState(null);
   // Paid (credit) draft: which mode the DraftScreen runs in, and the
-  // server-priced cost of the user's next paid draft this month.
+  // server-priced cost of the user's next paid draft this week.
   const [draftMode, setDraftMode] = React.useState('free'); // 'free' | 'credit'
   const [draftCost, setDraftCost] = React.useState(null);   // null = loading
+  // Pricing FACTS (escalation rate + first-draft price) ride along with the
+  // cost query so Draft Hub copy can't drift from src/server/core/draft.ts.
+  const [draftPricing, setDraftPricing] = React.useState(null); // null = loading
   const refreshDraftCost = React.useCallback(() => {
-    return trpc.draft.cost.query().then(r => setDraftCost(r.cost)).catch(() => {});
+    return trpc.draft.cost.query().then(r => {
+      setDraftCost(r.cost);
+      setDraftPricing({ stepPct: r.stepPct, firstCost: r.firstCost });
+    }).catch(() => {});
   }, []);
   const [freeDrafts,    setFreeDrafts]    = React.useState(0);
   const [paidPicks,     setPaidPicks]     = React.useState(0); // banked credit-draft picks
@@ -724,6 +730,8 @@ export default function App() {
           credits={serverCredits}
           rosterCount={homeRoster.length}
           nextDraftCost={draftCost}
+          costStepPct={draftPricing?.stepPct ?? null}
+          firstDraftCost={draftPricing?.firstCost ?? null}
           onUsePick={() => {
             // Free FTUE draft — skip team-name setup if already named.
             setDraftMode('free');

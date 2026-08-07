@@ -1,0 +1,302 @@
+{
+  "name": "draft pricing: shipped default is FLAT 0%",
+  "description": "Proves the paid-draft rate is now 0% (flat 2,500 CR every buy) rather than +25% per buy. bob first asserts redis holds NO pricing override, so the test is measuring the shipped default and not a leftover from an earlier run. He funds carol; carol then buys twice and is billed exactly 2,500 each time with the button price never moving. Also checks the derived copy degrades sensibly at 0% ('same cost every buy', 'flat') instead of '+0%'.",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "bob"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=DBG",
+      "timeout": 20000,
+      "_comment": "HARD ASSERT: DBG is admin-only, so this also proves bob is still an admin."
+    },
+    {
+      "action": "if",
+      "condition": "!document.querySelector('[data-testid=debug-input]')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "text=DBG"
+        },
+        {
+          "action": "waitFor",
+          "selector": "[data-testid=debug-input]",
+          "timeout": 5000
+        }
+      ]
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=debug-input]",
+      "text": "admin"
+    },
+    {
+      "action": "sleep",
+      "ms": 200
+    },
+    {
+      "action": "eval",
+      "name": "open admin as bob",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); if (!el) return 'ERR no input'; const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; if (el.value !== 'admin') { set.call(el, 'admin'); el.dispatchEvent(new Event('input', { bubbles: true })); } el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); return 'submitted'; })()"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=ADMIN PANEL",
+      "timeout": 10000
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-config]"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=dp-input-firstCost]",
+      "timeout": 15000,
+      "_comment": "HARD ASSERT: pricing panel rendered (the loading branch has no inputs)."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=dp-state-stepPct][data-on='0']",
+      "timeout": 8000,
+      "_comment": "HARD ASSERT: stepPct is NOT overridden in redis. Without this the whole test could pass on a leftover override from an earlier run and prove nothing about the shipped default."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=dp-state-firstCost][data-on='0']",
+      "timeout": 8000,
+      "_comment": "HARD ASSERT: firstCost not overridden either."
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=flat (same every buy)",
+      "timeout": 8000,
+      "_comment": "HARD ASSERT: at 0% the admin source line says 'flat', not the absurd 'then +0% per buy'."
+    },
+    {
+      "action": "eval",
+      "name": "probe the live tier table",
+      "expression": "(() => { document.querySelectorAll('#fw-flat-probe').forEach(n => n.remove()); const t = [0,1,2,3,4].map(i => { const e = document.querySelector('[data-testid=dp-tier-' + i + ']'); if (!e) return NaN; const tok = e.innerText.trim().split(/\\s+/).pop(); return parseInt(tok.replace(/[^0-9]/g, ''), 10); }); const allFlat = t.every(v => v === 2500); const d = document.createElement('div'); d.id = 'fw-flat-probe'; d.setAttribute('data-flat', allFlat ? '1' : '0'); d.setAttribute('data-tiers', t.join(',')); d.style.display = 'none'; document.body.appendChild(d); return t.join(','); })()",
+      "_comment": "The tier chip is '#1 2,500' - row label and price share one testid, so strip the label by taking the last token, not by removing all non-digits."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#fw-flat-probe[data-flat='1']",
+      "timeout": 5000,
+      "_comment": "HARD ASSERT: all 5 preview tiers are 2,500 CR. This is the 0% ladder. If the default were still 25% this reads 2500,3125,3900,4875,6100 and data-flat is '0'."
+    },
+    {
+      "action": "extract",
+      "name": "live tier table",
+      "expression": "document.querySelector('#fw-flat-probe')?.getAttribute('data-tiers')",
+      "into": "tiers"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/flat-01-admin-config.png"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-user]"
+    },
+    {
+      "action": "sleep",
+      "ms": 600
+    },
+    {
+      "action": "click",
+      "selector": "text=u/carol",
+      "_comment": "Chip supplies the u/-prefixed name. admin.getUser resolves either form now, but the chip is the reliable path."
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=Games Played",
+      "timeout": 15000,
+      "_comment": "HARD ASSERT: carol's record is loaded. Set Credits computes a DELTA from the loaded record, so clicking before this appears writes the wrong amount."
+    },
+    {
+      "action": "eval",
+      "name": "set credits field to 50000",
+      "expression": "(() => { const el = document.querySelector('[data-testid=admin-credits-input]'); if (!el) return 'ERR no credits input'; const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, '50000'); el.dispatchEvent(new Event('input', { bubbles: true })); return 'typed'; })()"
+    },
+    {
+      "action": "sleep",
+      "ms": 300
+    },
+    {
+      "action": "eval",
+      "name": "scroll [data-testid=admin-set-credits] into view",
+      "expression": "(() => { const e = document.querySelector(\"[data-testid=admin-set-credits]\"); if (!e) return 'MISSING'; e.scrollIntoView({ block: 'center' }); return 'scrolled'; })()",
+      "_comment": "Runner clicks by coordinates without scrolling first, so a control below the admin panel fold gets an off-screen click and the step still reports OK. Scroll first."
+    },
+    {
+      "action": "sleep",
+      "ms": 350
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-set-credits]"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=Credits set to 50000",
+      "timeout": 15000,
+      "_comment": "HARD ASSERT: adjustCredits succeeded."
+    },
+    {
+      "action": "switchUser",
+      "username": "carol"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=lobby-screen]",
+      "timeout": 30000
+    },
+    {
+      "action": "while",
+      "max": 5,
+      "until": "!document.querySelector('.lb2-coach')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": ".lb2-coach"
+        },
+        {
+          "action": "sleep",
+          "ms": 700
+        }
+      ],
+      "_comment": "Coach bubble swallows nav taps. Normal FTUE chrome, not a bug."
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=bnav-draft]"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=ftue-intro-video], .dh-btn.credit",
+      "timeout": 25000
+    },
+    {
+      "action": "if",
+      "condition": "!!document.querySelector('[data-testid=ftue-intro-video]')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "[data-testid=ftue-intro-video]"
+        },
+        {
+          "action": "sleep",
+          "ms": 1800
+        },
+        {
+          "action": "clickIfPresent",
+          "selector": "[data-testid=ftue-intro-video]"
+        },
+        {
+          "action": "sleep",
+          "ms": 1000
+        }
+      ]
+    },
+    {
+      "action": "waitFor",
+      "selector": ".dh-btn.credit",
+      "timeout": 25000
+    },
+    {
+      "action": "sleep",
+      "ms": 2500,
+      "_comment": "let draft.nextCost land - until it does the button reads just BUY A DRAFT with no price"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=BUY A DRAFT \u00b7 2,500 CR",
+      "timeout": 15000,
+      "_comment": "HARD ASSERT: the first buy costs the shipped 2,500 CR."
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=same cost every buy",
+      "timeout": 15000,
+      "_comment": "THE COPY ASSERT: at 0% the hub says 'same cost every buy'. If the derived string were still naive this reads 'cost +0% each buy'."
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/flat-02-carol-hub-before.png"
+    },
+    {
+      "action": "extract",
+      "name": "carol hub BEFORE buy",
+      "expression": "(() => { const btn = document.querySelector('.dh-btn.credit'); const cost = parseInt((btn?.innerText || '').replace(/[^0-9]/g, ''), 10); const stat = [...document.querySelectorAll('.dh-stat')].find(s => /CREDITS/.test(s.querySelector('.dh-stat-lbl')?.innerText || '')); const credits = parseInt((stat?.querySelector('.dh-stat-val')?.innerText || '').replace(/[^0-9]/g, ''), 10); window.__f = { cost, credits, note: document.querySelector('.dh-credit-note')?.innerText.trim() }; return JSON.stringify(window.__f); })()",
+      "into": "hubBefore"
+    },
+    {
+      "action": "extract",
+      "name": "expected credits after one buy",
+      "expression": "(window.__f.credits - window.__f.cost).toLocaleString()",
+      "into": "expectCredits"
+    },
+    {
+      "action": "click",
+      "selector": ".dh-btn.credit"
+    },
+    {
+      "action": "sleep",
+      "ms": 3000
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=${expectCredits}",
+      "timeout": 20000,
+      "_comment": "HARD ASSERT: carol was billed EXACTLY 2,500. This also proves the hub RE-RENDERED, which is what makes the next assert meaningful rather than a stale read."
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=BUY A DRAFT \u00b7 2,500 CR",
+      "timeout": 20000,
+      "_comment": "THE CORE 0% ASSERT: after a buy the price is STILL 2,500 CR. Under the old +25% default this would read 3,125 CR."
+    },
+    {
+      "action": "extract",
+      "name": "carol hub AFTER buy",
+      "expression": "JSON.stringify({ btn: document.querySelector('.dh-btn.credit')?.innerText.replace(/\\s+/g, ' ').trim(), note: document.querySelector('.dh-credit-note')?.innerText.trim(), picks: document.querySelector('.dh-counter-value')?.innerText.trim() })",
+      "into": "hubAfter"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/flat-03-carol-after-buy.png"
+    },
+    {
+      "action": "extract",
+      "name": "expected credits after second buy",
+      "expression": "(() => { const stat = [...document.querySelectorAll('.dh-stat')].find(s => /CREDITS/.test(s.querySelector('.dh-stat-lbl')?.innerText || '')); const credits = parseInt((stat?.querySelector('.dh-stat-val')?.innerText || '').replace(/[^0-9]/g, ''), 10); return (credits - 2500).toLocaleString(); })()",
+      "into": "expectCredits2"
+    },
+    {
+      "action": "click",
+      "selector": ".dh-btn.credit"
+    },
+    {
+      "action": "sleep",
+      "ms": 3000
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=${expectCredits2}",
+      "timeout": 20000,
+      "_comment": "HARD ASSERT: the SECOND buy also cost exactly 2,500."
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=BUY A DRAFT \u00b7 2,500 CR",
+      "timeout": 20000,
+      "_comment": "HARD ASSERT: still 2,500 at tier 3. Two consecutive flat charges rule out an off-by-one in the tier index."
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/flat-04-carol-third-price.png"
+    }
+  ]
+}

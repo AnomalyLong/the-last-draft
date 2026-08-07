@@ -1,0 +1,294 @@
+{
+  "name": "admin-user-search-bare-name",
+  "description": "Proves the admin user search accepts a bare handle. Records are keyed by the exact string that created them (userKey = 'user:' + username, no normalization), so the Devvit emulator stores 'u/carol' while production Reddit would store 'carol'. resolveUsername probes the as-typed form then the toggled form and returns whichever key exists, so neither environment is broken. Asserts: (1) a record exists under the canonical key [control], (2) from a verified-empty panel, bare 'carol' loads that same record and the input adopts 'u/carol', (3) a genuinely unknown user is still rejected [negative control]. Each phase is preceded by a tab bounce that unmounts UserPanel, because a failed lookup leaves the previous user's table rendered and would otherwise produce a false pass. Phase 4 covers the Missions tab's separate user search: every per-user mission procedure resolves the name and uses the resolved key for BOTH the existence check and the write, so a bare handle cannot read the real record and then write progress to a phantom one.",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "bob",
+      "_comment": "bob is a hardcoded CREATOR_ADMIN. NOTE: if bob is already active this is a no-op and does NOT restart the dev server - after changing server code, switch to another user and back first, or this test will exercise a stale bundle."
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=DBG",
+      "timeout": 15000,
+      "_comment": "HARD ASSERT: DBG is admin-only."
+    },
+    {
+      "action": "if",
+      "condition": "!document.querySelector('[data-testid=debug-input]')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "text=DBG"
+        },
+        {
+          "action": "waitFor",
+          "selector": "[data-testid=debug-input]",
+          "timeout": 5000
+        }
+      ]
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=debug-input]",
+      "text": "admin"
+    },
+    {
+      "action": "sleep",
+      "ms": 200
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); if (!el) return 'ERR: no debug input'; const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'admin'); el.dispatchEvent(new Event('input', { bubbles: true })); el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); return 'submitted'; })()",
+      "name": "run 'admin' command"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=ADMIN PANEL",
+      "timeout": 8000
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-user]"
+    },
+    {
+      "action": "sleep",
+      "ms": 500
+    },
+    {
+      "action": "click",
+      "selector": "text=u/carol",
+      "_comment": "CONTROL: prove a record exists under the canonical key."
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=Reset User",
+      "timeout": 8000,
+      "_comment": "HARD ASSERT: carol has a record. Everything below is meaningless without it."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=admin-user-input]'); return JSON.stringify({ field: el ? el.value : null, credits: (document.body.innerText.match(/Credits\\s+([\\d,]+)/) || [])[1] || null }); })()",
+      "name": "CONTROL: canonical load succeeded"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-games]",
+      "_comment": "unmount UserPanel to clear loaded-user state (before bare-name phase)"
+    },
+    {
+      "action": "sleep",
+      "ms": 400
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-user]"
+    },
+    {
+      "action": "sleep",
+      "ms": 700
+    },
+    {
+      "action": "waitForNotVisible",
+      "selector": "text=Reset User",
+      "timeout": 5000,
+      "_comment": "HARD ASSERT: clean slate - no user loaded. Makes the next assertion meaningful instead of stale."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=admin-user-input]'); if (!el) return 'ERR: no user input'; const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'carol'); el.dispatchEvent(new Event('input', { bubbles: true })); return 'field = ' + JSON.stringify(el.value); })()",
+      "name": "type bare 'carol' (no u/ prefix)"
+    },
+    {
+      "action": "sleep",
+      "ms": 250
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-user-load]"
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=Reset User",
+      "timeout": 8000,
+      "_comment": "HARD ASSERT: bare 'carol' resolved to the u/carol record from a verified-empty start. THIS IS THE FEATURE."
+    },
+    {
+      "action": "waitForNotVisible",
+      "selector": "text=not found",
+      "timeout": 3000,
+      "_comment": "HARD ASSERT: no NOT_FOUND error surfaced."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=admin-user-input]'); const v = el ? el.value : null; const hasRecord = !!Array.from(document.querySelectorAll('button')).find(x => x.textContent.trim() === 'Reset User'); const problems = []; if (!hasRecord) problems.push('bare name did not load a record'); if (v !== 'u/carol') problems.push('field did not adopt canonical name, got ' + JSON.stringify(v)); return JSON.stringify({ verdict: problems.length ? 'FAIL: ' + problems.join('; ') : 'PASS: bare carol resolved AND field adopted u/carol', field: v, hasRecord }); })()",
+      "name": "VERDICT 1: bare-name resolution + canonical adoption"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/user-search-bare-name.png"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-games]",
+      "_comment": "unmount UserPanel to clear loaded-user state (before negative control)"
+    },
+    {
+      "action": "sleep",
+      "ms": 400
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-user]"
+    },
+    {
+      "action": "sleep",
+      "ms": 700
+    },
+    {
+      "action": "waitForNotVisible",
+      "selector": "text=Reset User",
+      "timeout": 5000,
+      "_comment": "HARD ASSERT: clean slate - no user loaded. Makes the next assertion meaningful instead of stale."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=admin-user-input]'); if (!el) return 'ERR: no user input'; const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'zzznosuchuser'); el.dispatchEvent(new Event('input', { bubbles: true })); return 'field = ' + JSON.stringify(el.value); })()",
+      "name": "type a username that does not exist"
+    },
+    {
+      "action": "sleep",
+      "ms": 250
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-user-load]"
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=not found",
+      "timeout": 8000,
+      "_comment": "HARD ASSERT: unknown users are still rejected - resolution did not become match-anything."
+    },
+    {
+      "action": "waitForNotVisible",
+      "selector": "text=Reset User",
+      "timeout": 4000,
+      "_comment": "HARD ASSERT: and no record was loaded. Valid because the tab bounce above proved the slate was empty first."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const t = document.body.innerText; const hasRecord = !!Array.from(document.querySelectorAll('button')).find(x => x.textContent.trim() === 'Reset User'); const m = t.match(/User \"[^\"]*\" not found/); return JSON.stringify({ verdict: (!hasRecord && m) ? 'PASS: unknown user still rejected' : 'FAIL: unknown user not rejected cleanly', error: m ? m[0] : null, hasRecord }); })()",
+      "name": "VERDICT 2: negative control"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/user-search-unknown.png"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-missions]",
+      "_comment": "PHASE 4: the Missions tab has its own user search. Same bare-name tolerance must hold, and its writes must target the resolved key."
+    },
+    {
+      "action": "sleep",
+      "ms": 800
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=admin-mission-user-input]",
+      "timeout": 6000,
+      "_comment": "HARD ASSERT: missions user search rendered."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=admin-mission-user-input]'); if (!el) return 'ERR: no mission user input'; const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'carol'); el.dispatchEvent(new Event('input', { bubbles: true })); return 'field = ' + JSON.stringify(el.value); })()",
+      "name": "missions: type bare 'carol'"
+    },
+    {
+      "action": "sleep",
+      "ms": 250
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=admin-mission-user-load]'); if (!el) return 'ERR: missing ' + 'load button'; el.scrollIntoView({ block: 'center' }); return 'scrolled into view'; })()",
+      "name": "scroll Load into view - the runner clicks by element coords and does NOT auto-scroll, so a control below the fold gets a click at an off-screen y and the step still reports OK"
+    },
+    {
+      "action": "sleep",
+      "ms": 500
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-mission-user-load]"
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=Reset All (current period)",
+      "timeout": 8000,
+      "_comment": "HARD ASSERT: the per-user mission list actually rendered for bare 'carol'. This button only appears when getUserMissions returned data, so it fails the run if resolution did not happen - unlike an eval verdict, which the runner counts as passing regardless of content."
+    },
+    {
+      "action": "waitForNotVisible",
+      "selector": "text=not found",
+      "timeout": 3000,
+      "_comment": "HARD ASSERT: no NOT_FOUND from the missions route."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const t = document.body.innerText; const err = (t.match(/User \"[^\"]*\" not found/) || [])[0] || null; const hasMissionUi = /Reset All \\(current period\\)/.test(t); return JSON.stringify({ verdict: (!err && hasMissionUi) ? 'PASS: missions loaded for bare carol' : 'FAIL: ' + (err || 'no mission list'), err, hasMissionUi }); })()",
+      "name": "VERDICT 3: missions tab bare-name resolution"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/user-search-missions.png"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-user]",
+      "_comment": "return to the User tab for teardown"
+    },
+    {
+      "action": "sleep",
+      "ms": 600
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=admin-user-input]'); if (!el) return 'ERR: no user input'; const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'u/carol'); el.dispatchEvent(new Event('input', { bubbles: true })); return 'field = ' + JSON.stringify(el.value); })()",
+      "name": "restore field to canonical"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-user-load]"
+    },
+    {
+      "action": "sleep",
+      "ms": 1500
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { location.href = location.origin + location.pathname; return 'url reset'; })()",
+      "name": "teardown: clear any ?mode= override for the next test"
+    },
+    {
+      "action": "sleep",
+      "ms": 1500
+    }
+  ]
+}

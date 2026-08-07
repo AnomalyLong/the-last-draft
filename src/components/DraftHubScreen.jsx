@@ -8,6 +8,8 @@ export function DraftHubScreen({
   credits = 0,
   rosterCount = 0,
   nextDraftCost = null,   // cost of the next paid (credit) draft this week, or null while loading
+  costStepPct = null,     // % the cost rises per buy (server-derived), or null while loading
+  firstDraftCost = null,  // price of the week's first paid draft (server-derived), or null while loading
   onUsePick,
   onBuyDraft,
   onCreditDraft,
@@ -18,6 +20,17 @@ export function DraftHubScreen({
   // picks are consumed first (they run the 5-player draft flow); bought picks
   // run the single-player reveal.
   const hasFreePicks = freeDrafts > 0;
+  // Escalation copy is derived from the server's configured stepPct, never
+  // hardcoded. Until it arrives we describe the cost WITHOUT naming a
+  // percentage — a vague-but-true string beats a precise-but-stale one.
+  // At 0% (the shipped default) there is no rise to describe, and "+0% each
+  // buy" would be technically true but absurd, so say it plainly instead.
+  const isFlatCost = costStepPct === 0;
+  const stepNote = costStepPct == null
+    ? 'cost set weekly'
+    : isFlatCost
+      ? 'same cost every buy'
+      : `cost +${costStepPct}% each buy`;
   const hasPaidPick = paidPicks > 0;
   const totalPicks = freeDrafts + paidPicks;
   const hasAnyPick = totalPicks > 0;
@@ -105,7 +118,7 @@ export function DraftHubScreen({
           </div>
         )}
 
-        {/* Buy a draft pick — banks a reusable pick (weekly +25% cost) */}
+        {/* Buy a draft pick — banks a reusable pick (cost escalates weekly) */}
         <div className="dh-credit">
           <button
             className="dh-btn credit"
@@ -121,10 +134,19 @@ export function DraftHubScreen({
           </button>
           <div className="dh-credit-note">
             {nextDraftCost == null
-              ? 'First draft each week is 2,500 CR'
+              ? (firstDraftCost == null
+                  // Nothing from the server yet: say nothing about the ladder.
+                  ? (costStepPct == null
+                      ? 'Buy an extra pick this week'
+                      : isFlatCost
+                        ? 'Every draft this week costs the same'
+                        : 'First draft each week is the cheapest')
+                  : isFlatCost
+                    ? `Every draft this week is ${firstDraftCost.toLocaleString()} CR`
+                    : `First draft each week is ${firstDraftCost.toLocaleString()} CR`)
               : canAffordCredit
-                ? 'Adds a pick above · cost +25% each buy · resets weekly'
-                : `Need ${nextDraftCost.toLocaleString()} CR · cost +25% each buy`}
+                ? `Adds a pick above · ${stepNote} · resets weekly`
+                : `Need ${nextDraftCost.toLocaleString()} CR · ${stepNote}`}
           </div>
         </div>
       </div>
