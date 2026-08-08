@@ -391,7 +391,12 @@ export default function App() {
   const [ftueIntroSeen, setFtueIntroSeen] = React.useState(false);
   // Render-time assignment (not an effect): the music effect below reads this
   // on the same commit, so it must be correct before effects run.
-  const showSoundChoice = !isInline && isFtue && audioPreferenceLoaded && !soundChoiceDone;
+  // Two flags, deliberately distinct. `soundChoicePending` is true from first
+  // paint — before the saved mute pref has loaded — because that pre-load
+  // window is real time on screen during which nothing FTUE-ish may start.
+  // `showSoundChoice` is the narrower "the modal is actually up" flag.
+  const soundChoicePending = !isInline && isFtue && !soundChoiceDone;
+  const showSoundChoice = soundChoicePending && audioPreferenceLoaded;
   soundChoicePendingRef.current = showSoundChoice;
   // FTUE onboarding simplification: the intro video screen is disabled. The
   // scene + component are left intact — flip this to true to bring it back.
@@ -618,7 +623,11 @@ export default function App() {
           onToggleMute={handleToggleMute}
           homeRoster={homeRoster}
           missions={serverMissions}
-          isFtue={isFtue}
+          // Hold the FTUE coach (and its typing loop) until the sound choice is
+          // made. The lobby renders BEHIND the modal, so an ungated isFtue
+          // starts the coach typing under it — audible before the user has been
+          // asked whether they want audio at all.
+          isFtue={isFtue && !soundChoicePending}
           onPlay={(mode) => {
             // Kick audio context inside the user-gesture so subsequent
             // scene-driven music starts cleanly on mobile (iOS Safari needs

@@ -1,6 +1,6 @@
 {
-  "name": "FTUE sound choice modal gates mute on first launch",
-  "description": "bob is the FTUE user (gamesPlayed === 0), so the SOUND CHECK modal must be the first thing he sees. Covers both branches: PLAY WITHOUT SOUND must mute the game, PLAY WITH SOUND must leave it unmuted and start the title music. The modal is session-scoped, so a reload re-asks and lets us drive the second branch. Ends on the unmuted branch so bob is left in a sane state.",
+  "name": "FTUE sound choice modal gates mute and holds the coach until answered",
+  "description": "bob is the FTUE user (gamesPlayed === 0), so the SOUND CHECK modal must be the first thing he sees. Covers both branches: PLAY WITHOUT SOUND must mute the game, PLAY WITH SOUND must leave it unmuted and start the title music. ALSO covers the regression where the lobby FTUE coach rendered BEHIND the modal and started its typing loop before the user had been asked about audio at all. NOTE on method: resource-timing is useless for this - Vite dev serves asset imports as JS module wrappers, so typing1.ogg shows a fetch at ~89ms regardless of playback. And new Audio() is detached, so querySelectorAll('audio') is always 0. The two valid signals are (a) .lb2-coach absent from the DOM, since BballTip starts its typing loop on mount, and (b) an HTMLMediaElement.play() spy left dwelling while the modal is up - the typing loop re-calls play() every clip, so an active loop cannot hide from it. Ends on the unmuted branch so bob is left in a sane state.",
   "steps": [
     {
       "action": "switchUser",
@@ -19,9 +19,44 @@
       "_comment": "ASSERTION 1: the modal opens at start. showSoundChoice also requires audioPreferenceLoaded, so this covers the async user.init settling."
     },
     {
+      "action": "waitForNotVisible",
+      "selector": ".lb2-coach",
+      "timeout": 2000,
+      "_comment": "ASSERTION 2 (the regression): the FTUE coach must NOT be mounted while the sound-choice modal is up. BballTip fires _typingAudio.play() from a mount effect, so a coach here means audible typing before the user has been asked about audio."
+    },
+    {
+      "action": "waitForNotVisible",
+      "selector": ".lb2-coach-tap",
+      "timeout": 2000,
+      "_comment": "The tap-catcher ships with the coach block - its absence confirms the whole FTUE coach subtree is held, not just the bubble."
+    },
+    {
+      "action": "extract",
+      "into": "domUnderModal",
+      "expression": "(() => { const coach = document.querySelector('.lb2-coach'); const tap = document.querySelector('.lb2-coach-tap'); const dim = document.querySelector('.lobby2-ftue'); const lobby = document.querySelector('[data-testid=lobby-screen]'); return 'lobbyMounted=' + !!lobby + ' coach=' + (coach ? 'PRESENT(BUG)' : 'absent') + ' tapCatcher=' + (tap ? 'PRESENT(BUG)' : 'absent') + ' ftueDim=' + (dim ? 'PRESENT(BUG)' : 'absent'); })()",
+      "_comment": "REPORTED: the lobby IS mounted behind the modal (that's why this bug was possible) but its FTUE coach subtree must not be."
+    },
+    {
+      "action": "eval",
+      "into": "spyInstall",
+      "expression": "(() => { if (window.__sndSpy) { window.__sndSpy.played.length = 0; return 'reset existing'; } const spy = { played: [] }; window.__sndSpy = spy; const short = (s) => { try { return String(s||'').split('/').pop().split('?')[0]; } catch (e) { return String(s); } }; const nativePlay = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { spy.played.push({ src: short(this.currentSrc || this.src), volume: Number(this.volume.toFixed(3)) }); return nativePlay.apply(this, arguments); }; return 'installed'; })()",
+      "_comment": "Install the play() spy WHILE the modal is still up, so it can observe the quiet period."
+    },
+    {
+      "action": "sleep",
+      "ms": 1800,
+      "_comment": "Deliberate dwell. The typing loop chains a fresh play() call per clip (~0.5s), so 1800ms of silence cannot be an active loop we merely started watching late."
+    },
+    {
+      "action": "extract",
+      "into": "audioWhileModalUp",
+      "expression": "(() => { const s = window.__sndSpy; if (!s) return 'SPY MISSING'; if (!s.played.length) return 'SILENT (correct)'; return 'PLAYED(BUG): ' + s.played.map(p => p.src + '@v' + p.volume).join(', '); })()",
+      "_comment": "ASSERTION 3 (reported): nothing at all may play while the user is being asked whether they want audio."
+    },
+    {
       "action": "screenshot",
-      "_comment": "Visual check of the SOUND CHECK modal on first launch",
-      "path": "/tmp/ftue-sound-choice-modal.png"
+      "path": "/tmp/ftue-sound-choice-modal.png",
+      "_comment": "Visual check - no coach bubble behind the modal"
     },
     {
       "action": "extract",
@@ -43,7 +78,24 @@
       "action": "waitFor",
       "selector": "[data-testid=sound-mute][aria-pressed=true]",
       "timeout": 8000,
-      "_comment": "ASSERTION 2: 'no sound' mutes the game. aria-pressed mirrors the muted state in TitleStrip; this step fails if it stayed unmuted."
+      "_comment": "ASSERTION 4: 'no sound' mutes the game. aria-pressed mirrors the muted state in TitleStrip."
+    },
+    {
+      "action": "waitFor",
+      "selector": ".lb2-coach",
+      "timeout": 8000,
+      "_comment": "ASSERTION 5: the coach is only HELD, not cancelled - it must appear once the choice is made, even on the muted branch."
+    },
+    {
+      "action": "sleep",
+      "ms": 1200,
+      "_comment": "Let the released coach type a few chars on the muted branch"
+    },
+    {
+      "action": "extract",
+      "into": "audioAfterChoosingSilence",
+      "expression": "(() => { const s = window.__sndSpy; if (!s) return 'SPY MISSING'; const typing = s.played.filter(p => /typing/.test(p.src)); if (!typing.length) return 'no typing play() calls'; const loud = typing.filter(p => p.volume > 0); return 'typingCalls=' + typing.length + ' atNonZeroVolume=' + loud.length + ' (expect 0 - user chose silence)'; })()",
+      "_comment": "ASSERTION 6 (reported): on the muted branch the coach may mount and call play(), but every call must be at volume 0."
     },
     {
       "action": "sleep",
@@ -62,6 +114,12 @@
       "_comment": "Modal re-appears because bob is still FTUE"
     },
     {
+      "action": "waitForNotVisible",
+      "selector": ".lb2-coach",
+      "timeout": 2000,
+      "_comment": "ASSERTION 7: the hold survives a reload too - coach still absent while the modal is back up."
+    },
+    {
       "action": "extract",
       "into": "mutePersistedFromBranchA",
       "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); return b ? 'aria-pressed=' + b.getAttribute('aria-pressed') : 'no mute btn'; })()",
@@ -69,9 +127,9 @@
     },
     {
       "action": "eval",
-      "into": "spyInstall",
-      "_comment": "Spy play() so we can prove the WITH SOUND branch actually starts title music at non-zero volume",
-      "expression": "(() => { if (window.__sndSpy) return 'already installed'; const spy = { played: [] }; window.__sndSpy = spy; const short = (s) => { try { return String(s||'').split('/').pop().split('?')[0]; } catch (e) { return String(s); } }; const nativePlay = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { spy.played.push({ src: short(this.currentSrc || this.src), volume: Number(this.volume.toFixed(3)) }); return nativePlay.apply(this, arguments); }; return 'installed'; })()"
+      "into": "spyReinstall",
+      "expression": "(() => { if (window.__sndSpy) { window.__sndSpy.played.length = 0; return 'reset existing'; } const spy = { played: [] }; window.__sndSpy = spy; const short = (s) => { try { return String(s||'').split('/').pop().split('?')[0]; } catch (e) { return String(s); } }; const nativePlay = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { spy.played.push({ src: short(this.currentSrc || this.src), volume: Number(this.volume.toFixed(3)) }); return nativePlay.apply(this, arguments); }; return 'installed'; })()",
+      "_comment": "Fresh document after the reload - reinstall (or clear) the spy."
     },
     {
       "action": "click",
@@ -87,18 +145,24 @@
       "action": "waitFor",
       "selector": "[data-testid=sound-mute][aria-pressed=false]",
       "timeout": 8000,
-      "_comment": "ASSERTION 3: 'with sound' leaves the game unmuted - and clears the muted state persisted by branch A."
+      "_comment": "ASSERTION 8: 'with sound' leaves the game unmuted - and clears the muted state persisted by branch A."
+    },
+    {
+      "action": "waitFor",
+      "selector": ".lb2-coach",
+      "timeout": 8000,
+      "_comment": "ASSERTION 9: coach appears after the sound-on choice too."
     },
     {
       "action": "sleep",
-      "ms": 1200,
-      "_comment": "Give titleMusic.start() time to fire"
+      "ms": 1500,
+      "_comment": "Give titleMusic.start() and the now-released coach typing loop time to fire"
     },
     {
       "action": "extract",
-      "into": "musicAfterChoosingSound",
-      "expression": "(() => { const s = window.__sndSpy; if (!s) return 'SPY MISSING'; if (!s.played.length) return 'NOTHING PLAYED'; return s.played.map(p => p.src + '@v' + p.volume).join(', '); })()",
-      "_comment": "ASSERTION 4 (reported): title music must play at non-zero volume. v0 here would mean the lazy-channel mute leak regressed."
+      "into": "audioAfterChoosingSound",
+      "expression": "(() => { const s = window.__sndSpy; if (!s) return 'SPY MISSING'; if (!s.played.length) return 'NOTHING PLAYED (BUG)'; const uniq = {}; s.played.forEach(p => { const k = p.src + '@v' + p.volume; uniq[k] = (uniq[k]||0) + 1; }); return Object.keys(uniq).map(k => k + ' x' + uniq[k]).join(', '); })()",
+      "_comment": "ASSERTION 10 (reported): title music AND the coach typing loop must now play at NON-ZERO volume. v0 here would mean the lazy-channel mute leak regressed; typing appearing only now proves it was held, not killed."
     },
     {
       "action": "waitFor",
@@ -108,8 +172,8 @@
     },
     {
       "action": "screenshot",
-      "_comment": "Lobby after choosing PLAY WITH SOUND - mute icon should read unmuted",
-      "path": "/tmp/ftue-sound-choice-lobby.png"
+      "path": "/tmp/ftue-sound-choice-lobby.png",
+      "_comment": "Lobby after choosing PLAY WITH SOUND - mute icon unmuted, coach bubble now visible"
     }
   ]
 }
