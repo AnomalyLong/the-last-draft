@@ -1,0 +1,214 @@
+{
+  "name": "admin-analytics-tab",
+  "description": "Admin panel -> Stats tab: verify the analytics snapshot renders in the REAL in-app AdminOverlay (not the story harness) over tRPC admin.getAnalytics. Asserts the panel paints, the stat tiles hold numbers consistent with the server payload, the window selector re-queries, and Backfill Indices runs. Runs as u/bob (admin) - DBG and the admin panel are admin-gated. Also asserts the cumulative user-growth line chart renders one point per day, draws a path, shows a percent growth rate, and re-scales when the window changes.",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "bob",
+      "_comment": "DBG + admin panel are admin-only. ALSO restarts the dev server, which is required for server-side trpc.ts changes - Vite HMR does not pick those up."
+    },
+    {
+      "action": "sleep",
+      "ms": 3000,
+      "_comment": "switchUser restarts the dev server"
+    },
+    {
+      "action": "eval",
+      "_id": "reset-mode",
+      "expression": "(() => { const had = !!location.search; if (had) { location.search=''; } else { location.reload(); } return had ? 'reset to expanded (reload)' : 'forced reload'; })()",
+      "_comment": "SELF-HEALING: needs the EXPANDED view (DBG is not rendered inline). ALWAYS reloads - HMR does not reliably swap AdminOverlay.jsx, and a stale client bundle silently reports old strings (this cost a false 'fix verified' once)."
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 25000
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=DBG",
+      "timeout": 8000
+    },
+    {
+      "action": "if",
+      "condition": "!document.querySelector('[data-testid=debug-input]')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": "text=DBG"
+        },
+        {
+          "action": "waitFor",
+          "selector": "[data-testid=debug-input]",
+          "timeout": 5000
+        }
+      ]
+    },
+    {
+      "action": "type",
+      "selector": "[data-testid=debug-input]",
+      "text": "admin"
+    },
+    {
+      "action": "sleep",
+      "ms": 200
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const el = document.querySelector('[data-testid=debug-input]'); if (!el) throw new Error('no debug input'); if (el.value !== 'admin') { const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; set.call(el, 'admin'); el.dispatchEvent(new Event('input', { bubbles: true })); } el.focus(); el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); return 'submitted'; })()",
+      "name": "press Enter on 'admin'"
+    },
+    {
+      "action": "waitFor",
+      "selector": "text=ADMIN PANEL",
+      "timeout": 8000
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const tabs = [...document.querySelectorAll('[data-testid^=admin-tab-]')].map(e => e.dataset.testid); if (!tabs.includes('admin-tab-stats')) throw new Error('Stats tab missing - TABS array not updated. Got: ' + tabs.join(', ')); return 'tabs: ' + tabs.join(', '); })()",
+      "name": "ASSERT the Stats tab exists in the REAL overlay"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-tab-stats]",
+      "_comment": "Analytics lives on the Stats tab (index 7)"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=admin-analytics-panel]",
+      "timeout": 20000,
+      "_comment": "ASSERT: the fan-out scan resolved and the panel painted. If admin.getAnalytics is missing or throws, this times out and the loading branch shows the error instead."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const g = id => document.querySelector('[data-testid=' + id + ']')?.textContent || 'MISSING'; return JSON.stringify({ newToday: g('an-new-today'), new7d: g('an-new-7d'), active7d: g('an-active-7d'), drafted: g('an-drafted'), notDrafted: g('an-not-drafted'), played: g('an-played'), energyBelow: g('an-energy-below'), energyEmpty: g('an-energy-empty'), gamesTotal: g('an-games-total'), crHeld: g('an-cr-held') }); })()",
+      "name": "READ the rendered tiles"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const t = document.querySelector('[data-testid=admin-analytics-panel]').textContent; const m = t.match(/Scanned (\\d+) of (\\d+)/); if (!m) throw new Error('no scan footer: ' + t.slice(-200)); const drafted = document.querySelector('[data-testid=an-drafted]')?.textContent || ''; const nd = document.querySelector('[data-testid=an-not-drafted]')?.textContent || ''; const dn = parseInt(drafted.replace(/[^0-9]/g, ''), 10); const ndn = parseInt(nd.replace(/[^0-9]/g, ''), 10); return 'scanned ' + m[1] + '/' + m[2] + ' drafted=' + dn + ' notDrafted=' + ndn; })()",
+      "name": "ASSERT scan footer present and roster split readable"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=admin-analytics-growth]",
+      "timeout": 8000,
+      "name": "growth chart renders"
+    },
+    {
+      "action": "eval",
+      "name": "ASSERT growth chart has one point per day + a readable rate",
+      "expression": "(() => { const g = document.querySelector('[data-testid=admin-analytics-growth]'); if (!g) throw new Error('no growth chart'); const pts = g.querySelectorAll('svg circle'); if (pts.length !== 15) throw new Error('expected 15 growth points at 14d (14 days + window-start anchor), got ' + pts.length); const path = g.querySelector('[data-testid=an-growth-line]'); if (!path || !path.getAttribute('d')) throw new Error('no line path drawn'); const rate = document.querySelector('[data-testid=an-growth-rate]'); if (!rate) throw new Error('no growth rate label'); if (!/-?\\d+\\.\\d%/.test(rate.textContent)) throw new Error('rate label not a percent: ' + rate.textContent); const head = g.querySelector('div').textContent; if (!/\\d+\\s*\\u2192\\s*\\d+/.test(head)) throw new Error('no baseline->current in heading: ' + head); return 'growth: ' + head.trim() + ' | pts=' + pts.length + ' | d=' + path.getAttribute('d').slice(0, 70); })()"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/admin-analytics-default.png"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-analytics-range-30]",
+      "_comment": "Window selector must re-query the server, not just re-render"
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const bars = document.querySelectorAll('[data-testid=admin-analytics-chart] > div'); if (bars.length !== 30) throw new Error('expected 30 daily buckets after switching to 30d, got ' + bars.length); return '30 buckets rendered'; })()",
+      "name": "ASSERT the 30d window actually re-queried (bucket count changed 14 -> 30)"
+    },
+    {
+      "action": "eval",
+      "name": "ASSERT growth chart re-scaled to 30 points",
+      "expression": "(() => { const g = document.querySelector('[data-testid=admin-analytics-growth]'); const pts = g.querySelectorAll('svg circle'); if (pts.length !== 31) throw new Error('expected 31 growth points at 30d (30 days + anchor), got ' + pts.length); const t = g.textContent; const flat = /flat: no signups/.test(t); return 'growth 30d pts=' + pts.length + ' flat=' + flat + ' :: ' + t.trim().slice(0, 120); })()"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/admin-analytics-30d.png"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid=admin-analytics-range-1]",
+      "_comment": "1-day window - the tightest case. Server clamps min(1); the chart must still draw."
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "eval",
+      "name": "ASSERT 1d window re-queried to a single bucket",
+      "expression": "(() => { const bars = document.querySelectorAll('[data-testid=admin-analytics-chart] > div'); if (bars.length !== 1) throw new Error('expected 1 daily bucket at 1d, got ' + bars.length); return '1 bucket rendered'; })()"
+    },
+    {
+      "action": "eval",
+      "name": "ASSERT 1d growth line still DRAWS (anchor + today = 2 points)",
+      "expression": "(() => { const g = document.querySelector('[data-testid=admin-analytics-growth]'); if (!g) throw new Error('no growth chart at 1d'); const pts = g.querySelectorAll('svg circle'); if (pts.length !== 2) throw new Error('expected 2 growth points at 1d (anchor + today), got ' + pts.length); const path = g.querySelector('[data-testid=an-growth-line]'); if (!path || !path.getAttribute('d')) throw new Error('REGRESSION: no line path at 1d - single-point window drew nothing'); const area = g.querySelector('[data-testid=an-growth-area]'); if (!area) throw new Error('no area path at 1d'); const d = path.getAttribute('d'); if (!/^M[\\d.]+,[\\d.]+ L[\\d.]+,[\\d.]+$/.test(d)) throw new Error('1d path is not a 2-point segment: ' + d); const rate = document.querySelector('[data-testid=an-growth-rate]'); if (!/\\/ 1d/.test(rate.textContent)) throw new Error('rate label should read /1d: ' + rate.textContent); return '1d growth ok :: path=' + d + ' :: ' + rate.textContent.trim(); })()"
+    },
+    {
+      "action": "eval",
+      "name": "ASSERT growth chart is ABOVE the Users section",
+      "expression": "(() => { const p = document.querySelector('[data-testid=admin-analytics-panel]'); const g = document.querySelector('[data-testid=admin-analytics-growth]'); if (!g) throw new Error('no growth chart'); const kids = [...p.children]; const gi = kids.findIndex(k => k === g || k.contains(g)); const ui = kids.findIndex(k => /Users\\s+\\u2014/.test(k.textContent) && k.tagName === 'DIV' && k.children.length === 0); if (gi < 0) throw new Error('growth not a direct child of panel'); if (ui < 0) throw new Error('Users heading not found'); if (gi > ui) throw new Error('growth chart renders BELOW Users (idx ' + gi + ' vs ' + ui + ')'); return 'order ok: growth idx ' + gi + ' before Users idx ' + ui; })()"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/admin-analytics-1d.png"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__anProbe = 'pending'; fetch('/api/trpc/admin.getAnalytics?input=' + encodeURIComponent(JSON.stringify({ windowDays: 30 }))).then(async r => { window.__anProbe = r.status + ' :: ' + (await r.text()).slice(0, 600); }).catch(e => { window.__anProbe = 'THREW ' + e.message; }); return 'fired'; })()",
+      "name": "fire direct tRPC read-back",
+      "_comment": "Async eval return values come back as {} in this runner - stash on window, sleep, assert in a SYNC eval."
+    },
+    {
+      "action": "sleep",
+      "ms": 2000
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const v = window.__anProbe; if (!v || v === 'pending') throw new Error('probe did not resolve: ' + JSON.stringify(v)); if (!/^200 /.test(v)) throw new Error('bad status: ' + v.slice(0, 300)); if (!/\"total\"/.test(v)) throw new Error('payload has no total: ' + v.slice(0, 300)); return 'server: ' + v.slice(0, 300); })()",
+      "name": "ASSERT admin.getAnalytics serves over tRPC (not /dev-admin)"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__bfProbe='pending'; fetch('/api/trpc/admin.backfillAnalytics',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({})}).then(async r=>{window.__bfProbe=r.status+' :: '+(await r.text()).slice(0,400);}).catch(e=>{window.__bfProbe='THREW '+e.message;}); return 'fired'; })()",
+      "name": "fire backfill mutation directly (isolates server from UI)"
+    },
+    {
+      "action": "sleep",
+      "ms": 9000
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const v=window.__bfProbe; if(!v||v==='pending') throw new Error('probe did not resolve: '+JSON.stringify(v)); if(!/^200 /.test(v)) throw new Error('bad status: '+v.slice(0,300)); if(!/usersIndexed/.test(v)) throw new Error('payload missing usersIndexed: '+v.slice(0,300)); return 'server: '+v.slice(0,240); })()",
+      "name": "ASSERT backfill mutation succeeds server-side"
+    },
+    {
+      "action": "eval",
+      "name": "scroll Backfill button into view and click the element directly",
+      "expression": "(() => { const b = document.querySelector('[data-testid=admin-analytics-backfill]'); if (!b) throw new Error('backfill button missing - testid not in bundle'); b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) throw new Error('still offscreen after scroll: top=' + Math.round(r.top) + ' vh=' + innerHeight); if (b.disabled) throw new Error('button already disabled before click'); b.click(); return 'clicked at y=' + Math.round(r.top) + ' (vh=' + innerHeight + ')'; })()"
+    },
+    {
+      "action": "eval",
+      "name": "start polling for the backfill confirmation (up to 30s)",
+      "expression": "(() => { window.__bfUi = { done: false, saw: [] }; const t0 = Date.now(); const tick = () => { const p = document.querySelector('[data-testid=admin-analytics-panel]'); if (!p) { window.__bfUi.done = 'panel vanished'; return; } const btn = [...p.querySelectorAll('button')].find(b => /Backfill/.test(b.textContent)); const m = p.textContent.match(/Indexed \\d+ users, \\d+ games[^A-Z]*/); window.__bfUi.saw.push({ ms: Date.now() - t0, busy: btn ? btn.disabled : null, msg: m ? m[0].trim() : null }); if (m) { window.__bfUi.done = m[0].trim(); return; } if (Date.now() - t0 > 30000) { window.__bfUi.done = 'TIMEOUT'; return; } setTimeout(tick, 500); }; tick(); return 'polling'; })()"
+    },
+    {
+      "action": "sleep",
+      "ms": 31000
+    },
+    {
+      "action": "eval",
+      "name": "ASSERT Backfill Indices reported counts in the UI",
+      "expression": "(() => { const s = window.__bfUi; if (!s) throw new Error('poll never started'); const busyStates = s.saw.map(x => x.busy); const everBusy = busyStates.some(b => b === true); if (!s.done || s.done === 'TIMEOUT') { throw new Error('no UI confirmation after 30s. everBusy=' + everBusy + ' samples=' + JSON.stringify(s.saw.slice(0, 8)) + ' last=' + JSON.stringify(s.saw.slice(-3))); } if (/undefined/.test(s.done)) throw new Error('field-name mismatch: ' + s.done); const at = s.saw.find(x => x.msg); return 'UI backfill: \"' + s.done + '\" after ' + (at ? at.ms : '?') + 'ms (button went busy: ' + everBusy + ')'; })()"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/admin-analytics-backfilled.png"
+    }
+  ]
+}

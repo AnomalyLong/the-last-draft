@@ -1,5 +1,6 @@
 import { redis } from '@devvit/web/server';
 import { deductEnergy, awardCredits, recordGameOutcome, gamesKey } from './user';
+import { recordGamePlayed } from './analyticsIndex';
 import { recordGameCompletion } from './missions';
 import { getChallengePost, recordChallengeResult } from './post';
 
@@ -191,6 +192,9 @@ export const endGame = async (
       member: String(gameId),
     }),
     redis.zAdd(gamesKey(username), { score: now, member: String(gameId) }),
+    // Append-only global game log for analytics. Deliberately separate from
+    // games:pending, which is a moderation queue that gets zRem'd on review.
+    recordGamePlayed(gameId, now),
   ]);
 
   if (creditsEarned > 0) {

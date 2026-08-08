@@ -1647,7 +1647,228 @@ function ConfigPanel() {
   );
 }
 
-const TABS = ['User', 'Games', 'Missions', 'Announce', 'Notify', 'Admins', 'Config'];
+
+// ── Analytics ───────────────────────────────────────────────────────────────
+// Aggregate snapshot over users:all. Every figure is derived from data already
+// stored on the user hashes, so it is correct across full history on first
+// load (no waiting for new indices to fill).
+const RANGES = [1, 7, 14, 30, 90];
+
+function Stat({ label, value, sub, testid }) {
+  return (
+    <div data-testid={testid} style={{ background: '#0a0f1c', border: '1px solid #1a2438', borderRadius: 4, padding: '8px 10px' }}>
+      <div style={{ color: '#556', fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ color: '#e0e0e0', fontSize: 18, fontWeight: 'bold' }}>{value}</div>
+      {sub != null && <div style={{ color: '#445', fontSize: 10 }}>{sub}</div>}
+    </div>
+  );
+}
+
+const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))', gap: 6, marginBottom: 14 };
+const pct = (n, d) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');
+
+// Cumulative user-growth line. The server only returns per-day new signups for
+// the window, so the pre-window baseline is derived as (total - sum(newUsers)).
+// That keeps the line anchored to the true user count without a new endpoint.
+function GrowthChart({ daily, total }) {
+  const W = 320, H = 96, PAD_L = 26, PAD_R = 6, PAD_T = 8, PAD_B = 16;
+
+  const inWindow = daily.reduce((a, d) => a + d.newUsers, 0);
+  const baseline = Math.max(0, total - inWindow);
+
+  let running = baseline;
+  // Anchor point = cumulative total at the *start* of the window. Without it a
+  // 1-day window is a single point (no line), and every window silently hid its
+  // true starting value because day 0 already includes that day's signups.
+  const pts = [{ day: 'start', newUsers: null, cum: baseline, rate: 0, anchor: true }];
+  for (const d of daily) {
+    const prev = running;
+    running += d.newUsers;
+    pts.push({
+      day: d.day,
+      newUsers: d.newUsers,
+      cum: running,
+      // daily growth rate vs. the prior day's cumulative base
+      rate: prev > 0 ? (d.newUsers / prev) * 100 : (d.newUsers > 0 ? 100 : 0),
+    });
+  }
+
+  const lo = Math.min(...pts.map(p => p.cum), baseline);
+  const hi = Math.max(...pts.map(p => p.cum), baseline);
+  const flat = hi === lo;
+  // pad a flat series so the line renders mid-box instead of on an edge
+  const yMin = flat ? Math.max(0, lo - 1) : lo;
+  const yMax = flat ? hi + 1 : hi;
+
+  const x = i => PAD_L + (pts.length <= 1 ? 0 : (i / (pts.length - 1)) * (W - PAD_L - PAD_R));
+  const y = v => PAD_T + (1 - (v - yMin) / (yMax - yMin || 1)) * (H - PAD_T - PAD_B);
+
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.cum).toFixed(1)}`).join(' ');
+  const area = pts.length
+    ? `${line} L${x(pts.length - 1).toFixed(1)},${H - PAD_B} L${x(0).toFixed(1)},${H - PAD_B} Z`
+    : '';
+
+  const net = running - baseline;
+  const overall = baseline > 0 ? (net / baseline) * 100 : (net > 0 ? 100 : 0);
+  const sign = net > 0 ? '+' : '';
+
+  return (
+    <div data-testid="admin-analytics-growth">
+      <div style={S.heading}>
+        User growth — {baseline} &rarr; {running}{' '}
+        <span data-testid="an-growth-rate" style={{ color: net > 0 ? '#4a9a5a' : '#556' }}>
+          ({sign}{overall.toFixed(1)}% / {daily.length}d)
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: 'block', marginBottom: 4 }}>
+        <line x1={PAD_L} y1={PAD_T} x2={W - PAD_R} y2={PAD_T} stroke="#1d2430" strokeWidth="1" />
+        <line x1={PAD_L} y1={H - PAD_B} x2={W - PAD_R} y2={H - PAD_B} stroke="#1d2430" strokeWidth="1" />
+        <text x="2" y={PAD_T + 4} fill="#445" fontSize="8">{yMax}</text>
+        <text x="2" y={H - PAD_B} fill="#445" fontSize="8">{yMin}</text>
+        {area && <path data-testid="an-growth-area" d={area} fill="#3a8fd4" fillOpacity="0.12" stroke="none" />}
+        {pts.length > 1 && <path data-testid="an-growth-line" d={line} fill="none" stroke="#3a8fd4" strokeWidth="1.6" strokeLinejoin="round" />}
+        {pts.map((p, i) => (
+          <g key={p.day}>
+            <circle cx={x(i)} cy={y(p.cum)} r={p.anchor ? 1.8 : p.newUsers ? 2.4 : 1.2}
+              fill={p.anchor ? '#445' : p.newUsers ? '#6fb7ea' : '#3a8fd4'} />
+            <rect x={x(i) - 6} y={PAD_T} width="12" height={H - PAD_T - PAD_B} fill="transparent">
+              <title>{p.anchor
+                ? `window start · ${p.cum} total`
+                : `${p.day}  +${p.newUsers} new · ${p.cum} total · ${p.rate.toFixed(1)}%/d`}</title>
+            </rect>
+          </g>
+        ))}
+        <text x={PAD_L} y={H - 4} fill="#445" fontSize="8">{pts[0] && pts[0].day.slice(5)}</text>
+        <text x={W - PAD_R} y={H - 4} fill="#445" fontSize="8" textAnchor="end">
+          {pts.length && pts[pts.length - 1].day.slice(5)}
+        </text>
+      </svg>
+      <div style={{ color: '#445', fontSize: 10, marginBottom: 14 }}>
+        Cumulative users · baseline {baseline} before window · hover a point for that day&rsquo;s rate
+        {flat && <span style={{ color: '#d4a13a' }}> · flat: no signups in this window</span>}
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsPanel() {
+  const { busy, msg, wrap, setMsg } = useWrap();
+  const [data, setData] = useState(null);
+  const [days, setDays] = useState(14);
+
+  const load = (d = days) => trpc.admin.getAnalytics.query({ windowDays: d })
+    .then(setData)
+    .catch(e => setMsg({ text: e.message, ok: false }));
+
+  useEffect(() => { load(days); }, [days]);
+
+  const backfill = () => wrap(async () => {
+    const r = await trpc.admin.backfillAnalytics.mutate();
+    await load();
+    setMsg({ text: `Indexed ${r.usersIndexed} users, ${r.gamesIndexed} games (scanned ${r.scanned})`, ok: true });
+  });
+
+  if (!data) return (
+    <div data-testid="admin-analytics-loading" style={{ fontSize: 12 }}>
+      {msg && !msg.ok
+        ? <div style={S.error}>Failed to load analytics: {msg.text}</div>
+        : <span style={{ color: '#556' }}>scanning users…</span>}
+    </div>
+  );
+
+  const { users: u, credits, games, daily } = data;
+  const peak = Math.max(1, ...daily.map(d => Math.max(d.newUsers, d.games)));
+
+  return (
+    <div data-testid="admin-analytics-panel">
+      <div style={S.row}>
+        <span style={{ ...S.heading, marginBottom: 0 }}>Window</span>
+        {RANGES.map(d => (
+          <button key={d} data-testid={`admin-analytics-range-${d}`}
+            style={S.tab(days === d)} onClick={() => setDays(d)}>{d}d</button>
+        ))}
+        <button style={S.btn()} onClick={() => load()}>Refresh</button>
+      </div>
+
+      {data.truncated && (
+        <div style={{ color: '#d4a13a', fontSize: 11, marginBottom: 10 }}>
+          Scan truncated — showing the {data.scanned} most recently active of {data.total} users.
+          Percentages are of the scanned set.
+        </div>
+      )}
+
+      <GrowthChart daily={daily} total={u.total} />
+
+      <div style={S.heading}>Users — {u.total} total</div>
+      <div style={grid}>
+        <Stat testid="an-new-today" label="New today" value={u.newToday} />
+        <Stat testid="an-new-7d" label="New 7d" value={u.new7d} />
+        <Stat testid="an-new-30d" label="New 30d" value={u.new30d} />
+        <Stat testid="an-active-7d" label="Active 7d" value={u.active7d} sub={pct(u.active7d, u.total)} />
+      </div>
+
+      <div style={S.heading}>Engagement</div>
+      <div style={grid}>
+        <Stat testid="an-drafted" label="Drafted" value={u.drafted} sub={pct(u.drafted, u.total)} />
+        <Stat testid="an-not-drafted" label="No roster" value={u.notDrafted} sub={pct(u.notDrafted, u.total)} />
+        <Stat testid="an-played" label="Played 1+" value={u.played} sub={pct(u.played, u.total)} />
+        <Stat testid="an-named" label="Named team" value={u.named} sub={pct(u.named, u.total)} />
+      </div>
+
+      <div style={S.heading}>Energy — regen-adjusted</div>
+      <div style={grid}>
+        <Stat testid="an-energy-below" label="Below max" value={u.energyBelowMax} sub={pct(u.energyBelowMax, u.total)} />
+        <Stat testid="an-energy-empty" label="Empty" value={u.energyEmpty} sub={pct(u.energyEmpty, u.total)} />
+        <Stat testid="an-muted" label="Muted" value={u.muted} />
+        <Stat testid="an-founders" label="Founders" value={u.founders} />
+      </div>
+
+      <div style={S.heading}>Games</div>
+      <div style={grid}>
+        <Stat testid="an-games-total" label="Total" value={games.total} />
+        <Stat testid="an-games-avg" label="Avg/player" value={games.avgPerPlayer.toFixed(1)} />
+        <Stat testid="an-games-wins" label="Wins" value={games.wins} />
+        <Stat testid="an-games-losses" label="Losses" value={games.losses} />
+      </div>
+
+      <div style={S.heading}>Credits</div>
+      <div style={grid}>
+        <Stat testid="an-cr-held" label="Held" value={credits.held.toLocaleString()} />
+        <Stat testid="an-cr-earned" label="Earned" value={credits.earned.toLocaleString()} />
+        <Stat testid="an-cr-spent" label="Spent" value={credits.spent.toLocaleString()} />
+      </div>
+
+      <div style={S.heading}>Daily — new users vs games</div>
+      <div data-testid="admin-analytics-chart" style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 70, marginBottom: 6 }}>
+        {daily.map(d => (
+          <div key={d.day} title={`${d.day}  new ${d.newUsers} · games ${d.games} · active ${d.activeUsers}`}
+            style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 1, height: '100%' }}>
+            <div style={{ flex: 1, height: `${(d.newUsers / peak) * 100}%`, background: '#3a8fd4', minHeight: d.newUsers ? 2 : 0 }} />
+            <div style={{ flex: 1, height: `${(d.games / peak) * 100}%`, background: '#4a9a5a', minHeight: d.games ? 2 : 0 }} />
+          </div>
+        ))}
+      </div>
+      <div style={{ color: '#445', fontSize: 10, marginBottom: 14 }}>
+        <span style={{ color: '#3a8fd4' }}>■</span> new users&nbsp;&nbsp;
+        <span style={{ color: '#4a9a5a' }}>■</span> games&nbsp;&nbsp;· peak {peak}/day · hover for detail
+      </div>
+
+      <hr style={S.divider} />
+      <div style={S.row}>
+        <button data-testid="admin-analytics-backfill" style={S.btn()} disabled={busy} onClick={backfill}>Backfill Indices</button>
+        <span style={{ color: '#445', fontSize: 10 }}>
+          Fills users:byFirstSeen + games:log from existing data. Idempotent.
+        </span>
+      </div>
+      {msg && <div style={msg.ok ? S.success : S.error}>{msg.text}</div>}
+      <div style={{ color: '#334', fontSize: 10, marginTop: 10 }}>
+        Scanned {data.scanned} of {data.total} · generated {new Date(data.generatedAt).toLocaleTimeString()}
+      </div>
+    </div>
+  );
+}
+
+const TABS = ['User', 'Games', 'Missions', 'Announce', 'Notify', 'Admins', 'Config', 'Stats'];
 
 export function AdminOverlay({ onClose }) {
   const [tab, setTab] = useState(0);
@@ -1678,6 +1899,7 @@ export function AdminOverlay({ onClose }) {
           {tab === 4 && <NotificationsPanel />}
           {tab === 5 && <AdminsPanel />}
           {tab === 6 && <ConfigPanel />}
+          {tab === 7 && <AnalyticsPanel />}
         </div>
       </div>
     </div>

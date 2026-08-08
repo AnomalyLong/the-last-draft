@@ -1,4 +1,5 @@
 import { redis } from '@devvit/web/server';
+import { indexUserFirstSeen } from './analyticsIndex';
 
 export const MAX_ENERGY = 5;
 const ENERGY_REGEN_SECS = 3600;
@@ -84,7 +85,19 @@ export const getOrCreateUser = async (username: string, redditId: string): Promi
     redis.hGetAll(key),
     redis.zCard(gamesKey(username)),
   ]);
-  return { ...parseUser(raw), gamesPlayed };
+
+  // Mirror firstSeen into the signup index. `users:all` is scored by lastSeen,
+  // so it can't answer "who joined on day X" — this index can. The write is a
+  // fixed-score zAdd, so calling it on every visit is idempotent. Never let an
+  // analytics write break user init.
+  const parsed = { ...parseUser(raw), gamesPlayed };
+  try {
+    await indexUserFirstSeen(username, parsed.firstSeen);
+  } catch {
+    /* analytics index is best-effort */
+  }
+
+  return parsed;
 };
 
 export const getUser = async (username: string): Promise<UserData | null> => {

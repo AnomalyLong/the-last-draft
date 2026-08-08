@@ -64,6 +64,7 @@ import {
 } from './core/auction';
 import { countDecrement, countGet, countIncrement } from './core/count';
 import { getMyPass, adminGrantPass, adminRevokePass, retryFounderFlair } from './core/battlePass';
+import { getAnalytics, backfillIndices } from './core/analytics';
 import { getFlags, setFlag, getFlagLog, isFlagName, FLAG_DEFAULTS } from './core/featureFlags';
 import { getInlineSplashSetting, setInlineSplashSetting, getInlineSplashLog } from './core/inlineSplash';
 import {
@@ -942,6 +943,17 @@ export const appRouter = t.router({
       builtAt: typeof __BUILD_TIME__ !== "undefined" ? __BUILD_TIME__ : "unknown",
       nodeEnv: typeof process !== "undefined" ? (process.env.NODE_ENV ?? "unknown") : "unknown",
     })),
+
+    // ── Analytics ──────────────────────────────────────────────────────────
+    // Aggregate snapshot for the Analytics tab. Fan-out scan over users:all;
+    // see core/analytics.ts for why this is a scan and not a range query.
+    getAnalytics: adminProcedure
+      .input(z.object({ windowDays: z.number().int().min(1).max(90).default(14) }).optional())
+      .query(async ({ input }) => getAnalytics(input?.windowDays ?? 14)),
+
+    // Populates users:byFirstSeen + games:log from existing user hashes so the
+    // scan can become a range query later. Idempotent (fixed-score zAdd).
+    backfillAnalytics: adminProcedure.mutation(async () => backfillIndices()),
 
     // User management
     getAdmins: adminProcedure.query(async () => getAdmins()),

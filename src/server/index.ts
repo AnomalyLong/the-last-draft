@@ -9,7 +9,7 @@ import { menu } from './routes/menu';
 import { triggers } from './routes/triggers';
 import { appRouter } from './trpc';
 import { createContext } from './context';
-import { userKey, ledgerKey, gamesKey, getUser, MAX_ENERGY, USERS_INDEX_KEY } from './core/user';
+import { userKey, ledgerKey, gamesKey, getUser, computeEnergy, MAX_ENERGY, USERS_INDEX_KEY } from './core/user';
 import { fulfillPass, refundPass, getMyPass, adminGrantPass, adminRevokePass, retryFounderFlair, type PassTier } from './core/battlePass';
 import { rosterKey, lineupKey, getUserRoster, getPlayer, playerKey } from './core/player';
 import { challengePostKey } from './core/post';
@@ -112,7 +112,16 @@ if (process.env.NODE_ENV !== 'production') {
   devAdmin.get('/user/:username', async (c) => {
     const user = await getUser(c.req.param('username'));
     if (!user) return c.json({ error: 'User not found' }, 404);
-    return c.json(user);
+    // The stored `energy` field is only accurate as of the last write —
+    // energy regens 1/hour and is normalized lazily in deductEnergy. Surface
+    // the regen-adjusted value so the panel matches what the player actually
+    // has (and matches the analytics low-energy count). `energyStored` is
+    // kept for debugging the raw hash value.
+    return c.json({
+      ...user,
+      energy: computeEnergy(user.energy, user.energyUpdatedAt),
+      energyStored: user.energy,
+    });
   });
 
   devAdmin.post('/user/:username/reset', async (c) => {
