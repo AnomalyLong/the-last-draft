@@ -8,7 +8,7 @@
     "exactOptionalPropertyTypes": false,
     "rootDir": "../src/server"
   },
-  "include": ["../src/server/**/*"],
+  "include": ["../src/server/**/*", "../src/build-globals.d.ts"],
   "exclude": [],
   "references": [
     {
