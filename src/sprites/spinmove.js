@@ -6,7 +6,11 @@ import { JERSEY_BASE } from '../constants.js';
 // Frames 5–7: mid-spin hold (defender contact on right side)
 // Frames 8–11: spin completes, player drives away
 // Render anchor: translate(cx - 20*scale, cy - 38*scale) to keep feet at cy
-// #FF0000 pixels = opposing defender contact detail (not the ball)
+// #FF0000 pixels = the BALL. It is baked into these frames (a compact ~4x4
+// blob arcing low-right -> high-right through the mid-spin hold -> across
+// to the left on the drive-out), which is why GameScene.jsx and
+// SplashCourt.jsx gate the separate <Ball> component behind `!p.isSpinning`.
+// Do not filter these out when rendering the spin sprite.
 export const SPIN_MOVE_FRAMES = [
   [ // frame 1 — pivot start, ball low right
     [20,23,"#3E2525"],[21,23,"#3E2525"],

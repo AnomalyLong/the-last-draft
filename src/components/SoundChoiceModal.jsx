@@ -1,5 +1,6 @@
 import React from 'react';
-import { SPIN_MOVE_FRAMES, BALL_FRAMES } from '../sprites/index.js';
+import { SPIN_MOVE_FRAMES, RUN_BALL_FRAMES } from '../sprites/index.js';
+import { Ball } from './Ball.jsx';
 import { JERSEY_BASE, JERSEY_HOME } from '../constants.js';
 
 // First thing a brand-new (FTUE) user sees: pick an audio mode before the
@@ -8,121 +9,153 @@ import { JERSEY_BASE, JERSEY_HOME } from '../constants.js';
 // that unlocks the audio context. Whichever button is tapped, the tap itself
 // is what lets titleMusic.start() actually produce sound on iOS Safari.
 
-// SPIN_MOVE_FRAMES live in raw sprite coordinates: x 14..30, y 22..38.
-// Rendering with a viewBox on that box (rather than translating every pixel)
-// keeps the sprite data untouched and lets CSS size the sprite responsively.
-const VB_X = 14, VB_Y = 22, VB_W = 17, VB_H = 17;
+// ---------------------------------------------------------------------------
+// Animation: ~3s of running-and-dribbling, then the spin move, then loop.
+//
+// Phase sequencing runs off one 80ms interval. 36 run frames (2880ms) is the
+// closest whole number of 6-frame stride cycles to "3 seconds" — 38 would have
+// cut the stride mid-step and snapped the legs on the handoff to the spin.
 const FRAME_MS = 80;
+const RUN_CYCLE = RUN_BALL_FRAMES.length;     // 6 frames = 480ms per stride
+const DRIBBLE_FRAMES = RUN_CYCLE * 6;         // 36 frames = 2880ms of running
+const SPIN_FRAMES = SPIN_MOVE_FRAMES.length;  // 12
+const CYCLE_FRAMES = DRIBBLE_FRAMES + SPIN_FRAMES;
 
-// spinmove.js documents #FF0000 as "opposing defender contact detail" — the
-// bits of the DEFENDER the spin is blowing past, not part of the ball handler.
-// In-game there's a defender there to hide them; here the player is solo, so
-// they'd paint as a floating red blob by his feet. Drop them.
-const DEFENDER_PX = '#FF0000';
+// ---------------------------------------------------------------------------
+// Coordinate space
+//
+// Both sprites are authored in their own boxes:
+//   SPIN_MOVE_FRAMES — raw coords, x 14..30, y 22..38 (feet ink row 38)
+//   RUN_BALL_FRAMES  — own 14x18 box, ink y 0..17 (feet ink row 17)
+//
+// Everything is drawn in the SPIN sprite's space. A 1x1 rect at ink row 38
+// spans [38,39), so the actual floor line is the bottom EDGE at y=39 — that
+// distinction is what the old ball math got wrong. Running feet land on the
+// same line: ink row 17 + 21 = 38, bottom edge 39.
+const RUN_DX = 15;
+const RUN_DY = 21;
+const FLOOR_EDGE_Y = 39;
+
+// viewBox contains the ball at its left extent (x=10) and the spin sprite's
+// right edge (x=31); vertically the ball's apex (y=21) down to the floor.
+const VB_X = 10, VB_Y = 21, VB_W = 21, VB_H = 18;
 
 // ---------------------------------------------------------------------------
 // Ball
 //
-// The court view does NOT draw a ball during a spin move: GameScene.jsx and
-// SplashCourt.jsx both gate <Ball> behind `!p.isSpinning`, and spinmove.js
-// contains no ball-coloured pixels (its palette is skin/jersey/shoe/hair only).
-// So there is no per-frame offset table to copy the way isDunking copies
-// DUNK_BALL_OFFSETS — the path below is authored for this modal.
+// Run phase: the court's real <Ball>, in the same configuration GameScene and
+// SplashCourt use for a *moving* ball-handler — scale 1, lift 3, syncToRun.
+// syncToRun swaps the 500ms sine for the court's 6-entry per-stride lookup
+// (yOff [10,4,-2,-3,-2,4]), which holds the ball near its apex across the
+// middle of the stride and drops it hard to the floor. It reads as a real
+// dribble rather than a hover, and it parks the ball ON the floor for a whole
+// 80ms frame instead of kissing it for one instant at the sine peak.
 //
-// What IS borrowed from the court is the ball's *behaviour*:
-//   - the same BALL_FRAMES sprite data (up / mid / flat squash phases)
-//   - the same three-phase selection by height that Ball.jsx does, so the ball
-//     paints 'flat' as it meets the floor and 'up' at the top of the bounce
-//   - the same 7×7 grid centring maths (translate by -3.5 * scale)
+// Both the Ball and Player derive their frame from ABSOLUTE time
+// (floor(now/80) % 6), not mount time, so the bounce stays locked to the
+// stride. The run frame below is computed the same way for that reason.
 //
-// Path: ball starts low-right, sweeps up and around the body as the player
-// pivots, contacts the floor mid-spin (f6), then crosses back to the right and
-// settles into a dribble on the drive-out (f11). Two floor contacts across the
-// 12-frame / 960ms cycle ≈ the ~2 bounces/sec of the court's 500ms dribble.
-const BALL_SCALE = 0.7;      // ≈ court's ball:player size ratio at this sprite height
-const BALL_PATH = [
-  [27.0, 34.0],  // f0  pivot start — ball low right
-  [25.0, 32.0],  // f1  sweeping up
-  [22.0, 30.2],  // f2  over the top, crossing body
-  [18.5, 30.0],  // f3  apex, left side
-  [16.2, 33.0],  // f4  dropping down the left
-  [16.0, 35.4],  // f5  approaching floor
-  [17.2, 36.2],  // f6  floor contact (mid-spin dribble)
-  [20.0, 34.0],  // f7  rising off the bounce
-  [22.5, 31.2],  // f8  crossing back to the right
-  [26.0, 31.0],  // f9  apex, right side
-  [28.0, 33.5],  // f10 dropping
-  [28.8, 36.0],  // f11 floor contact — settles into the drive-out dribble
-];
-
-// Mirrors Ball.jsx's height→phase mapping, rebased onto sprite coords where
-// the floor (the player's feet) sits at y = 38.
-function ballPhase(y) {
-  if (y >= 35.5) return 'flat';
-  if (y >= 32.5) return 'mid';
-  return 'up';
-}
+// Floor alignment — the bug this fixes. BALL_FRAMES ink does not fill its 7x7
+// box: up/mid/flat all bottom out at local row 5, not 6. Ball.jsx centres on
+// the BOX (cy - 7/2), so the drawn underside sits at cy - 3.5 + 6 + yOff, a
+// full 1px above where box-centred math predicts. The previous cy of 24.5 was
+// derived as "cy + 3.5 + 10 = 38" — wrong on both counts (box instead of ink,
+// ink row instead of floor edge), leaving the ball hanging 2px clear of the
+// floor. At this scale 1 unit is ~6.7 screen px, so it read as a ball that
+// never touches the ground.
+const BALL_YOFF_MAX = 10;             // deepest point of the syncToRun stride
+const BALL_INK_BOTTOM = 6;            // bottom edge of ink row 5 within the 7x7 box
+const BALL_CY = FLOOR_EDGE_Y - BALL_INK_BOTTOM + 3.5 - BALL_YOFF_MAX;  // 26.5
+// Court puts the ball 10px ahead of player centre; player centre here is
+// RUN_DX + 7 = 22. 12.5 keeps that lead while landing the ink on whole pixels
+// under shapeRendering=crispEdges.
+const BALL_CX = 12.5;
+//
+// Spin phase: NO separate <Ball>. The ball is drawn into SPIN_MOVE_FRAMES
+// itself as a compact 4x4 blob that arcs from low-right (f1) up through the
+// mid-spin hold (f5-f7) and back across to the left as the player drives out
+// (f10-f11). That is why GameScene.jsx and SplashCourt.jsx both gate <Ball>
+// behind `!p.isSpinning` — during a spin the sprite already has one.
 
 // `lineHeight` is set explicitly on every text node below. App's root sets
 // lineHeight: 0 (load-bearing for the pixel-art layout) and it inherits, so
 // any container with real text has to opt back in or the lines overlap.
 
-function SpinSprite({ jerseyColor = JERSEY_HOME, size = 132 }) {
-  const [frame, setFrame] = React.useState(0);
+function SpinSprite({ jerseyColor = JERSEY_HOME, size = 140 }) {
+  // Driven by rAF, not setInterval, and for the same reason Player.jsx does it:
+  // <Ball syncToRun> updates its bounce every animation frame off ABSOLUTE time.
+  // A setInterval here re-rendered the sprite on its own jittery schedule, so
+  // under load the legs lagged the bounce by a frame and the ball hit the floor
+  // on the wrong step. Both values below come from one rAF timestamp.
+  //   cycleFrame — mount-relative, sequences run -> spin
+  //   runFrame   — absolute, identical formula to Ball's, so the stride locks
+  const [t, setT] = React.useState(() => ({ cycleFrame: 0, runFrame: 0 }));
 
   React.useEffect(() => {
-    const id = setInterval(
-      () => setFrame((f) => (f + 1) % SPIN_MOVE_FRAMES.length),
-      FRAME_MS,
-    );
-    return () => clearInterval(id);
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now) => {
+      const next = {
+        cycleFrame: Math.floor((now - start) / FRAME_MS) % CYCLE_FRAMES,
+        runFrame: Math.floor(now / FRAME_MS) % RUN_CYCLE,
+      };
+      // Bail out of the re-render between visible frame changes.
+      setT((p) =>
+        p.cycleFrame === next.cycleFrame && p.runFrame === next.runFrame ? p : next,
+      );
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, []);
 
-  const pixels = (SPIN_MOVE_FRAMES[frame] || SPIN_MOVE_FRAMES[0])
-    .filter(([, , fill]) => fill !== DEFENDER_PX);
+  const { cycleFrame, runFrame } = t;
+  const isSpinning = cycleFrame >= DRIBBLE_FRAMES;
+  const spinFrame = isSpinning ? cycleFrame - DRIBBLE_FRAMES : 0;
 
-  const [bx, by] = BALL_PATH[frame] || BALL_PATH[0];
-  const phase = ballPhase(by);
-  const ballPixels = BALL_FRAMES[phase] || BALL_FRAMES.up;
-  // Centre the nominal 7×7 ball grid on (bx, by), exactly as Ball.jsx does.
-  const bx0 = bx - 3.5 * BALL_SCALE;
-  const by0 = by - 3.5 * BALL_SCALE;
+  const paint = (pixels, keyPrefix) =>
+    pixels.map(([x, y, fill], i) => (
+      <rect
+        key={`${keyPrefix}${i}`}
+        x={x}
+        y={y}
+        width={1}
+        height={1}
+        fill={fill === JERSEY_BASE ? jerseyColor : fill}
+      />
+    ));
 
   return (
     <svg
       width={size}
-      height={size}
+      height={Math.round((size * VB_H) / VB_W)}
       viewBox={`${VB_X} ${VB_Y} ${VB_W} ${VB_H}`}
       shapeRendering="crispEdges"
       style={{ imageRendering: 'pixelated', display: 'block' }}
       data-testid="sound-choice-sprite"
-      data-frame={frame}
+      data-phase={isSpinning ? 'spin' : 'dribble'}
+      data-frame={isSpinning ? spinFrame : cycleFrame}
+      data-run-frame={isSpinning ? -1 : runFrame}
       aria-hidden="true"
     >
-      {pixels.map(([x, y, fill], i) => (
-        <rect
-          key={i}
-          x={x}
-          y={y}
-          width={1}
-          height={1}
-          fill={fill === JERSEY_BASE ? jerseyColor : fill}
-        />
-      ))}
-      {/* Ball paints after the body so it reads as being in front of the
-          handler — same draw order as the isDunking branch in Player.jsx. */}
-      <g data-testid="sound-choice-ball" data-ball-phase={phase}>
-        {ballPixels.map(([x, y, fill], i) => (
-          <rect
-            key={`b${i}`}
-            x={bx0 + x * BALL_SCALE}
-            y={by0 + y * BALL_SCALE}
-            width={BALL_SCALE}
-            height={BALL_SCALE}
-            fill={fill}
-          />
-        ))}
-      </g>
+      {isSpinning ? (
+        // Ball is part of the sprite data — render every pixel, unfiltered.
+        <g data-testid="sound-choice-spin">
+          {paint(SPIN_MOVE_FRAMES[spinFrame] || SPIN_MOVE_FRAMES[0], 's')}
+        </g>
+      ) : (
+        <>
+          <g data-testid="sound-choice-run" transform={`translate(${RUN_DX}, ${RUN_DY})`}>
+            {paint(RUN_BALL_FRAMES[runFrame] || RUN_BALL_FRAMES[0], 'r')}
+          </g>
+          {/* Same props the court passes for a moving ball-handler. Remounting
+              each cycle is harmless: syncToRun reads absolute time, so the
+              bounce resumes in phase rather than restarting from the top. */}
+          <g data-testid="sound-choice-ball">
+            <Ball cx={BALL_CX} cy={BALL_CY} scale={1} lift={3} syncToRun />
+          </g>
+        </>
+      )}
     </svg>
   );
 }
