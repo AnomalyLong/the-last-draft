@@ -1,8 +1,0 @@
-{
-  "name": "PROBE 4: draft card + coach selectors at reveal stage",
-  "steps": [
-    {"action": "extract", "expression": "JSON.stringify(Array.from(document.querySelectorAll('div,button')).map(e=>e.className).filter(c=>typeof c==='string' && /coach/i.test(c)))", "into": "coachClasses"},
-    {"action": "extract", "expression": "JSON.stringify(Array.from(document.querySelectorAll('[class*=draft-card],[class*=dc-]')).map(e=>e.className).slice(0,25))", "into": "cardClasses"},
-    {"action": "extract", "expression": "JSON.stringify(Array.from(document.querySelectorAll('[data-testid]')).map(e=>e.getAttribute('data-testid')).filter(t=>/draft|card|coach|slot|pick/i.test(t)))", "into": "draftTestids"}
-  ]
-}

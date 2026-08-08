@@ -1,9 +1,0 @@
-{
-  "name": "Probe 3: short-form play-picker iso-mode + child ids",
-  "steps": [
-    {"action": "extract", "expression": "String(document.querySelector('[data-testid=\"play-picker\"]')?.getAttribute('data-iso-mode'))", "into": "isoMode"},
-    {"action": "extract", "expression": "[...document.querySelectorAll('[data-testid^=\"play-\"]')].map(e=>e.getAttribute('data-testid')).join(',').slice(0,180)", "into": "playIds"},
-    {"action": "extract", "expression": "[...document.querySelectorAll('[data-testid^=\"defense\"],[data-testid^=\"iso-\"]')].map(e=>e.getAttribute('data-testid')).join(',').slice(0,180)", "into": "defIds"},
-    {"action": "extract", "expression": "[...document.querySelectorAll('[data-testid^=\"play-\"]')].map(e=>e.getAttribute('data-disabled')).join(',').slice(0,120)", "into": "playDisabled"}
-  ]
-}
