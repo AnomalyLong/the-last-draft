@@ -1,5 +1,5 @@
 import React from 'react';
-import { SPIN_MOVE_FRAMES } from '../sprites/index.js';
+import { SPIN_MOVE_FRAMES, BALL_FRAMES } from '../sprites/index.js';
 import { JERSEY_BASE, JERSEY_HOME } from '../constants.js';
 
 // First thing a brand-new (FTUE) user sees: pick an audio mode before the
@@ -20,6 +20,49 @@ const FRAME_MS = 80;
 // they'd paint as a floating red blob by his feet. Drop them.
 const DEFENDER_PX = '#FF0000';
 
+// ---------------------------------------------------------------------------
+// Ball
+//
+// The court view does NOT draw a ball during a spin move: GameScene.jsx and
+// SplashCourt.jsx both gate <Ball> behind `!p.isSpinning`, and spinmove.js
+// contains no ball-coloured pixels (its palette is skin/jersey/shoe/hair only).
+// So there is no per-frame offset table to copy the way isDunking copies
+// DUNK_BALL_OFFSETS — the path below is authored for this modal.
+//
+// What IS borrowed from the court is the ball's *behaviour*:
+//   - the same BALL_FRAMES sprite data (up / mid / flat squash phases)
+//   - the same three-phase selection by height that Ball.jsx does, so the ball
+//     paints 'flat' as it meets the floor and 'up' at the top of the bounce
+//   - the same 7×7 grid centring maths (translate by -3.5 * scale)
+//
+// Path: ball starts low-right, sweeps up and around the body as the player
+// pivots, contacts the floor mid-spin (f6), then crosses back to the right and
+// settles into a dribble on the drive-out (f11). Two floor contacts across the
+// 12-frame / 960ms cycle ≈ the ~2 bounces/sec of the court's 500ms dribble.
+const BALL_SCALE = 0.7;      // ≈ court's ball:player size ratio at this sprite height
+const BALL_PATH = [
+  [27.0, 34.0],  // f0  pivot start — ball low right
+  [25.0, 32.0],  // f1  sweeping up
+  [22.0, 30.2],  // f2  over the top, crossing body
+  [18.5, 30.0],  // f3  apex, left side
+  [16.2, 33.0],  // f4  dropping down the left
+  [16.0, 35.4],  // f5  approaching floor
+  [17.2, 36.2],  // f6  floor contact (mid-spin dribble)
+  [20.0, 34.0],  // f7  rising off the bounce
+  [22.5, 31.2],  // f8  crossing back to the right
+  [26.0, 31.0],  // f9  apex, right side
+  [28.0, 33.5],  // f10 dropping
+  [28.8, 36.0],  // f11 floor contact — settles into the drive-out dribble
+];
+
+// Mirrors Ball.jsx's height→phase mapping, rebased onto sprite coords where
+// the floor (the player's feet) sits at y = 38.
+function ballPhase(y) {
+  if (y >= 35.5) return 'flat';
+  if (y >= 32.5) return 'mid';
+  return 'up';
+}
+
 // `lineHeight` is set explicitly on every text node below. App's root sets
 // lineHeight: 0 (load-bearing for the pixel-art layout) and it inherits, so
 // any container with real text has to opt back in or the lines overlap.
@@ -37,6 +80,13 @@ function SpinSprite({ jerseyColor = JERSEY_HOME, size = 132 }) {
 
   const pixels = (SPIN_MOVE_FRAMES[frame] || SPIN_MOVE_FRAMES[0])
     .filter(([, , fill]) => fill !== DEFENDER_PX);
+
+  const [bx, by] = BALL_PATH[frame] || BALL_PATH[0];
+  const phase = ballPhase(by);
+  const ballPixels = BALL_FRAMES[phase] || BALL_FRAMES.up;
+  // Centre the nominal 7×7 ball grid on (bx, by), exactly as Ball.jsx does.
+  const bx0 = bx - 3.5 * BALL_SCALE;
+  const by0 = by - 3.5 * BALL_SCALE;
 
   return (
     <svg
@@ -59,6 +109,20 @@ function SpinSprite({ jerseyColor = JERSEY_HOME, size = 132 }) {
           fill={fill === JERSEY_BASE ? jerseyColor : fill}
         />
       ))}
+      {/* Ball paints after the body so it reads as being in front of the
+          handler — same draw order as the isDunking branch in Player.jsx. */}
+      <g data-testid="sound-choice-ball" data-ball-phase={phase}>
+        {ballPixels.map(([x, y, fill], i) => (
+          <rect
+            key={`b${i}`}
+            x={bx0 + x * BALL_SCALE}
+            y={by0 + y * BALL_SCALE}
+            width={BALL_SCALE}
+            height={BALL_SCALE}
+            fill={fill}
+          />
+        ))}
+      </g>
     </svg>
   );
 }
