@@ -112,6 +112,15 @@ export const backfillIndices = async (): Promise<{
 export type DailyPoint = {
   day: string;
   newUsers: number;
+  /**
+   * Of the users who FIRST SIGNED UP on this day, how many have since drafted
+   * a team. This is a signup-cohort conversion figure, not "drafts that day":
+   * a user who joined Mon and drafted Wed counts on Mon. That keeps
+   * `drafted <= newUsers` always true, so the two series are directly
+   * comparable. (Draft timestamps do exist -- rosterKey is scored by draft
+   * time -- so a by-draft-date series is possible if that's wanted instead.)
+   */
+  drafted: number;
   games: number;
   activeUsers: number;
 };
@@ -155,9 +164,17 @@ export const getAnalytics = async (windowDays = 14): Promise<AnalyticsSnapshot> 
   const usernames = truncated ? all.slice(total - SCAN_CAP) : all;
 
   // Pre-seed every bucket in the window so the chart has no holes.
-  const daily = new Map<string, { newUsers: number; games: number; active: Set<string> }>();
+  const daily = new Map<
+    string,
+    { newUsers: number; drafted: number; games: number; active: Set<string> }
+  >();
   for (let i = days - 1; i >= 0; i--) {
-    daily.set(dayKey(now - i * DAY_MS), { newUsers: 0, games: 0, active: new Set() });
+    daily.set(dayKey(now - i * DAY_MS), {
+      newUsers: 0,
+      drafted: 0,
+      games: 0,
+      active: new Set(),
+    });
   }
   const bucket = (ts: number) => daily.get(dayKey(ts));
 
@@ -214,7 +231,10 @@ export const getAnalytics = async (windowDays = 14): Promise<AnalyticsSnapshot> 
       if (age <= 7 * DAY_MS) acc.new7d++;
       if (age <= 30 * DAY_MS) acc.new30d++;
       const b = bucket(firstSeen);
-      if (b) b.newUsers++;
+      if (b) {
+        b.newUsers++;
+        if (rosterSize > 0) b.drafted++;
+      }
     }
 
     const lastSeen = Number(raw.lastSeen ?? 0);
@@ -266,6 +286,7 @@ export const getAnalytics = async (windowDays = 14): Promise<AnalyticsSnapshot> 
     daily: [...daily.entries()].map(([day, v]) => ({
       day,
       newUsers: v.newUsers,
+      drafted: v.drafted,
       games: v.games,
       activeUsers: v.active.size,
     })),

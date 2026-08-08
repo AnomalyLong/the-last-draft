@@ -1,6 +1,6 @@
 {
   "name": "admin-analytics-tab",
-  "description": "Admin panel -> Stats tab: verify the analytics snapshot renders in the REAL in-app AdminOverlay (not the story harness) over tRPC admin.getAnalytics. Asserts the panel paints, the stat tiles hold numbers consistent with the server payload, the window selector re-queries, and Backfill Indices runs. Runs as u/bob (admin) - DBG and the admin panel are admin-gated. Also asserts the cumulative user-growth line chart renders one point per day, draws a path, shows a percent growth rate, and re-scales when the window changes.",
+  "description": "Admin panel -> Stats tab: verify the analytics snapshot renders in the REAL in-app AdminOverlay (not the story harness) over tRPC admin.getAnalytics. Asserts the panel paints, the stat tiles hold numbers consistent with the server payload, the window selector re-queries, and Backfill Indices runs. Runs as u/bob (admin) - DBG and the admin panel are admin-gated. Also asserts the cumulative user-growth line chart renders one point per day, draws a path, shows a percent growth rate, and re-scales when the window changes. ALSO asserts the new per-day drafted series: signup-cohort tiles that follow the window selector, the per-day new-vs-drafted table, the drafted<=new invariant, and 3 chart series.",
   "steps": [
     {
       "action": "switchUser",
@@ -26,6 +26,16 @@
       "action": "waitFor",
       "selector": "[data-testid='lobby-screen']",
       "timeout": 25000
+    },
+    {
+      "action": "eval",
+      "name": "dismiss the FTUE sound-choice modal if it is up",
+      "_comment": "bob is FTUE (0 games), so SoundChoiceModal renders at App.jsx:1196 - AFTER AdminOverlay at :999 - and therefore paints ON TOP of the admin panel. Dismiss it first, exactly as a real user would.",
+      "expression": "(() => { const m=document.querySelector('[data-testid=sound-choice-modal]'); if(!m) return 'no sound modal'; const b=document.querySelector('[data-testid=sound-choice-on]'); if(!b) throw new Error('modal up but no PLAY WITH SOUND button'); b.click(); return 'dismissed sound modal'; })()"
+    },
+    {
+      "action": "sleep",
+      "ms": 800
     },
     {
       "action": "waitFor",
@@ -127,6 +137,21 @@
       "expression": "(() => { const g = document.querySelector('[data-testid=admin-analytics-growth]'); const pts = g.querySelectorAll('svg circle'); if (pts.length !== 31) throw new Error('expected 31 growth points at 30d (30 days + anchor), got ' + pts.length); const t = g.textContent; const flat = /flat: no signups/.test(t); return 'growth 30d pts=' + pts.length + ' flat=' + flat + ' :: ' + t.trim().slice(0, 120); })()"
     },
     {
+      "action": "eval",
+      "name": "ASSERT signup-cohort block renders and equals the sum of the daily series (30d)",
+      "expression": "(() => { const g = id => document.querySelector('[data-testid='+id+']'); const need = ['an-win-new','an-win-drafted','an-win-nodraft','an-win-games']; for (const n of need) if (!g(n)) throw new Error('cohort tile missing: '+n); const num = id => parseInt((g(id).children[1].textContent||'0').replace(/,/g,''),10); const rows=[...document.querySelectorAll('[data-testid^=an-row-20]')]; if(!rows.length) throw new Error('per-day table rendered no rows'); const sumNew=rows.reduce((a,r)=>a+parseInt(r.querySelector('[data-testid=an-row-new]').textContent,10),0); const sumDr=rows.reduce((a,r)=>a+parseInt(r.querySelector('[data-testid=an-row-drafted]').textContent,10),0); if(num('an-win-new')!==sumNew) throw new Error('cohort New tile '+num('an-win-new')+' != sum of table rows '+sumNew); if(num('an-win-drafted')!==sumDr) throw new Error('cohort Drafted tile '+num('an-win-drafted')+' != sum of table rows '+sumDr); window.__coh30={new:num('an-win-new'),drafted:num('an-win-drafted'),rows:rows.length}; return '30d cohort new='+sumNew+' drafted='+sumDr+' rows='+rows.length; })()"
+    },
+    {
+      "action": "eval",
+      "name": "ASSERT drafted never exceeds new on any day (cohort invariant)",
+      "expression": "(() => { const rows=[...document.querySelectorAll('[data-testid^=an-row-20]')]; if(rows.length!==30) throw new Error('expected 30 table rows at 30d, got '+rows.length); const bad=[]; for(const r of rows){ const n=parseInt(r.querySelector('[data-testid=an-row-new]').textContent,10); const d=parseInt(r.querySelector('[data-testid=an-row-drafted]').textContent,10); if(d>n) bad.push(r.dataset.testid+' d='+d+' n='+n); } if(bad.length) throw new Error('drafted > new on: '+bad.join(', ')); const first=rows[0].children[0].textContent, last=rows[rows.length-1].children[0].textContent; if(first<last) throw new Error('table not most-recent-first: '+first+' before '+last); return 'invariant ok across 30 rows, newest '+first+' oldest '+last; })()"
+    },
+    {
+      "action": "eval",
+      "name": "ASSERT daily chart now draws 3 series per day (new / drafted / games)",
+      "expression": "(() => { const days=[...document.querySelectorAll('[data-testid=admin-analytics-chart] > div')]; if(days.length!==30) throw new Error('expected 30 day groups, got '+days.length); const d0=days[0]; const kinds=[...d0.children].map(c=>c.dataset.testid); if(kinds.length!==3) throw new Error('expected 3 bars per day, got '+kinds.length+': '+kinds.join(',')); for(const k of ['an-bar-new','an-bar-drafted','an-bar-games']) if(!kinds.includes(k)) throw new Error('missing series '+k+' (got '+kinds.join(',')+')'); const anyDrafted=days.some(d=>{const b=d.querySelector('[data-testid=an-bar-drafted]'); return b && parseFloat(b.style.height)>0;}); return 'chart: 3 series x 30 days, drafted bar has height somewhere: '+anyDrafted; })()"
+    },
+    {
       "action": "screenshot",
       "path": "/tmp/admin-analytics-30d.png"
     },
@@ -152,7 +177,17 @@
     {
       "action": "eval",
       "name": "ASSERT growth chart is ABOVE the Users section",
-      "expression": "(() => { const p = document.querySelector('[data-testid=admin-analytics-panel]'); const g = document.querySelector('[data-testid=admin-analytics-growth]'); if (!g) throw new Error('no growth chart'); const kids = [...p.children]; const gi = kids.findIndex(k => k === g || k.contains(g)); const ui = kids.findIndex(k => /Users\\s+\\u2014/.test(k.textContent) && k.tagName === 'DIV' && k.children.length === 0); if (gi < 0) throw new Error('growth not a direct child of panel'); if (ui < 0) throw new Error('Users heading not found'); if (gi > ui) throw new Error('growth chart renders BELOW Users (idx ' + gi + ' vs ' + ui + ')'); return 'order ok: growth idx ' + gi + ' before Users idx ' + ui; })()"
+      "expression": "(() => { const p = document.querySelector('[data-testid=admin-analytics-panel]'); const g = document.querySelector('[data-testid=admin-analytics-growth]'); if (!g) throw new Error('no growth chart'); const kids = [...p.children]; const gi = kids.findIndex(k => k === g || k.contains(g)); const ui = kids.findIndex(k => k.tagName === 'DIV' && /^Users\\s+\\u2014/.test(k.textContent.trim())); if (gi < 0) throw new Error('growth not a direct child of panel'); if (ui < 0) throw new Error('Users heading not found'); if (gi > ui) throw new Error('growth chart renders BELOW Users (idx ' + gi + ' vs ' + ui + ')'); return 'order ok: growth idx ' + gi + ' before Users idx ' + ui; })()"
+    },
+    {
+      "action": "eval",
+      "name": "ASSERT the cohort block RE-SCOPES on window change (the reported bug)",
+      "expression": "(() => { const g=id=>document.querySelector('[data-testid='+id+']'); if(!g('an-win-new')) throw new Error('cohort tile gone at 1d'); const num = id => parseInt((g(id).children[1].textContent||'0').replace(/,/g,''),10); const rows=[...document.querySelectorAll('[data-testid^=an-row-20]')]; if(rows.length!==1) throw new Error('expected 1 table row at 1d, got '+rows.length); const prev=window.__coh30; if(!prev) throw new Error('no 30d baseline captured'); if(prev.rows===rows.length) throw new Error('table did not re-scope: still '+rows.length+' rows'); const now={new:num('an-win-new'),drafted:num('an-win-drafted')}; const sumNew=parseInt(rows[0].querySelector('[data-testid=an-row-new]').textContent,10); if(now.new!==sumNew) throw new Error('1d cohort tile '+now.new+' != single row '+sumNew); const changed = now.new!==prev.new || now.drafted!==prev.drafted; if(prev.new>0 && !changed) throw new Error('REGRESSION: cohort identical at 1d and 30d despite '+prev.new+' signups in 30d - window is not scoping'); return '1d cohort new='+now.new+' drafted='+now.drafted+' (30d was new='+prev.new+' drafted='+prev.drafted+') changed='+changed; })()"
+    },
+    {
+      "action": "eval",
+      "name": "ASSERT all-time blocks are labelled so they are not mistaken for windowed",
+      "expression": "(() => { const t=document.querySelector('[data-testid=admin-analytics-panel]').textContent; if(!/Engagement\\s*\\u00b7\\s*all time, not affected by window/.test(t)) throw new Error('Engagement heading not labelled all-time'); if(!/Signup cohort \\u2014 last 1d/.test(t)) throw new Error('cohort heading missing/wrong window: '+(t.match(/Signup cohort[^\\u00b7]*/)||['none'])[0]); return 'labels ok'; })()"
     },
     {
       "action": "screenshot",

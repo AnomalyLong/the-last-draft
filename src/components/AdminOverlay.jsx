@@ -1778,6 +1778,12 @@ function AnalyticsPanel() {
 
   const { users: u, credits, games, daily } = data;
   const peak = Math.max(1, ...daily.map(d => Math.max(d.newUsers, d.games)));
+  // Window-scoped totals. `daily` is the ONLY window-scoped thing the server
+  // returns -- users/credits/games blocks are lifetime figures -- so the range
+  // buttons are summed from here rather than from `u`.
+  const winNew = daily.reduce((a, d) => a + d.newUsers, 0);
+  const winDrafted = daily.reduce((a, d) => a + d.drafted, 0);
+  const winGames = daily.reduce((a, d) => a + d.games, 0);
 
   return (
     <div data-testid="admin-analytics-panel">
@@ -1799,7 +1805,7 @@ function AnalyticsPanel() {
 
       <GrowthChart daily={daily} total={u.total} />
 
-      <div style={S.heading}>Users — {u.total} total</div>
+      <div style={S.heading}>Users — {u.total} total <span style={{ color: '#445', fontWeight: 'normal' }}>· all time</span></div>
       <div style={grid}>
         <Stat testid="an-new-today" label="New today" value={u.newToday} />
         <Stat testid="an-new-7d" label="New 7d" value={u.new7d} />
@@ -1807,12 +1813,23 @@ function AnalyticsPanel() {
         <Stat testid="an-active-7d" label="Active 7d" value={u.active7d} sub={pct(u.active7d, u.total)} />
       </div>
 
-      <div style={S.heading}>Engagement</div>
+      <div style={S.heading}>Engagement <span style={{ color: '#445', fontWeight: 'normal' }}>· all time, not affected by window</span></div>
       <div style={grid}>
         <Stat testid="an-drafted" label="Drafted" value={u.drafted} sub={pct(u.drafted, u.total)} />
         <Stat testid="an-not-drafted" label="No roster" value={u.notDrafted} sub={pct(u.notDrafted, u.total)} />
         <Stat testid="an-played" label="Played 1+" value={u.played} sub={pct(u.played, u.total)} />
         <Stat testid="an-named" label="Named team" value={u.named} sub={pct(u.named, u.total)} />
+      </div>
+
+      <div style={S.heading} data-testid="an-cohort-heading">
+        Signup cohort — last {days}d{' '}
+        <span style={{ color: '#445', fontWeight: 'normal' }}>· follows the window</span>
+      </div>
+      <div style={grid}>
+        <Stat testid="an-win-new" label="New users" value={winNew} />
+        <Stat testid="an-win-drafted" label="Drafted" value={winDrafted} sub={pct(winDrafted, winNew)} />
+        <Stat testid="an-win-nodraft" label="No roster" value={winNew - winDrafted} sub={pct(winNew - winDrafted, winNew)} />
+        <Stat testid="an-win-games" label="Games played" value={winGames} />
       </div>
 
       <div style={S.heading}>Energy — regen-adjusted</div>
@@ -1823,7 +1840,7 @@ function AnalyticsPanel() {
         <Stat testid="an-founders" label="Founders" value={u.founders} />
       </div>
 
-      <div style={S.heading}>Games</div>
+      <div style={S.heading}>Games <span style={{ color: '#445', fontWeight: 'normal' }}>· all time</span></div>
       <div style={grid}>
         <Stat testid="an-games-total" label="Total" value={games.total} />
         <Stat testid="an-games-avg" label="Avg/player" value={games.avgPerPlayer.toFixed(1)} />
@@ -1831,26 +1848,57 @@ function AnalyticsPanel() {
         <Stat testid="an-games-losses" label="Losses" value={games.losses} />
       </div>
 
-      <div style={S.heading}>Credits</div>
+      <div style={S.heading}>Credits <span style={{ color: '#445', fontWeight: 'normal' }}>· all time</span></div>
       <div style={grid}>
         <Stat testid="an-cr-held" label="Held" value={credits.held.toLocaleString()} />
         <Stat testid="an-cr-earned" label="Earned" value={credits.earned.toLocaleString()} />
         <Stat testid="an-cr-spent" label="Spent" value={credits.spent.toLocaleString()} />
       </div>
 
-      <div style={S.heading}>Daily — new users vs games</div>
+      <div style={S.heading}>Daily — new users vs drafted vs games</div>
       <div data-testid="admin-analytics-chart" style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 70, marginBottom: 6 }}>
         {daily.map(d => (
-          <div key={d.day} title={`${d.day}  new ${d.newUsers} · games ${d.games} · active ${d.activeUsers}`}
+          <div key={d.day} data-testid={`an-bar-${d.day}`}
+            title={`${d.day}  new ${d.newUsers} · drafted ${d.drafted} · games ${d.games} · active ${d.activeUsers}`}
             style={{ flex: 1, display: 'flex', alignItems: 'flex-end', gap: 1, height: '100%' }}>
-            <div style={{ flex: 1, height: `${(d.newUsers / peak) * 100}%`, background: '#3a8fd4', minHeight: d.newUsers ? 2 : 0 }} />
-            <div style={{ flex: 1, height: `${(d.games / peak) * 100}%`, background: '#4a9a5a', minHeight: d.games ? 2 : 0 }} />
+            <div data-testid="an-bar-new" style={{ flex: 1, height: `${(d.newUsers / peak) * 100}%`, background: '#3a8fd4', minHeight: d.newUsers ? 2 : 0 }} />
+            <div data-testid="an-bar-drafted" style={{ flex: 1, height: `${(d.drafted / peak) * 100}%`, background: '#d4a13a', minHeight: d.drafted ? 2 : 0 }} />
+            <div data-testid="an-bar-games" style={{ flex: 1, height: `${(d.games / peak) * 100}%`, background: '#4a9a5a', minHeight: d.games ? 2 : 0 }} />
           </div>
         ))}
       </div>
       <div style={{ color: '#445', fontSize: 10, marginBottom: 14 }}>
         <span style={{ color: '#3a8fd4' }}>■</span> new users&nbsp;&nbsp;
+        <span style={{ color: '#d4a13a' }}>■</span> drafted&nbsp;&nbsp;
         <span style={{ color: '#4a9a5a' }}>■</span> games&nbsp;&nbsp;· peak {peak}/day · hover for detail
+      </div>
+
+      <div style={S.heading}>Per day — new vs drafted</div>
+      <div data-testid="an-daily-table" style={{ maxHeight: 190, overflowY: 'auto', border: '1px solid #1a2438', borderRadius: 4, marginBottom: 6 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead>
+            <tr style={{ color: '#556', textAlign: 'left' }}>
+              <th style={{ padding: '4px 8px', position: 'sticky', top: 0, background: '#0a0f1c' }}>Day</th>
+              <th style={{ padding: '4px 8px', position: 'sticky', top: 0, background: '#0a0f1c', textAlign: 'right' }}>New</th>
+              <th style={{ padding: '4px 8px', position: 'sticky', top: 0, background: '#0a0f1c', textAlign: 'right' }}>Drafted</th>
+              <th style={{ padding: '4px 8px', position: 'sticky', top: 0, background: '#0a0f1c', textAlign: 'right' }}>Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...daily].reverse().map(d => (
+              <tr key={d.day} data-testid={`an-row-${d.day}`} style={{ borderTop: '1px solid #141c2c', color: d.newUsers ? '#e0e0e0' : '#445' }}>
+                <td style={{ padding: '3px 8px' }}>{d.day}</td>
+                <td data-testid="an-row-new" style={{ padding: '3px 8px', textAlign: 'right', color: d.newUsers ? '#6fb7ea' : '#445' }}>{d.newUsers}</td>
+                <td data-testid="an-row-drafted" style={{ padding: '3px 8px', textAlign: 'right', color: d.drafted ? '#d4a13a' : '#445' }}>{d.drafted}</td>
+                <td style={{ padding: '3px 8px', textAlign: 'right' }}>{pct(d.drafted, d.newUsers)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ color: '#445', fontSize: 10, marginBottom: 14 }}>
+        Drafted = of that day&rsquo;s signups, how many have since drafted a team (cohort conversion,
+        so it never exceeds New). Most recent day first.
       </div>
 
       <hr style={S.divider} />
