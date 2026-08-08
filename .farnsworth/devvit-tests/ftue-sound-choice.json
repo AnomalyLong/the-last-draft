@@ -1,0 +1,115 @@
+{
+  "name": "FTUE sound choice modal gates mute on first launch",
+  "description": "bob is the FTUE user (gamesPlayed === 0), so the SOUND CHECK modal must be the first thing he sees. Covers both branches: PLAY WITHOUT SOUND must mute the game, PLAY WITH SOUND must leave it unmuted and start the title music. The modal is session-scoped, so a reload re-asks and lets us drive the second branch. Ends on the unmuted branch so bob is left in a sane state.",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "bob",
+      "_comment": "bob has gamesPlayed 0 -> isFtue true. carol has played, so she never sees this modal."
+    },
+    {
+      "action": "reload",
+      "waitMs": 3500,
+      "_comment": "Force a real reload - HMR has served a stale client bundle in this repo before."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='sound-choice-modal']",
+      "timeout": 15000,
+      "_comment": "ASSERTION 1: the modal opens at start. showSoundChoice also requires audioPreferenceLoaded, so this covers the async user.init settling."
+    },
+    {
+      "action": "screenshot",
+      "_comment": "Visual check of the SOUND CHECK modal on first launch",
+      "path": "/tmp/ftue-sound-choice-modal.png"
+    },
+    {
+      "action": "extract",
+      "into": "bothButtonsPresent",
+      "expression": "(() => { const on = document.querySelector('[data-testid=sound-choice-on]'); const off = document.querySelector('[data-testid=sound-choice-off]'); return (on ? 'on:' + on.textContent.trim() : 'ON MISSING') + ' | ' + (off ? 'off:' + off.textContent.trim() : 'OFF MISSING'); })()"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='sound-choice-off']",
+      "_comment": "BRANCH A: PLAY WITHOUT SOUND"
+    },
+    {
+      "action": "waitForNotVisible",
+      "selector": "[data-testid='sound-choice-modal']",
+      "timeout": 8000,
+      "_comment": "Choosing must dismiss the modal"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=sound-mute][aria-pressed=true]",
+      "timeout": 8000,
+      "_comment": "ASSERTION 2: 'no sound' mutes the game. aria-pressed mirrors the muted state in TitleStrip; this step fails if it stayed unmuted."
+    },
+    {
+      "action": "sleep",
+      "ms": 900,
+      "_comment": "Let the setMuted mutation reach the server before we reload"
+    },
+    {
+      "action": "reload",
+      "waitMs": 3500,
+      "_comment": "Session-scoped modal re-asks on reload - that's how we reach branch B"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='sound-choice-modal']",
+      "timeout": 15000,
+      "_comment": "Modal re-appears because bob is still FTUE"
+    },
+    {
+      "action": "extract",
+      "into": "mutePersistedFromBranchA",
+      "expression": "(() => { const b = document.querySelector('[data-testid=sound-mute]'); return b ? 'aria-pressed=' + b.getAttribute('aria-pressed') : 'no mute btn'; })()",
+      "_comment": "Should read true - proves branch A's choice persisted server-side across the reload"
+    },
+    {
+      "action": "eval",
+      "into": "spyInstall",
+      "_comment": "Spy play() so we can prove the WITH SOUND branch actually starts title music at non-zero volume",
+      "expression": "(() => { if (window.__sndSpy) return 'already installed'; const spy = { played: [] }; window.__sndSpy = spy; const short = (s) => { try { return String(s||'').split('/').pop().split('?')[0]; } catch (e) { return String(s); } }; const nativePlay = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { spy.played.push({ src: short(this.currentSrc || this.src), volume: Number(this.volume.toFixed(3)) }); return nativePlay.apply(this, arguments); }; return 'installed'; })()"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='sound-choice-on']",
+      "_comment": "BRANCH B: PLAY WITH SOUND"
+    },
+    {
+      "action": "waitForNotVisible",
+      "selector": "[data-testid='sound-choice-modal']",
+      "timeout": 8000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid=sound-mute][aria-pressed=false]",
+      "timeout": 8000,
+      "_comment": "ASSERTION 3: 'with sound' leaves the game unmuted - and clears the muted state persisted by branch A."
+    },
+    {
+      "action": "sleep",
+      "ms": 1200,
+      "_comment": "Give titleMusic.start() time to fire"
+    },
+    {
+      "action": "extract",
+      "into": "musicAfterChoosingSound",
+      "expression": "(() => { const s = window.__sndSpy; if (!s) return 'SPY MISSING'; if (!s.played.length) return 'NOTHING PLAYED'; return s.played.map(p => p.src + '@v' + p.volume).join(', '); })()",
+      "_comment": "ASSERTION 4 (reported): title music must play at non-zero volume. v0 here would mean the lazy-channel mute leak regressed."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 10000,
+      "_comment": "Lobby is reachable after the choice - the modal is not blocking the app"
+    },
+    {
+      "action": "screenshot",
+      "_comment": "Lobby after choosing PLAY WITH SOUND - mute icon should read unmuted",
+      "path": "/tmp/ftue-sound-choice-lobby.png"
+    }
+  ]
+}

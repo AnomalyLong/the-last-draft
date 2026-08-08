@@ -42,6 +42,7 @@ function toAwayPlayers(roster = []) {
 import { getInlineSplash, subscribeSplash, applyGlobalSplash } from './splashConfig.js';
 import { TitleScreen, SplashScreen, SplashCourt, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FeaturedEventsScreen, BattlePassScreen, FtueIntroVideo } from './components/index.js';
 import { TitleStrip } from './components/TitleStrip.jsx';
+import { SoundChoiceModal } from './components/SoundChoiceModal.jsx';
 
 // Column wrapper that pins the global TitleStrip (lobby header) above a
 // full-screen scene. The wrapped screens use `position: absolute; inset: 0`
@@ -111,6 +112,33 @@ export default function App() {
     });
   }, [muted]);
 
+  // ── FTUE sound choice ────────────────────────────────────────────────
+  // Brand-new users get one modal before anything else, so the very first
+  // sound the game makes is one they opted into. Session-scoped on purpose:
+  // it re-asks on reload until they finish their first game (isFtue flips
+  // off server-side at gamesPlayed >= 1), which is cheap and means a user who
+  // bounced before playing isn't silently stuck with a mis-tap.
+  const [soundChoiceDone, setSoundChoiceDone] = React.useState(false);
+  // The lobby-music effect runs ABOVE the `isFtue` declaration, so it can't
+  // reference that state directly (TDZ in its dep array). A ref updated during
+  // render is the seam: it lets the music effect know a sound-choice modal is
+  // on screen without reordering the component's state declarations.
+  const soundChoicePendingRef = React.useRef(false);
+
+  const handleSoundChoice = React.useCallback((wantSound) => {
+    const next = !wantSound;
+    setMuted(next);
+    setMutedState(next);
+    setSoundChoiceDone(true);
+    // This click is a real user gesture — the only moment iOS Safari will let
+    // us open the audio context. Kick the music here or it stays silent until
+    // the next tap.
+    if (wantSound) titleMusic.start();
+    trpc.user.setMuted.mutate({ muted: next }).catch((err) => {
+      console.error('[mute] failed to persist FTUE sound choice:', err);
+    });
+  }, []);
+
   /* Publish --fw-bottom-gutter so the lobby's bottom nav can clear the phone's
      gesture bar. On Reddit mobile web our iframe is taller than the usable
      screen and the child document cannot see that via env() -- see
@@ -120,6 +148,9 @@ export default function App() {
 
   React.useEffect(() => {
     if (!audioPreferenceLoaded) return;
+    // Hold all music while the FTUE sound-choice modal is up — the whole point
+    // of that modal is that nothing plays until the user has said yes.
+    if (soundChoicePendingRef.current) { titleMusic.stop(); return; }
     if (scene === 'title' || scene === 'options' || scene === 'teamSelect' || scene === 'draft' || scene === 'draftHub' || scene === 'collection' || scene === 'matchmaking' || scene === 'featuredEvents' || scene === 'battlePass') {
       bgMusic.stop();
       bounceBall.stop();
@@ -127,7 +158,7 @@ export default function App() {
     } else {
       titleMusic.stop();
     }
-  }, [scene, audioPreferenceLoaded]);
+  }, [scene, audioPreferenceLoaded, soundChoiceDone]);
 
   // applyAllVolumes() re-applies every live channel and notifies subscribers
   // (FTUE typing loop, intro video), so a slider drag reaches all of them.
@@ -358,6 +389,10 @@ export default function App() {
   const [rawLineup, setRawLineup]   = React.useState({});
   const [isFtue, setIsFtue] = React.useState(true); // true until persisted completion flag is received
   const [ftueIntroSeen, setFtueIntroSeen] = React.useState(false);
+  // Render-time assignment (not an effect): the music effect below reads this
+  // on the same commit, so it must be correct before effects run.
+  const showSoundChoice = !isInline && isFtue && audioPreferenceLoaded && !soundChoiceDone;
+  soundChoicePendingRef.current = showSoundChoice;
   // FTUE onboarding simplification: the intro video screen is disabled. The
   // scene + component are left intact — flip this to true to bring it back.
   const FTUE_INTRO_ENABLED = false;
@@ -1146,6 +1181,11 @@ export default function App() {
             </>)}
           </div>
         </div>
+      )}
+
+      {/* ── FTUE SOUND CHOICE (first screen a new user touches) ── */}
+      {scene === 'title' && showSoundChoice && (
+        <SoundChoiceModal onChoose={handleSoundChoice} />
       )}
 
       {/* ── OUT OF ENERGY ─────────────────────────────────────── */}

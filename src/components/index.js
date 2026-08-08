@@ -37,3 +37,4 @@ export { default as LobbyScreen } from './LobbyScreen.jsx';
 export { default as FeaturedEventsScreen } from './FeaturedEventsScreen.jsx';
 export { default as BattlePassScreen } from './BattlePassScreen.jsx';
 export { FtueIntroVideo } from './FtueIntroVideo.jsx';
+export { SoundChoiceModal } from './SoundChoiceModal.jsx';

@@ -1,0 +1,330 @@
+{
+  "name": "Game SFX honour mute, and lazy loop channels do not leak past it",
+  "description": "Proves the SFX path is healthy and that mute was the discriminator. carol's persisted preference is muted, so her dunk/shot/miss fire at volume 0. This toggles mute off in the lobby before playing; the same sounds must then play at their real base volumes.",
+  "steps": [
+    {
+      "action": "switchUser",
+      "username": "carol",
+      "_comment": "Restarts dev server + re-attaches"
+    },
+    {
+      "action": "reload",
+      "waitMs": 3500,
+      "_comment": "Fresh app boot as carol"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='lobby-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "eval",
+      "into": "spyInstall",
+      "_comment": "Spy both layers: window.Audio (lazy construction) and HTMLMediaElement.prototype.play (the cloneNode clones makeSound actually plays).",
+      "expression": "(() => { if (window.__audioSpy) return 'already installed'; const spy = { constructed: [], played: [], settled: [] }; window.__audioSpy = spy; const short = (s) => { try { return String(s||'').split('/').pop().split('?')[0]; } catch (e) { return String(s); } }; const NativeAudio = window.Audio; function SpyAudio(src) { spy.constructed.push(short(src)); return new NativeAudio(src); } SpyAudio.prototype = NativeAudio.prototype; window.Audio = SpyAudio; const nativePlay = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { const name = short(this.currentSrc || this.src || this.getAttribute('src')); spy.played.push({ src: name, volume: Number(this.volume.toFixed(3)) }); let p; try { p = nativePlay.apply(this, arguments); } catch (e) { spy.settled.push({ src: name, status: 'threw', err: String(e && e.name) }); throw e; } if (p && p.then) { p.then(function(){ spy.settled.push({src:name,status:'ok'}); }, function(e){ spy.settled.push({src:name,status:'rejected',err:String(e && e.name)}); }); } return p; }; return 'installed'; })()"
+    },
+    {
+      "action": "extract",
+      "expression": "(() => window.__audioSpy ? 'spy alive' : 'SPY MISSING')()",
+      "into": "spyCheck"
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const b=document.querySelector('[data-testid=sound-mute]'); return b? (b.getAttribute('aria-pressed')||b.getAttribute('data-muted')||b.textContent||'found').trim() : 'no mute btn'; })()",
+      "into": "muteBefore"
+    },
+    {
+      "action": "eval",
+      "into": "unmuteAction",
+      "_comment": "DETERMINISTIC: only click when actually muted. A blind toggle flips carol's PERSISTED preference on every run, so the test would alternate muted/unmuted between runs and its result would flip with it.",
+      "expression": "(() => { const b=document.querySelector('[data-testid=sound-mute]'); if(!b) return 'no mute btn'; const on = b.getAttribute('data-muted')==='1' || b.getAttribute('aria-pressed')==='true'; if(!on) return 'already unmuted'; b.dispatchEvent(new MouseEvent('click',{bubbles:true})); return 'clicked to unmute'; })()"
+    },
+    {
+      "action": "sleep",
+      "ms": 800
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const b=document.querySelector('[data-testid=sound-mute]'); return b? (b.getAttribute('aria-pressed')||b.getAttribute('data-muted')||b.textContent||'found').trim() : 'no mute btn'; })()",
+      "into": "muteAfter"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__playRot = 0; return 'reset'; })()",
+      "_comment": "Reset the play-choice rotation counter for this run"
+    },
+    {
+      "action": "if",
+      "condition": "!!document.querySelector('.lb2-coach')",
+      "steps": [
+        {
+          "action": "click",
+          "selector": ".lb2-coach"
+        },
+        {
+          "action": "sleep",
+          "ms": 400
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('.lb2-coach')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": ".lb2-coach"
+            }
+          ]
+        }
+      ],
+      "_comment": "Dismiss lobby FTUE coach if carol ever gets reset to FTUE"
+    },
+    {
+      "action": "click",
+      "selector": "[data-testid='bnav-play']",
+      "_comment": "PLAY \u2192 casual matchmaking (NOT queue-btn-training, which is INSTANT and skips the countdown)"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='matchmaking-screen']",
+      "timeout": 15000
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='matchmaking-screen'][data-state='vs']",
+      "timeout": 20000,
+      "_comment": "Opponent locked; TIP-OFF countdown begins at 5"
+    },
+    {
+      "action": "extract",
+      "expression": "document.querySelector('.launch-bar .count')?.textContent?.trim() ?? 'none'",
+      "into": "countStart"
+    },
+    {
+      "action": "sleep",
+      "ms": 2000
+    },
+    {
+      "action": "extract",
+      "expression": "document.querySelector('.launch-bar .count')?.textContent?.trim() ?? 'none'",
+      "into": "countMid",
+      "_comment": "Must be lower than countStart \u2014 proves the countdown ticks"
+    },
+    {
+      "action": "waitFor",
+      "selector": ".launch-bar.tap-to-start",
+      "timeout": 15000,
+      "_comment": "Countdown hit 0 \u2192 phase 'ready'"
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/carol-01-tap-to-start.png"
+    },
+    {
+      "action": "click",
+      "selector": ".launch-bar.tap-to-start",
+      "_comment": "LAUNCH GAME"
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='score-home']",
+      "timeout": 20000,
+      "_comment": "GameScene HUD mounted"
+    },
+    {
+      "action": "while",
+      "max": 70,
+      "until": "(() => { const n = s => parseInt(((document.querySelector('[data-testid=' + s + ']')||{}).textContent)||'0',10)||0; return n('score-home') + n('score-away') >= 10; })()",
+      "steps": [
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"levelup-ok\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='levelup-ok']",
+              "_comment": "STAT UPGRADE modal \u2014 blocks all play until dismissed"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid^=\"levelup-ability-\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const a = document.querySelector('[data-testid^=\"levelup-ability-\"]'); window.__ups = (window.__ups ?? 0) + 1; return a ? a.getAttribute('data-testid') : ''; })()",
+              "into": "abilityPick"
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${abilityPick}']",
+              "_comment": "CHOOSE AN UPGRADE \u2192 take the first ability"
+            },
+            {
+              "action": "sleep",
+              "ms": 400
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"bball-tip\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='bball-tip']",
+              "_comment": "Mascot dialogue \u2192 dismiss"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"defense-ftue\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='defense-ftue']"
+            },
+            {
+              "action": "sleep",
+              "ms": 300
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"quarter-summary-continue\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='quarter-summary-continue']",
+              "_comment": "End-of-quarter recap \u2192 continue"
+            },
+            {
+              "action": "sleep",
+              "ms": 500
+            }
+          ],
+          "_comment": "Gate on the CONTINUE button itself \u2014 the summary root renders first, the button only after BTN_TICK frames"
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"play-picker\"][data-iso-mode=\"1\"]')",
+          "steps": [
+            {
+              "action": "click",
+              "selector": "[data-testid='iso-target-PG']",
+              "_comment": "ISO submenu open \u2192 PG keeps the ball"
+            },
+            {
+              "action": "sleep",
+              "ms": 400
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"play-picker\"][data-iso-mode=\"0\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const all = [...document.querySelectorAll('[data-testid^=\"play-\"]')].filter(e => e.getAttribute('data-testid') !== 'play-picker'); const enabled = all.filter(e => e.getAttribute('data-disabled') === '0'); const list = enabled.length ? enabled : all; const rot = window.__playRot ?? 0; const idx = list.length ? (rot % list.length) : 0; const p = list[idx] || list[0]; window.__plays = (window.__plays ?? 0) + 1; window.__playRot = rot + 1; return p ? p.getAttribute('data-testid') : ''; })()",
+              "into": "playPick",
+              "_comment": "Rotate 1st/2nd/3rd enabled choice each possession (repeat) so every play gets exercised, not just the first. 3rd slot is ISO -> its submenu is handled by the iso-mode branch above on the next tick."
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${playPick}']",
+              "_comment": "CALL A PLAY"
+            },
+            {
+              "action": "sleep",
+              "ms": 450
+            }
+          ]
+        },
+        {
+          "action": "if",
+          "condition": "!!document.querySelector('[data-testid=\"defense-picker\"]')",
+          "steps": [
+            {
+              "action": "extract",
+              "expression": "(() => { const d = document.querySelector('[data-testid=\"defense-motion\"], [data-testid=\"defense-guard\"], [data-testid=\"defense-aggressive\"]'); window.__defs = (window.__defs ?? 0) + 1; return d ? d.getAttribute('data-testid') : ''; })()",
+              "into": "defPick"
+            },
+            {
+              "action": "click",
+              "selector": "[data-testid='${defPick}']",
+              "_comment": "CALL A DEFENSE"
+            },
+            {
+              "action": "sleep",
+              "ms": 450
+            }
+          ]
+        },
+        {
+          "action": "sleep",
+          "ms": 450,
+          "_comment": "Let the possession animate out"
+        }
+      ],
+      "_comment": "Same gate-answering body as carol-play-full-match, but exits at 10 combined points instead of the final buzzer -- enough made baskets to guarantee swish/dunk."
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/sfx-realmatch.png"
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const n = s => (document.querySelector('[data-testid=' + s + ']')||{}).textContent || '?'; return JSON.stringify({home:n('score-home'),away:n('score-away'),q:n('quarter')}); })()",
+      "into": "scoreState"
+    },
+    {
+      "action": "extract",
+      "expression": "(() => window.__audioSpy ? 'spy alive' : 'SPY MISSING')()",
+      "into": "spyAfterMatch"
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const s=window.__audioSpy; if(!s) return 'NO SPY'; const sfx=['swish.wav','dunk.wav','shot.wav','miss.wav','block.wav']; return sfx.map(f=>{const h=s.played.filter(p=>p.src===f); return f.replace('.wav','')+':n='+h.length+',v='+(h.length?h[0].volume:'-');}).join(' '); })()",
+      "into": "scoringSfx",
+      "_comment": "DECISIVE: the exact sounds the bug names -- ball goes in (swish/shot) and dunk. v=0 means mute was applied to them."
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const s=window.__audioSpy; if(!s) return 'NO SPY'; const m=['game.mp3','title.mp3','dribble.wav','cursor.mp3']; return m.map(f=>{const h=s.played.filter(p=>p.src===f); return f.split('.')[0]+':n='+h.length+',v='+(h.length?h[0].volume:'-');}).join(' '); })()",
+      "into": "loopChannels",
+      "_comment": "The lazily-constructed loop channels. Non-zero here while SFX are 0 = mute leaking on exactly the channels whose getters set volume to the BASE constant."
+    },
+    {
+      "action": "extract",
+      "expression": "(() => { const s=window.__audioSpy; if(!s) return 'NO SPY'; const bad=s.settled.filter(r=>r.status!=='ok'); return bad.length? bad.slice(0,6).map(r=>r.src+'->'+r.status+':'+r.err).join(' ') : 'all play() promises resolved ok'; })()",
+      "into": "playFailures",
+      "_comment": "NotAllowedError would mean autoplay blocking, a different root cause entirely."
+    },
+    {
+      "action": "eval",
+      "into": "assertion",
+      "expression": "(() => { document.querySelectorAll('#probe-sfx-audible').forEach(n=>n.remove()); const s=window.__audioSpy; if(!s) return 'NO SPY'; const scoring=s.played.filter(p=>['swish.wav','dunk.wav','shot.wav'].indexOf(p.src)>=0); const audible=scoring.filter(p=>p.volume>0); if(scoring.length>0 && audible.length===scoring.length){ const d=document.createElement('div'); d.id='probe-sfx-audible'; document.body.appendChild(d);} return JSON.stringify({scoring:scoring.length,audible:audible.length}); })()"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-sfx-audible",
+      "timeout": 3000,
+      "_comment": "ASSERTION: with mute off, every made-basket SFX played at NON-ZERO volume. This is the regression guard for the lazy-channel mute leak fixed in basketball.js."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-sfx-audible').forEach(n=>n.remove()); return 'cleaned'; })()"
+    }
+  ]
+}

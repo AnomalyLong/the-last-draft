@@ -60,7 +60,13 @@ let _bounceTimer  = null;
 function getBounce() {
   if (_bounce) return _bounce;
   _bounce = new Audio(bounceSound);
-  _bounce.volume = BOUNCE_BASE;
+  // MUST apply the current volume/mute state, not the bare base. These channels
+  // are constructed lazily now, which means construction can happen AFTER the
+  // user's saved mute preference has been applied (user.init resolves a few
+  // hundred ms after mount and calls setMuted). applyAllVolumes() only re-applies
+  // to channels that already exist, so a channel born after that call would
+  // otherwise keep full volume forever and leak straight past mute. (Aug 8)
+  _bounce.volume = BOUNCE_BASE * sfxVolume();
   _bounce.addEventListener('ended', () => {
     if (!_bounceActive) return;
     _bounceTimer = setTimeout(() => {
@@ -94,7 +100,7 @@ function getBgMusic() {
   if (_bgMusic) return _bgMusic;
   _bgMusic = new Audio(gameMusicSrc);
   _bgMusic.loop = true;
-  _bgMusic.volume = BG_BASE;
+  _bgMusic.volume = BG_BASE * musicVolume();   // see getBounce — lazy channels must honour mute at birth
   return _bgMusic;
 }
 export const bgMusic = {
@@ -110,7 +116,7 @@ function getTitleMusic() {
   if (_titleMusic) return _titleMusic;
   _titleMusic = new Audio(titleMusicSrc);
   _titleMusic.loop = true;
-  _titleMusic.volume = TITLE_BASE;
+  _titleMusic.volume = TITLE_BASE * musicVolume();   // see getBounce — lazy channels must honour mute at birth
   return _titleMusic;
 }
 export const titleMusic = {
