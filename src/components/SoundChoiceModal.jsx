@@ -22,23 +22,39 @@ const SPIN_FRAMES = SPIN_MOVE_FRAMES.length;  // 12
 const CYCLE_FRAMES = DRIBBLE_FRAMES + SPIN_FRAMES;
 
 // ---------------------------------------------------------------------------
-// Coordinate space
+// Coordinate space — and the ball/player size ratio
 //
-// Both sprites are authored in their own boxes:
-//   SPIN_MOVE_FRAMES — raw coords, x 14..30, y 22..38 (feet ink row 38)
-//   RUN_BALL_FRAMES  — own 14x18 box, ink y 0..17 (feet ink row 17)
+// THE RULE: the court draws <Player scale={1.5}> but <Ball scale={1}>. The
+// player's pixels are 1.5 units each; the ball's are 1. Any surface that draws
+// both has to honour that asymmetry or the ball comes out the wrong size.
 //
-// Everything is drawn in the SPIN sprite's space. A 1x1 rect at ink row 38
-// spans [38,39), so the actual floor line is the bottom EDGE at y=39 — that
-// distinction is what the old ball math got wrong. Running feet land on the
-// same line: ink row 17 + 21 = 38, bottom edge 39.
-const RUN_DX = 15;
-const RUN_DY = 21;
-const FLOOR_EDGE_Y = 39;
+//   court:  ball 7 units : player 14*1.5 = 21 units   -> ratio 0.33
+//
+// This modal originally drew BOTH at scale 1 (ball 7 : player 14), a ratio of
+// 0.50 — a ball exactly 1.5x too big, because the player's 1.5 was never
+// applied. Fixed by scaling the SPRITES by 1.5 and leaving Ball at 1, which is
+// the court's arrangement verbatim rather than an approximation of it. Scaling
+// the ball DOWN by 1/1.5 would have matched the ratio too, but it would put the
+// ball's pixels on a 0.667-unit grid under shapeRendering=crispEdges; keeping
+// Ball at scale 1 leaves its rects on whole units exactly like the court.
+const PLAYER_SCALE = 1.5;
 
-// viewBox contains the ball at its left extent (x=10) and the spin sprite's
-// right edge (x=31); vertically the ball's apex (y=21) down to the floor.
-const VB_X = 10, VB_Y = 21, VB_W = 21, VB_H = 18;
+// Sprite ink boxes, measured from the sprite data (not assumed):
+//   SPIN_MOVE_FRAMES — raw coords x 14..30, y 22..38  (17x17, feet ink row 38)
+//   RUN_BALL_FRAMES  — own box    x  0..13, y  0..17  (14x18, feet ink row 17)
+//   BALL_FRAMES      — 7x7 box, ink x 1..5, y ..5 in all three phases
+//
+// A 1x1 rect at ink row 38 spans [38,39), so at PLAYER_SCALE the spin sprite's
+// floor is its bottom EDGE: 38*1.5 + 1.5 = 58.5. Getting that edge-vs-row
+// distinction wrong is what left the ball hovering before.
+const FLOOR_EDGE_Y = 38 * PLAYER_SCALE + PLAYER_SCALE;   // 58.5
+const RUN_H = 18 * PLAYER_SCALE;                         // 27
+const RUN_W = 14 * PLAYER_SCALE;                         // 21
+const SPIN_CX = ((14 + 30 + 1) * PLAYER_SCALE) / 2;      // 33.75 — spin box centre
+// Run sprite: feet on the same floor edge, body centred under the spin sprite
+// so the handoff between phases doesn't jump sideways.
+const RUN_DY = FLOOR_EDGE_Y - RUN_H;                     // 31.5
+const RUN_DX = SPIN_CX - RUN_W / 2;                      // 23.25
 
 // ---------------------------------------------------------------------------
 // Ball
@@ -55,21 +71,16 @@ const VB_X = 10, VB_Y = 21, VB_W = 21, VB_H = 18;
 // (floor(now/80) % 6), not mount time, so the bounce stays locked to the
 // stride. The run frame below is computed the same way for that reason.
 //
-// Floor alignment — the bug this fixes. BALL_FRAMES ink does not fill its 7x7
-// box: up/mid/flat all bottom out at local row 5, not 6. Ball.jsx centres on
-// the BOX (cy - 7/2), so the drawn underside sits at cy - 3.5 + 6 + yOff, a
-// full 1px above where box-centred math predicts. The previous cy of 24.5 was
-// derived as "cy + 3.5 + 10 = 38" — wrong on both counts (box instead of ink,
-// ink row instead of floor edge), leaving the ball hanging 2px clear of the
-// floor. At this scale 1 unit is ~6.7 screen px, so it read as a ball that
-// never touches the ground.
+// Floor alignment. BALL_FRAMES ink does not fill its 7x7 box: up/mid/flat all
+// bottom out at local row 5, not 6. Ball.jsx centres on the BOX (cy - 7/2), so
+// the drawn underside sits at cy - 3.5 + 6 + yOff.
 const BALL_YOFF_MAX = 10;             // deepest point of the syncToRun stride
 const BALL_INK_BOTTOM = 6;            // bottom edge of ink row 5 within the 7x7 box
-const BALL_CY = FLOOR_EDGE_Y - BALL_INK_BOTTOM + 3.5 - BALL_YOFF_MAX;  // 26.5
-// Court puts the ball 10px ahead of player centre; player centre here is
-// RUN_DX + 7 = 22. 12.5 keeps that lead while landing the ink on whole pixels
-// under shapeRendering=crispEdges.
-const BALL_CX = 12.5;
+const BALL_CY = FLOOR_EDGE_Y - BALL_INK_BOTTOM + 3.5 - BALL_YOFF_MAX;  // 46
+// Court leads the ball 10 units ahead of player centre while moving
+// (GameScene: cx = p.cx - 10 facing left). Same number here, unscaled, because
+// it is a ball-space offset in both places.
+const BALL_CX = SPIN_CX - 10;                            // 23.75
 //
 // Spin phase: NO separate <Ball>. The ball is drawn into SPIN_MOVE_FRAMES
 // itself as a compact 4x4 blob that arcs from low-right (f1) up through the
@@ -77,11 +88,19 @@ const BALL_CX = 12.5;
 // (f10-f11). That is why GameScene.jsx and SplashCourt.jsx both gate <Ball>
 // behind `!p.isSpinning` — during a spin the sprite already has one.
 
+// viewBox spans the ball at its left extent through the spin sprite's right
+// edge, and the spin sprite's crown down to the floor edge.
+const VB_X = 20, VB_Y = 33, VB_W = 27, VB_H = 26;
+
 // `lineHeight` is set explicitly on every text node below. App's root sets
 // lineHeight: 0 (load-bearing for the pixel-art layout) and it inherits, so
 // any container with real text has to opt back in or the lines overlap.
 
-function SpinSprite({ jerseyColor = JERSEY_HOME, size = 140 }) {
+// Default size keeps the player's ON-SCREEN height where it was before the
+// ratio fix: the viewBox grew ~1.5x with the sprites, so the rendered width
+// comes down to compensate. It is the ball that shrinks, not the player that
+// grows.
+function SpinSprite({ jerseyColor = JERSEY_HOME, size = 124 }) {
   // Driven by rAF, not setInterval, and for the same reason Player.jsx does it:
   // <Ball syncToRun> updates its bounce every animation frame off ABSOLUTE time.
   // A setInterval here re-rendered the sprite on its own jittery schedule, so
@@ -113,14 +132,15 @@ function SpinSprite({ jerseyColor = JERSEY_HOME, size = 140 }) {
   const isSpinning = cycleFrame >= DRIBBLE_FRAMES;
   const spinFrame = isSpinning ? cycleFrame - DRIBBLE_FRAMES : 0;
 
+  // Same rect shape Player.jsx uses: coords and size both multiplied by scale.
   const paint = (pixels, keyPrefix) =>
     pixels.map(([x, y, fill], i) => (
       <rect
         key={`${keyPrefix}${i}`}
-        x={x}
-        y={y}
-        width={1}
-        height={1}
+        x={x * PLAYER_SCALE}
+        y={y * PLAYER_SCALE}
+        width={PLAYER_SCALE}
+        height={PLAYER_SCALE}
         fill={fill === JERSEY_BASE ? jerseyColor : fill}
       />
     ));
@@ -148,9 +168,11 @@ function SpinSprite({ jerseyColor = JERSEY_HOME, size = 140 }) {
           <g data-testid="sound-choice-run" transform={`translate(${RUN_DX}, ${RUN_DY})`}>
             {paint(RUN_BALL_FRAMES[runFrame] || RUN_BALL_FRAMES[0], 'r')}
           </g>
-          {/* Same props the court passes for a moving ball-handler. Remounting
-              each cycle is harmless: syncToRun reads absolute time, so the
-              bounce resumes in phase rather than restarting from the top. */}
+          {/* Same props the court passes for a moving ball-handler, INCLUDING
+              scale 1 while the sprite around it is at 1.5. That asymmetry is
+              the whole point — see the ratio note at the top of this file.
+              Remounting each cycle is harmless: syncToRun reads absolute time,
+              so the bounce resumes in phase rather than restarting. */}
           <g data-testid="sound-choice-ball">
             <Ball cx={BALL_CX} cy={BALL_CY} scale={1} lift={3} syncToRun />
           </g>
