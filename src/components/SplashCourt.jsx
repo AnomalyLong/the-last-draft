@@ -16,7 +16,7 @@ import { SpecialPassBall } from './SpecialPassBall.jsx';
 import { Shadow } from './Shadow.jsx';
 import { PixelTextC } from './PixelText.jsx';
 import { SpecialMoveCards } from './SpecialMoveCards.jsx';
-import { PLAYS } from './PlayPickerOverlay.jsx';
+import { PLAYS, PlayPickerOverlay } from './PlayPickerOverlay.jsx';
 import { MONOGRAM_CELL_W } from '../sprites/monogram.js';
 
 // ── SplashCourt — inline (feed) splash showing the debug-court sandbox ────────
@@ -33,9 +33,10 @@ import { MONOGRAM_CELL_W } from '../sprites/monogram.js';
 // ── ATTRACT ──────────────────────────────────────────────────────────────────
 //
 //   'live'   → mounts useGame with the fixture rosters and runs the real
-//              `testGamePlay` command — the actual match loop (jump ball,
-//              possessions, shots, nets, clock), same as the sandbox court.
-//              Muted, and the human-input gates are auto-answered (below).
+//              `testGamePlayHome` command — the actual match loop (possessions,
+//              shots, nets, clock), same as the sandbox court, but opening on a
+//              home half-court possession instead of the tip-off. Muted, and the
+//              human-input gates are auto-answered (below).
 //
 //   'static' → INITIAL_PLAYERS jump-ball formation, no sim. This is exactly
 //              what the sandbox court looks like the instant you enter it,
@@ -120,14 +121,13 @@ export const AUTO_PLAY = 'rotate';
 // ── GATE_MS ──────────────────────────────────────────────────────────────────
 // How long to sit on each human-input gate before auto-answering it.
 //
-// These gates exist so a PLAYER can choose. Nothing in a feed tile can choose,
-// so every millisecond spent here is just the court standing still — the clock
-// is stopped and the possession is parked, with none of the overlays that would
-// explain the pause mounted. So: answer immediately.
+// Most of these gates exist so a PLAYER can choose. Nothing in a feed tile can
+// choose, so time spent on one is just the court standing still — the clock is
+// stopped and the possession parked. Those answer immediately.
 //
-// This matters most for the DEFENSE picker. useGame self-dismisses that one
+// That mattered most for the DEFENSE picker. useGame self-dismisses that one
 // after DEFENSE_PICK_MS (8250ms), which is why the splash originally left it
-// alone — but 8.25s of frozen court per away possession is the bulk of the dead
+// alone — but 8.25s of frozen court per away possession was the bulk of the dead
 // air in the tile. Pre-empting it with onPickDefense(null) runs the exact same
 // continuation the auto-dismiss would, just without the wait.
 //
@@ -135,6 +135,32 @@ export const AUTO_PLAY = 'rotate';
 // (onPickPlay) and 100ms (onPickDefense). Those are the real game's animation
 // beats and are deliberately left alone.
 export const GATE_MS = 0;
+
+// ── PLAY_GATE_MS ─────────────────────────────────────────────────────────────
+// The PLAY picker is the exception, and it is the one gate the tile WANTS to
+// dwell on: "call a play" is the game's signature decision, so the tile shows
+// the three real cards for a beat before answering, the way a player would see
+// them. This is only worth doing because PlayPickerOverlay is now actually
+// mounted below — a dwell without the overlay is just a frozen court.
+//
+// Note this is a dwell on top of the panel's own entrance animation: the cards
+// stagger in over ~14 rAF ticks each, so the full row is only settled ~600ms in.
+export const PLAY_GATE_MS = 3000;
+
+// ── PLAY_PICKER_DY ───────────────────────────────────────────────────────────
+// The picker is hardcoded to the bottom third of the screen (DLG_Y 232, height
+// 116 → y 232..348) because in the real game that band is empty. Here it is not:
+// the CTA sits at y=304 and would be buried under the panel for the whole dwell,
+// which is the one thing on the tile that must stay readable.
+//
+// Sized against the panel's WORST frame, not its settled one. PlayPickerOverlay's
+// cardAnim staggers the three cards in from +22px below their resting spot, so for
+// the first ~200ms the lowest ink is the card shadow at 348+22+3 = 373, not the
+// 348 the panel eventually occupies. -56 cleared the settled panel and still let
+// the entrance clip the CTA by ~9px; -68 clears every frame (373-68 = 305 for one
+// sample, 288 settled), which is why the test asserts the max over the window
+// rather than a single sighting.
+export const PLAY_PICKER_DY = -68;
 
 const SCALE    = ZOOM_W / W;                           // 0.6
 const SCALED_H = TOTAL_H * SCALE;                      // 208.8
@@ -384,7 +410,7 @@ function SplashCourtLive() {
     return () => setAudioSuspended(false);
   }, []);
 
-  React.useEffect(() => { handleCommand('testGamePlay'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  React.useEffect(() => { handleCommand('testGamePlayHome'); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cycles PLAYS so every possession type shows up in rotation rather than the
   // sim only ever running motion offence. Ref, not state: bumping it must not
@@ -397,7 +423,7 @@ function SplashCourtLive() {
       const play = PLAYS[playCycleRef.current % PLAYS.length];
       playCycleRef.current += 1;
       onPickPlay(play);
-    }, GATE_MS);
+    }, PLAY_GATE_MS);
     return () => clearTimeout(t);
   }, [game.playPickState]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -420,13 +446,13 @@ function SplashCourtLive() {
     return () => clearTimeout(t);
   }, [game.quarterSummary]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Loop forever: stopGamePlay first, or testGamePlay rejects with
+  // Loop forever: stopGamePlay first, or testGamePlayHome rejects with
   // "already running" (it guards on gameLoopActiveRef).
   React.useEffect(() => {
     if (!game.gameOver) return;
     const t = setTimeout(() => {
       handleCommand('stopGamePlay');
-      handleCommand('testGamePlay');
+      handleCommand('testGamePlayHome');
     }, RESTART_MS);
     return () => clearTimeout(t);
   }, [game.gameOver]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -439,9 +465,20 @@ function SplashCourtLive() {
 
   return (
     <Frame cameraX={game.cameraX} scoreline={scoreline}
-      overlay={SHOW_MOVE_CARDS
-        ? <SpecialMoveCards players={game.players} cameraX={0} cy={SPLASH_CARD_CY} withTestIds />
-        : null}>
+      overlay={<>
+        {/* The real picker, purely as a display. pointerEvents:none matters:
+            App.jsx puts onClick={tryExpand} on the whole inline container, and
+            PlayCard carries its own onClick — without this a tap on a card
+            would also resolve the play early, out of the rotation. */}
+        {game.playPickState && (
+          <g data-testid="splash-play-picker" style={{ pointerEvents: 'none' }}
+            transform={`translate(0, ${PLAY_PICKER_DY})`}>
+            <PlayPickerOverlay cameraX={0} onPick={() => {}} disabledPlayId={null} />
+          </g>
+        )}
+        {SHOW_MOVE_CARDS &&
+          <SpecialMoveCards players={game.players} cameraX={0} cy={SPLASH_CARD_CY} withTestIds />}
+      </>}>
       <CourtLayer players={game.players} shot={game.shot}
         netSwish={game.netSwish} netDunk={game.netDunk} netMiss={game.netMiss}
         playerAlpha={game.playerAlpha} />

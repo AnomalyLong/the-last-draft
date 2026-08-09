@@ -55,6 +55,7 @@ export const COMMAND_META = {
   testSpinDunk:     { scope: 'game', help: 'testSpinDunk      — ball carrier drives to basket and spin-dunks' },
   testThreePointer: { scope: 'game', help: 'testThreePointer  — ball carrier runs to the 3-point line and shoots' },
   testGamePlay:     { scope: 'game', help: 'testGamePlay      — start continuous game loop' },
+  testGamePlayHome: { scope: 'game', help: 'testGamePlayHome  — game loop, no tip-off: home starts in offence with the ball' },
   stopGamePlay:     { scope: 'game', help: 'stopGamePlay      — stop the game loop' },
   testSpinMove:     { scope: 'game', help: 'testSpinMove      — ball carrier performs spin move animation' },
   testHomePG:       { scope: 'game', help: 'testHomePG        — give ball to home PG for testing' },

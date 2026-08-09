@@ -2420,7 +2420,13 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         if (!playersRef.current.find(p => p.hasBall)) { addLog('nobody has the ball', 'err'); return; }
         triggerSpinDunk();
 
-      } else if (op === 'testGamePlay') {
+      } else if (op === 'testGamePlay' || op === 'testGamePlayHome') {
+        // testGamePlayHome — the SAME match loop with the tip-off skipped: home
+        // opens in half-court offence already holding the ball. Added for the
+        // inline splash attract loop, which wants a live possession on screen
+        // immediately instead of the jump-ball choreography. The real game
+        // (App.jsx) calls plain testGamePlay and still tips off as before.
+        const skipTipOff = op === 'testGamePlayHome';
         if (gameLoopActiveRef.current) { addLog('already running — type stopGamePlay', 'err'); return; }
         // Reset end-of-game state from any previous match — otherwise the
         // GameOverScreen / quarter summary from the last game would reappear
@@ -2439,13 +2445,31 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
         // whole session and never remounts between matches).
         {
           const freshPlayers = buildFreshPlayers();
-          playersRef.current = freshPlayers;
-          setPlayers(freshPlayers);
+          // INITIAL_PLAYERS deliberately gives NOBODY the ball — the tip-off is
+          // what assigns it. ensurePGHasBall() returns early when there is no
+          // carrier at all, so skipping the tip-off without handing the home PG
+          // (id 1, same id ensurePGHasBall looks up) the ball would run the
+          // whole possession ball-less.
+          const posed = skipTipOff
+            ? freshPlayers.map(p => ({ ...p, hasBall: p.id === 1 }))
+            : freshPlayers;
+          playersRef.current = posed;
+          setPlayers(posed);
         }
         gameLoopActiveRef.current = true;
         bgMusic.start();
         startTimer(1);
-        addLog('game loop started');
+        addLog(skipTipOff ? 'game loop started (home offence, no tip-off)' : 'game loop started');
+        if (skipTipOff) {
+          // Exactly the continuation the tip-off runs, with 'home' as the winner.
+          // setupOffense('home') poses HOME_FORMATION — the same table
+          // testMoveHome uses — so this IS that command's formation.
+          setupOffense('home', () => {
+            if (!gameLoopActiveRef.current || gamePausedRef.current) return;
+            loopHomeRef.current?.();
+          });
+          return;
+        }
         triggerJumpBall((winnerTeam) => {
           // Safety check: bail out if the game was stopped or paused while the jump ball was animating
           if (!gameLoopActiveRef.current || gamePausedRef.current) return;
