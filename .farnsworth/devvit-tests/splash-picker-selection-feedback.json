@@ -1,0 +1,64 @@
+{
+  "name": "splash court: defense picker is mounted alongside the play picker, and both show the chosen card lifting + blinking with siblings dimmed",
+  "description": "Two changes. (1) DEFENSE PICKER: SplashCourt previously answered defensePickState at GATE_MS=0 with NO overlay drawn, so the away half of the game was invisible in the feed tile. DefensePickerOverlay is now mounted and answered on DEF_GATE_MS + SELECT_FLASH_MS (3700ms), which must stay under useGame's own DEFENSE_PICK_MS auto-dismiss (8250ms) or the game answers over the flash. (2) SELECTION FEEDBACK: after the dwell the tile marks the rotated card chosen instead of resolving instantly - cardSelectFx.js gives a lift (data-lift, ease-out to SEL_LIFT=8), a ~7.5Hz white blink, and SEL_DIM=0.42 on the rejected cards. Each of those three is asserted separately because any one alone is ambiguous: a lift is invisible on a still frame, a blink is invisible in a screenshot taken on the off phase, and neither reads as a CHOICE unless the siblings dim. Blink is detected by rect count inside the -selected group (1 = off phase, 2 = white wash on), not by colour, so it cannot pass vacuously. Also re-checks last turn's regression that the panel itself is NOT shifted off its real DLG_Y (the per-card lift transform is expected; a transform on the panel group is not). Runs in App Mobile via App.jsx's DEV-only ?mode=inline override, because Post View is not a WebContentsView and the runner cannot attach to it.",
+  "steps": [
+    {
+      "action": "eval",
+      "expression": "(() => { location.search = '?mode=inline&t=' + Date.now(); return 'navigating to inline'; })()",
+      "_comment": "Mounts the SplashCourt inline branch inside a normal webview. Cache-bust forces a fresh module load."
+    },
+    { "action": "sleep", "ms": 2500 },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='splash-court'][data-attract='live']",
+      "timeout": 20000,
+      "_comment": "ATTRACT='static' has no sim, so every assertion below would be vacuous."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='splash-play-picker']",
+      "timeout": 25000,
+      "_comment": "First home possession parks on the play gate at loop entry."
+    },
+    { "action": "screenshot", "path": "/tmp/pick-01-play-dwell.png" },
+    {
+      "action": "while",
+      "max": 450,
+      "until": "(() => { const S = window.__fx = window.__fx || { play: { samples:0, cards:{}, selIds:{}, maxSel:0, maxLift:0, blinkOn:0, blinkOff:0, sibMax:0, selfOp:0, unselPhase:0, shifted:0 }, def: { samples:0, cards:{}, selIds:{}, maxSel:0, maxLift:0, blinkOn:0, blinkOff:0, sibMax:0, selfOp:0, unselPhase:0, shifted:0 }, pickerSamples:0, ctaWhilePicker:0, noPickerSamples:0, ctaWhenNoPicker:0 }; const scan = (rootSel, panelSel, prefix, b) => { const root = document.querySelector(rootSel); if (!root) return; b.samples++; const panel = root.querySelector(panelSel); if (panel && panel.getAttribute('transform')) b.shifted++; const cards = [...root.querySelectorAll('[data-testid^=\"' + prefix + '\"][data-selected]')]; cards.forEach(c => { b.cards[c.getAttribute('data-testid')] = 1; }); const sel = cards.filter(c => c.getAttribute('data-selected') === '1'); const others = cards.filter(c => c.getAttribute('data-selected') !== '1'); if (sel.length > b.maxSel) b.maxSel = sel.length; if (sel.length === 0 && cards.length === 3) b.unselPhase++; if (sel.length === 1) { const c = sel[0]; b.selIds[c.getAttribute('data-testid')] = 1; const L = parseInt(c.getAttribute('data-lift') || '0', 10); if (L > b.maxLift) b.maxLift = L; const g = c.querySelector('[data-testid$=\"-selected\"]'); if (g) { if (g.querySelectorAll('rect').length >= 2) b.blinkOn++; else b.blinkOff++; } const so = Math.round(parseFloat(c.parentNode.getAttribute('opacity') || '1') * 100); if (so > b.selfOp) b.selfOp = so; if (others.length) { const mx = Math.max.apply(null, others.map(o => parseFloat(o.parentNode.getAttribute('opacity') || '1'))); const m = Math.round(mx * 100); if (m > b.sibMax) b.sibMax = m; } } }; scan(\"[data-testid='splash-play-picker']\", \"[data-testid='play-picker']\", 'play-', S.play); scan(\"[data-testid='splash-defense-picker']\", \"[data-testid='defense-picker']\", 'defense-', S.def); const anyPicker = !!document.querySelector(\"[data-testid='splash-play-picker'],[data-testid='splash-defense-picker']\"); const cta = !!document.querySelector(\"[data-testid='splash-cta']\"); if (anyPicker) { S.pickerSamples++; if (cta) S.ctaWhilePicker++; } else { S.noPickerSamples++; if (cta) S.ctaWhenNoPicker++; } const done = b => b.maxSel === 1 && b.blinkOn > 0 && b.blinkOff > 0; return done(S.play) && done(S.def); })()",
+      "steps": [ { "action": "sleep", "ms": 200 } ],
+      "_comment": "One sampler for both panels. Runs until each has been seen with a selection AND caught on both blink phases - so it cannot stop early on a lucky frame. 450 x 200ms caps at 90s, enough for a home possession to finish and an away possession to start."
+    },
+    { "action": "screenshot", "path": "/tmp/pick-02-after-sampling.png" },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('[id^=\"probe-\"]').forEach(n => n.remove()); const S = window.__fx || {}; const P = S.play || {}, D = S.def || {}; const mk = id => { const d = document.createElement('div'); d.id = id; document.body.appendChild(d); }; const n = o => Object.keys(o || {}).length; if (n(P.cards) === 3) mk('probe-play-3cards'); if (P.unselPhase > 0) mk('probe-play-dwell-unselected'); if (P.maxSel === 1) mk('probe-play-one-selected'); if (P.maxLift >= 6) mk('probe-play-lift'); if (P.blinkOn > 0 && P.blinkOff > 0) mk('probe-play-blink'); if (P.sibMax > 0 && P.sibMax <= 60 && P.selfOp >= 90) mk('probe-play-dim'); if (P.samples > 0 && P.shifted === 0) mk('probe-play-panel-unshifted'); if (D.samples > 0) mk('probe-def-mounted'); if (n(D.cards) === 3) mk('probe-def-3cards'); if (D.maxSel === 1) mk('probe-def-one-selected'); if (D.maxLift >= 6) mk('probe-def-lift'); if (D.blinkOn > 0 && D.blinkOff > 0) mk('probe-def-blink'); if (D.sibMax > 0 && D.sibMax <= 60 && D.selfOp >= 90) mk('probe-def-dim'); if (D.samples > 0 && D.shifted === 0) mk('probe-def-panel-unshifted'); if (S.pickerSamples > 0 && S.ctaWhilePicker === 0) mk('probe-cta-hidden-during-picker'); if (S.noPickerSamples > 0 && S.ctaWhenNoPicker > 0) mk('probe-cta-returns-after'); return JSON.stringify({ play: P, def: D, cta: { pickerSamples: S.pickerSamples, ctaWhilePicker: S.ctaWhilePicker, noPickerSamples: S.noPickerSamples, ctaWhenNoPicker: S.ctaWhenNoPicker } }); })()",
+      "into": "fxStats",
+      "_comment": "Probe nodes are the assertions - each waitFor below throws if its condition never held."
+    },
+    { "action": "waitFor", "selector": "#probe-play-3cards", "timeout": 2000, "_comment": "All three PLAYS cards rendered." },
+    { "action": "waitFor", "selector": "#probe-play-dwell-unselected", "timeout": 2000, "_comment": "There is a real dwell with nothing chosen yet - the pick is not instant." },
+    { "action": "waitFor", "selector": "#probe-play-one-selected", "timeout": 2000, "_comment": "Exactly one card selected, never two." },
+    { "action": "waitFor", "selector": "#probe-play-lift", "timeout": 2000, "_comment": "data-lift reached >=6 of SEL_LIFT=8, so the ease-out actually ran." },
+    { "action": "waitFor", "selector": "#probe-play-blink", "timeout": 2000, "_comment": "Caught on BOTH blink phases - a static highlight would only ever hit one." },
+    { "action": "waitFor", "selector": "#probe-play-dim", "timeout": 2000, "_comment": "Rejected cards <=60% while the chosen card stays >=90%." },
+    { "action": "waitFor", "selector": "#probe-play-panel-unshifted", "timeout": 2000, "_comment": "Regression guard: the panel group itself carries no transform (cards sit at the real DLG_Y)." },
+    { "action": "waitFor", "selector": "#probe-def-mounted", "timeout": 2000, "_comment": "The defense picker is drawn at all - it never was before." },
+    { "action": "waitFor", "selector": "#probe-def-3cards", "timeout": 2000 },
+    { "action": "waitFor", "selector": "#probe-def-one-selected", "timeout": 2000, "_comment": "Also proves DEF_GATE_MS+SELECT_FLASH_MS beat useGame's 8250ms auto-dismiss - an auto-dismiss would clear the panel with nothing ever selected." },
+    { "action": "waitFor", "selector": "#probe-def-lift", "timeout": 2000 },
+    { "action": "waitFor", "selector": "#probe-def-blink", "timeout": 2000 },
+    { "action": "waitFor", "selector": "#probe-def-dim", "timeout": 2000 },
+    { "action": "waitFor", "selector": "#probe-def-panel-unshifted", "timeout": 2000 },
+    { "action": "waitFor", "selector": "#probe-cta-hidden-during-picker", "timeout": 2000, "_comment": "TAP TO PLAY yields to both panels rather than overlapping the cards." },
+    { "action": "waitFor", "selector": "#probe-cta-returns-after", "timeout": 2000, "_comment": "And comes back once no picker is up - the CTA is hidden, not deleted." },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('[id^=\"probe-\"]').forEach(n => n.remove()); delete window.__fx; return 'cleaned'; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { location.href = location.origin + location.pathname; return 'cleared ?mode=inline'; })()",
+      "_comment": "Restore the plain URL so the next test does not inherit ?mode=inline."
+    }
+  ]
+}

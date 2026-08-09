@@ -2,6 +2,7 @@ import React from 'react';
 import { ZOOM_W, TOTAL_H } from '../constants.js';
 import { PixelTextC } from './PixelText.jsx';
 import { useRafTick } from './useRafTick.js';
+import { SEL_DIM, selLift, selBlinkOn } from './cardSelectFx.js';
 
 export const PLAYS = [
   { id: 'standard', tag: 'MOTION',  name: 'Standard',    desc: ['Motion', 'Offense'], color: '#20c8a0', tint: 'rgba(32,200,160,0.13)' },
@@ -34,12 +35,31 @@ const N_PARTS  = 10;
 
 // ─── Play card ────────────────────────────────────────────────────────────────
 
-function PlayCard({ play, x, y, onClick, disabled }) {
+function PlayCard({ play, x, y, onClick, disabled, selected, tick }) {
   const [hover, setHover] = React.useState(false);
+  // `clicked` is what gives a REAL player feedback: useGame defers its
+  // continuation by 300ms after onPickPlay, so the panel is still mounted long
+  // enough for the lift+blink to land. Nothing is delayed to achieve this.
+  const [clicked, setClicked] = React.useState(false);
+  const chosen = !!selected || clicked;
+
+  // Tick at which selection began, so the lift has an onset independent of when
+  // the panel opened. Reset when deselected.
+  const startRef = React.useRef(null);
+  if (chosen && startRef.current === null) startRef.current = tick;
+  if (!chosen && startRef.current !== null) startRef.current = null;
+  const st = chosen ? tick - startRef.current : 0;
+
+  const lift    = chosen ? selLift(st) : 0;
+  const blinkOn = chosen && selBlinkOn(st);
+
+  const handleClick = disabled ? undefined : () => { setClicked(true); onClick?.(); };
 
   return (
     <g data-testid={`play-${play.id}`} data-disabled={disabled ? '1' : '0'}
-      onClick={disabled ? undefined : onClick} style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
+      data-selected={chosen ? '1' : '0'} data-lift={lift}
+      transform={`translate(0 ${-lift})`}
+      onClick={handleClick} style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
       onMouseEnter={() => !disabled && setHover(true)} onMouseLeave={() => setHover(false)}>
     <g opacity={disabled ? 0.38 : 1}>
 
@@ -55,6 +75,17 @@ function PlayCard({ play, x, y, onClick, disabled }) {
       {hover && (
         <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={4}
           fill="white" opacity={0.06} shapeRendering="crispEdges" />
+      )}
+      {/* Selection: fattened border always, white wash on the blink phase. */}
+      {chosen && (
+        <g data-testid={`play-${play.id}-selected`}>
+          <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={4}
+            fill="none" stroke={blinkOn ? '#ffffff' : play.color} strokeWidth={3} />
+          {blinkOn && (
+            <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={4}
+              fill="white" opacity={0.22} shapeRendering="crispEdges" />
+          )}
+        </g>
       )}
 
       {/* Tag pill */}
@@ -81,9 +112,10 @@ function PlayCard({ play, x, y, onClick, disabled }) {
 
       {/* SELECT / NO REPEAT button */}
       <rect x={x + 6} y={y + CARD_H - 18} width={CARD_W - 12} height={14} rx={3}
-        fill={disabled ? '#1a1a2a' : hover ? play.color : '#1a3060'} opacity={0.2} shapeRendering="crispEdges" />
-      <PixelTextC text={disabled ? 'NO RPT' : 'SELECT'} cx={x + CARD_W / 2} y={y + CARD_H - 15}
-        scale={1} fill={disabled ? '#445' : hover ? '#000' : play.color} outline={null} />
+        fill={chosen ? play.color : disabled ? '#1a1a2a' : hover ? play.color : '#1a3060'}
+        opacity={chosen ? 0.55 : 0.2} shapeRendering="crispEdges" />
+      <PixelTextC text={disabled ? 'NO RPT' : chosen ? 'PICKED' : 'SELECT'} cx={x + CARD_W / 2} y={y + CARD_H - 15}
+        scale={1} fill={chosen ? '#ffffff' : disabled ? '#445' : hover ? '#000' : play.color} outline={null} />
     </g>
 
     {/* Cooldown badge — rendered at full opacity above the dimmed card */}
@@ -140,7 +172,7 @@ function IsoTargetButton({ tgt, x, y, onClick }) {
 
 // ─── Picker dialog ────────────────────────────────────────────────────────────
 
-export function PlayPickerOverlay({ cameraX, onPick, disabledPlayId }) {
+export function PlayPickerOverlay({ cameraX, onPick, disabledPlayId, selectedPlayId = null }) {
   const tick = useRafTick();
   // When the ISO card is chosen we switch to a target picker instead of resolving.
   const [isoMode, setIsoMode] = React.useState(false);
@@ -264,12 +296,18 @@ export function PlayPickerOverlay({ cameraX, onPick, disabledPlayId }) {
         const { yOff, op } = cardAnim(i);
         const cardX = dlgX + SIDE_PAD + i * (CARD_W + CARD_GAP);
         const cardY = DLG_Y + 32;
+        const isSel = selectedPlayId != null && play.id === selectedPlayId;
+        // Dim the rejected cards — without this all three still read as active
+        // and the lift alone doesn't communicate a choice.
+        const dim = selectedPlayId != null && !isSel ? SEL_DIM : 1;
         return (
-          <g key={play.id} opacity={op} transform={`translate(0 ${yOff})`}>
+          <g key={play.id} opacity={op * dim} transform={`translate(0 ${yOff})`}>
             <PlayCard
               play={play}
               x={cardX}
               y={cardY}
+              tick={tick}
+              selected={isSel}
               onClick={() => play.id === 'iso' ? setIsoMode(true) : onPick(play)}
               disabled={play.id === disabledPlayId}
             />

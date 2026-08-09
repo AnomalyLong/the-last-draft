@@ -17,6 +17,7 @@ import { Shadow } from './Shadow.jsx';
 import { PixelTextC } from './PixelText.jsx';
 import { SpecialMoveCards } from './SpecialMoveCards.jsx';
 import { PLAYS, PlayPickerOverlay } from './PlayPickerOverlay.jsx';
+import { DEFENSES, DefensePickerOverlay } from './DefensePickerOverlay.jsx';
 import { MONOGRAM_CELL_W } from '../sprites/monogram.js';
 
 // ── SplashCourt — inline (feed) splash showing the debug-court sandbox ────────
@@ -125,11 +126,10 @@ export const AUTO_PLAY = 'rotate';
 // choose, so time spent on one is just the court standing still — the clock is
 // stopped and the possession parked. Those answer immediately.
 //
-// That mattered most for the DEFENSE picker. useGame self-dismisses that one
-// after DEFENSE_PICK_MS (8250ms), which is why the splash originally left it
-// alone — but 8.25s of frozen court per away possession was the bulk of the dead
-// air in the tile. Pre-empting it with onPickDefense(null) runs the exact same
-// continuation the auto-dismiss would, just without the wait.
+// This now applies only to the LEVEL-UP and QUARTER-SUMMARY gates. The defense
+// picker used to be answered here too (an unrendered 8250ms auto-dismiss read as
+// the court freezing every away possession), but it has its own overlay and
+// dwell now — see DEF_GATE_MS.
 //
 // Residual pause is NOT zero: useGame defers its own continuations by 300ms
 // (onPickPlay) and 100ms (onPickDefense). Those are the real game's animation
@@ -146,6 +146,30 @@ export const GATE_MS = 0;
 // Note this is a dwell on top of the panel's own entrance animation: the cards
 // stagger in over ~14 rAF ticks each, so the full row is only settled ~600ms in.
 export const PLAY_GATE_MS = 3000;
+
+// ── SELECT_FLASH_MS ──────────────────────────────────────────────────────────
+// After the dwell, the tile does NOT resolve the play instantly — it marks the
+// rotated card as chosen (lift + blink, siblings dimmed) and holds that for a
+// beat so the choice is visible. Without this the panel simply vanishes and the
+// tile never shows WHICH play was called, which is the whole point of showing
+// three cards.
+//
+// This is additive to the dwell: a home possession now spends
+// PLAY_GATE_MS + SELECT_FLASH_MS on the panel. ~4 blink half-cycles at 7.5Hz.
+export const SELECT_FLASH_MS = 700;
+
+// ── DEF_GATE_MS ──────────────────────────────────────────────────────────────
+// The defense picker gets the same treatment as the play picker now that
+// DefensePickerOverlay is actually mounted below. It was previously answered at
+// GATE_MS (0) precisely BECAUSE nothing was drawn — 8.25s of frozen court with
+// no panel is dead air, but a dwell with the real panel up is a demo of the away
+// possession, which is half the game.
+//
+// Must stay under useGame's own DEFENSE_PICK_MS auto-dismiss (8250ms) or the
+// game answers for us mid-flash: 3000 + 700 = 3700ms, comfortable margin. The
+// panel's countdown ring is live, so it visibly ticks 8 → 7 → 6 during the
+// dwell rather than sitting still.
+export const DEF_GATE_MS = 3000;
 
 // ── Picker position / CTA during the dwell ───────────────────────────────────
 // The picker is drawn at its REAL in-game position (PlayPickerOverlay hardcodes
@@ -387,12 +411,11 @@ function Frame({ cameraX, scoreline, overlay, hideCta = false, children }) {
 //                       is also what advances the period / ends the game.
 //
 //   defensePickState  — showDefensePicker sets gamePausedRef and arms its OWN
-//                       auto-dismiss, so this one can't deadlock. But that timer
-//                       is DEFENSE_PICK_MS = 8250ms, and with no overlay drawn
-//                       that reads as the court simply freezing for 8 seconds on
-//                       every away possession. Answered immediately instead;
-//                       onPickDefense(null) is the same path the auto-dismiss
-//                       takes (and it clears the pending timer itself).
+//                       auto-dismiss (DEFENSE_PICK_MS = 8250ms), so this one
+//                       can't deadlock. DefensePickerOverlay is mounted below and
+//                       answered on DEF_GATE_MS + SELECT_FLASH_MS (3700ms) with a
+//                       rotated pick from the real DEFENSES table — well inside
+//                       the auto-dismiss, so the game never answers over us.
 function SplashCourtLive() {
   const game = useGame({ homeRoster: HOME_ROSTER, awayRoster: AWAY_ROSTER, isFtue: false });
   const { handleCommand, onPickPlay, onPickDefense, onDismissStatUpgrade, onDismissQuarterSummary } = game;
@@ -423,22 +446,37 @@ function SplashCourtLive() {
   // sim only ever running motion offence. Ref, not state: bumping it must not
   // re-render mid-possession.
   const playCycleRef = React.useRef(0);
+  // Which card is shown as chosen during SELECT_FLASH_MS. null = still deciding.
+  const [selectedPlayId, setSelectedPlayId] = React.useState(null);
   React.useEffect(() => {
-    if (!game.playPickState) return;
-    const t = setTimeout(() => {
-      if (AUTO_PLAY !== 'rotate') return onPickPlay(null);
-      const play = PLAYS[playCycleRef.current % PLAYS.length];
+    if (!game.playPickState) { setSelectedPlayId(null); return; }
+    if (AUTO_PLAY !== 'rotate') {
+      const t = setTimeout(() => onPickPlay(null), PLAY_GATE_MS);
+      return () => clearTimeout(t);
+    }
+    const play = PLAYS[playCycleRef.current % PLAYS.length];
+    // Phase 1: dwell on all three cards. Phase 2: mark the pick and hold.
+    const t1 = setTimeout(() => setSelectedPlayId(play.id), PLAY_GATE_MS);
+    const t2 = setTimeout(() => {
       playCycleRef.current += 1;
       onPickPlay(play);
-    }, PLAY_GATE_MS);
-    return () => clearTimeout(t);
+    }, PLAY_GATE_MS + SELECT_FLASH_MS);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [game.playPickState]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Away possession. Pre-empts useGame's 8250ms auto-dismiss (see GATE_MS).
+  // Away possession — same dwell + selection flash as the play picker.
+  // Cycles the real DEFENSES table so all three show up in rotation.
+  const defCycleRef = React.useRef(0);
+  const [selectedDefenseId, setSelectedDefenseId] = React.useState(null);
   React.useEffect(() => {
-    if (!game.defensePickState) return;
-    const t = setTimeout(() => onPickDefense(null), GATE_MS);
-    return () => clearTimeout(t);
+    if (!game.defensePickState) { setSelectedDefenseId(null); return; }
+    const def = DEFENSES[defCycleRef.current % DEFENSES.length];
+    const t1 = setTimeout(() => setSelectedDefenseId(def.id), DEF_GATE_MS);
+    const t2 = setTimeout(() => {
+      defCycleRef.current += 1;
+      onPickDefense(def);
+    }, DEF_GATE_MS + SELECT_FLASH_MS);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [game.defensePickState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   React.useEffect(() => {
@@ -471,7 +509,8 @@ function SplashCourtLive() {
   const scoreline = `${HOME_TEAM.name} ${game.homeScore}-${game.awayScore} ${AWAY_TEAM.name}  ${mm}:${ss}`;
 
   return (
-    <Frame cameraX={game.cameraX} scoreline={scoreline} hideCta={!!game.playPickState}
+    <Frame cameraX={game.cameraX} scoreline={scoreline}
+      hideCta={!!game.playPickState || !!game.defensePickState}
       overlay={<>
         {/* The real picker, purely as a display. pointerEvents:none matters:
             App.jsx puts onClick={tryExpand} on the whole inline container, and
@@ -479,7 +518,14 @@ function SplashCourtLive() {
             would also resolve the play early, out of the rotation. */}
         {game.playPickState && (
           <g data-testid="splash-play-picker" style={{ pointerEvents: 'none' }}>
-            <PlayPickerOverlay cameraX={0} onPick={() => {}} disabledPlayId={null} />
+            <PlayPickerOverlay cameraX={0} onPick={() => {}} disabledPlayId={null}
+              selectedPlayId={selectedPlayId} />
+          </g>
+        )}
+        {game.defensePickState && (
+          <g data-testid="splash-defense-picker" style={{ pointerEvents: 'none' }}>
+            <DefensePickerOverlay cameraX={0} onPick={() => {}}
+              selectedDefenseId={selectedDefenseId} />
           </g>
         )}
         {SHOW_MOVE_CARDS &&

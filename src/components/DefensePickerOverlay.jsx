@@ -2,8 +2,9 @@ import React from 'react';
 import { ZOOM_W, TOTAL_H, DEFENSE_PICK_COUNTDOWN_MS } from '../constants.js';
 import { PixelTextC } from './PixelText.jsx';
 import { useRafTick, FRAME_MS } from './useRafTick.js';
+import { SEL_DIM, selLift, selBlinkOn } from './cardSelectFx.js';
 
-const DEFENSES = [
+export const DEFENSES = [
   { id: 'motion',     tag: 'ZONE',   name: 'Motion',     desc: ['Zone',   'Defense'],   color: '#5099ff', tint: 'rgba(80,153,255,0.15)' },
   { id: 'guard',      tag: 'MAN',    name: 'Guard',      desc: ['Guard A', 'Player'],  color: '#20c8a0', tint: 'rgba(32,200,160,0.13)' },
   { id: 'aggressive', tag: 'PRESS',  name: 'Aggressive', desc: ['All-Out', 'Press'],   color: '#e85060', tint: 'rgba(232,80,96,0.18)'  },
@@ -19,11 +20,26 @@ const DLG_Y    = TOTAL_H - DLG_H;
 const N_PARTS  = 10;
 const AUTO_DISMISS_MS = DEFENSE_PICK_COUNTDOWN_MS;
 
-function DefenseCard({ def, x, y, onClick }) {
+function DefenseCard({ def, x, y, onClick, selected, tick }) {
   const [hover, setHover] = React.useState(false);
+  const [clicked, setClicked] = React.useState(false);
+  const chosen = !!selected || clicked;
+
+  const startRef = React.useRef(null);
+  if (chosen && startRef.current === null) startRef.current = tick;
+  if (!chosen && startRef.current !== null) startRef.current = null;
+  const st = chosen ? tick - startRef.current : 0;
+
+  const lift    = chosen ? selLift(st) : 0;
+  const blinkOn = chosen && selBlinkOn(st);
+
+  const handleClick = () => { setClicked(true); onClick?.(); };
 
   return (
-    <g data-testid={`defense-${def.id}`} onClick={onClick} style={{ cursor: 'pointer' }}
+    <g data-testid={`defense-${def.id}`}
+      data-selected={chosen ? '1' : '0'} data-lift={lift}
+      transform={`translate(0 ${-lift})`}
+      onClick={handleClick} style={{ cursor: 'pointer' }}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
 
       <rect x={x + 2} y={y + 3} width={CARD_W} height={CARD_H} rx={4}
@@ -36,6 +52,16 @@ function DefenseCard({ def, x, y, onClick }) {
       {hover && (
         <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={4}
           fill="white" opacity={0.06} shapeRendering="crispEdges" />
+      )}
+      {chosen && (
+        <g data-testid={`defense-${def.id}-selected`}>
+          <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={4}
+            fill="none" stroke={blinkOn ? '#ffffff' : def.color} strokeWidth={3} />
+          {blinkOn && (
+            <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={4}
+              fill="white" opacity={0.22} shapeRendering="crispEdges" />
+          )}
+        </g>
       )}
 
       <rect x={x + 4} y={y + 5} width={CARD_W - 8} height={11} rx={2}
@@ -57,14 +83,15 @@ function DefenseCard({ def, x, y, onClick }) {
         scale={1} fill="#b08090" outline={null} />
 
       <rect x={x + 6} y={y + CARD_H - 18} width={CARD_W - 12} height={14} rx={3}
-        fill={hover ? def.color : '#601a30'} opacity={0.2} shapeRendering="crispEdges" />
-      <PixelTextC text="SELECT" cx={x + CARD_W / 2} y={y + CARD_H - 15}
-        scale={1} fill={hover ? '#000' : def.color} outline={null} />
+        fill={chosen ? def.color : hover ? def.color : '#601a30'}
+        opacity={chosen ? 0.55 : 0.2} shapeRendering="crispEdges" />
+      <PixelTextC text={chosen ? 'PICKED' : 'SELECT'} cx={x + CARD_W / 2} y={y + CARD_H - 15}
+        scale={1} fill={chosen ? '#ffffff' : hover ? '#000' : def.color} outline={null} />
     </g>
   );
 }
 
-export function DefensePickerOverlay({ cameraX, onPick }) {
+export function DefensePickerOverlay({ cameraX, onPick, selectedDefenseId = null }) {
   const tick = useRafTick();
   const elapsedMs = tick * FRAME_MS;
 
@@ -196,12 +223,16 @@ export function DefensePickerOverlay({ cameraX, onPick }) {
         const { yOff, op } = cardAnim(i);
         const cardX = dlgX + SIDE_PAD + i * (CARD_W + CARD_GAP);
         const cardY = DLG_Y + 32;
+        const isSel = selectedDefenseId != null && def.id === selectedDefenseId;
+        const dim = selectedDefenseId != null && !isSel ? SEL_DIM : 1;
         return (
-          <g key={def.id} opacity={op} transform={`translate(0 ${yOff})`}>
+          <g key={def.id} opacity={op * dim} transform={`translate(0 ${yOff})`}>
             <DefenseCard
               def={def}
               x={cardX}
               y={cardY}
+              tick={tick}
+              selected={isSel}
               onClick={() => onPick(def)}
             />
           </g>
