@@ -17,6 +17,12 @@
       "timeout": 15000
     },
     {
+      "action": "extract",
+      "expression": "JSON.stringify({credits: document.querySelector('.lb2-ts-time')?.textContent?.trim() ?? '?', energy: document.querySelector('.lb2-ts-energy')?.textContent?.trim() ?? '?'})",
+      "into": "preGameLobby",
+      "_comment": "Baseline for the post-game delta. Credits live on .lb2-ts-time (legacy class name — there is NO .lb2-ts-credits and no data-testid; see TitleStrip.jsx:175)."
+    },
+    {
       "action": "eval",
       "expression": "(() => { window.__playRot = 0; return 'reset'; })()",
       "_comment": "Reset the play-choice rotation counter for this run"
@@ -286,8 +292,15 @@
     },
     {
       "action": "extract",
-      "expression": "JSON.stringify({credits: document.querySelector('.lb2-ts-credits')?.textContent?.trim() ?? '?', energy: document.querySelector('.lb2-ts-energy')?.textContent?.trim() ?? '?'})",
-      "into": "postGameLobby"
+      "expression": "JSON.stringify({credits: document.querySelector('.lb2-ts-time')?.textContent?.trim() ?? '?', energy: document.querySelector('.lb2-ts-energy')?.textContent?.trim() ?? '?'})",
+      "into": "postGameLobby",
+      "_comment": "Compare against preGameLobby. Credits selector is .lb2-ts-time — the old .lb2-ts-credits matched nothing and silently reported '?' every run."
+    },
+    {
+      "action": "waitFor",
+      "selector": ".lb2-ts-time",
+      "timeout": 5000,
+      "_comment": "ASSERT the credits element exists at all, so a future rename fails loudly instead of degrading to '?' in an extract that always passes."
     },
     {
       "action": "screenshot",
