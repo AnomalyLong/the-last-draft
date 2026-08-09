@@ -147,20 +147,20 @@ export const GATE_MS = 0;
 // stagger in over ~14 rAF ticks each, so the full row is only settled ~600ms in.
 export const PLAY_GATE_MS = 3000;
 
-// ── PLAY_PICKER_DY ───────────────────────────────────────────────────────────
-// The picker is hardcoded to the bottom third of the screen (DLG_Y 232, height
-// 116 → y 232..348) because in the real game that band is empty. Here it is not:
-// the CTA sits at y=304 and would be buried under the panel for the whole dwell,
-// which is the one thing on the tile that must stay readable.
+// ── Picker position / CTA during the dwell ───────────────────────────────────
+// The picker is drawn at its REAL in-game position (PlayPickerOverlay hardcodes
+// DLG_Y 232, height 116 → y 232..348). It used to be shifted up 68px here to
+// keep the CTA at y=304 out from under it, but moving the game's signature panel
+// off its real mark to protect a label is the wrong trade — the whole point of
+// the dwell is that the tile shows the cards where a player sees them.
 //
-// Sized against the panel's WORST frame, not its settled one. PlayPickerOverlay's
-// cardAnim staggers the three cards in from +22px below their resting spot, so for
-// the first ~200ms the lowest ink is the card shadow at 348+22+3 = 373, not the
-// 348 the panel eventually occupies. -56 cleared the settled panel and still let
-// the entrance clip the CTA by ~9px; -68 clears every frame (373-68 = 305 for one
-// sample, 288 settled), which is why the test asserts the max over the window
-// rather than a single sighting.
-export const PLAY_PICKER_DY = -68;
+// So the CTA yields instead of the cards. Painting it ON TOP of the panel was
+// tried first and looked worse than the original overlap: "TAP TO PLAY" lands
+// straight across the cards' own body text ("Motion Offense", "1-on-1 Matchup",
+// "SELECT"), and its backing plate reads as a smear over the middle card.
+// Hiding it for the 3s dwell is the only option where nothing moves and nothing
+// collides — the cards carry their own SELECT affordance while they are up, and
+// the CTA is back for the rest of the loop.
 
 const SCALE    = ZOOM_W / W;                           // 0.6
 const SCALED_H = TOTAL_H * SCALE;                      // 208.8
@@ -296,7 +296,7 @@ function CourtLayer({ players, shot, netSwish, netDunk, netMiss, playerAlpha }) 
 // the game's own smoothed camera value; GameScene applies it by moving the
 // viewBox, which we can't do from inside App's shared <svg>, so we translate the
 // field by -cameraX instead. Same result.
-function Frame({ cameraX, scoreline, overlay, children }) {
+function Frame({ cameraX, scoreline, overlay, hideCta = false, children }) {
   const [pulse, setPulse] = React.useState(1);
   React.useEffect(() => {
     let raf;
@@ -326,6 +326,16 @@ function Frame({ cameraX, scoreline, overlay, children }) {
     )
   );
 
+  const cta = (
+    <g data-testid="splash-cta">
+      {plate(CTA, 2, layout.ctaY, true)}
+      <g opacity={pulse}>
+        <PixelTextC text={CTA} cx={ZOOM_W / 2} y={layout.ctaY} scale={2}
+          fill="#7ee0ff" outline="#0a1828" thick />
+      </g>
+    </g>
+  );
+
   return (
     <g data-testid="splash-court" data-attract={ATTRACT} data-framing={FRAMING}>
       <rect x={-BLEED} y={0} width={ZOOM_W + BLEED * 2} height={TOTAL_H} fill="#111" />
@@ -350,11 +360,8 @@ function Frame({ cameraX, scoreline, overlay, children }) {
         </>
       )}
 
-      {plate(CTA, 2, layout.ctaY, true)}
-      <g opacity={pulse}>
-        <PixelTextC text={CTA} cx={ZOOM_W / 2} y={layout.ctaY} scale={2}
-          fill="#7ee0ff" outline="#0a1828" thick />
-      </g>
+      {/* Suppressed entirely while the play picker is up — see the note up top. */}
+      {!hideCta && cta}
 
       {/* Screen space, OUTSIDE the camera group and after the text — mirrors
           GameScene rendering its cards after the HUD so they paint on top. */}
@@ -464,15 +471,14 @@ function SplashCourtLive() {
   const scoreline = `${HOME_TEAM.name} ${game.homeScore}-${game.awayScore} ${AWAY_TEAM.name}  ${mm}:${ss}`;
 
   return (
-    <Frame cameraX={game.cameraX} scoreline={scoreline}
+    <Frame cameraX={game.cameraX} scoreline={scoreline} hideCta={!!game.playPickState}
       overlay={<>
         {/* The real picker, purely as a display. pointerEvents:none matters:
             App.jsx puts onClick={tryExpand} on the whole inline container, and
             PlayCard carries its own onClick — without this a tap on a card
             would also resolve the play early, out of the rotation. */}
         {game.playPickState && (
-          <g data-testid="splash-play-picker" style={{ pointerEvents: 'none' }}
-            transform={`translate(0, ${PLAY_PICKER_DY})`}>
+          <g data-testid="splash-play-picker" style={{ pointerEvents: 'none' }}>
             <PlayPickerOverlay cameraX={0} onPick={() => {}} disabledPlayId={null} />
           </g>
         )}
