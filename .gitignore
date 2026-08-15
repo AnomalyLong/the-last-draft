@@ -20,3 +20,6 @@ tmp/
 .env
 .env.local
 .env.*.local
+
+# Citadel operates from its own folder, never this repo
+citadel/
