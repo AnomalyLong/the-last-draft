@@ -1,5 +1,6 @@
 import React from 'react';
 import { JERSEY_BASE, JERSEY_HOME, ZOOM_W, TOTAL_H } from '../constants.js';
+import { SpriteOutline } from './SpriteOutline.jsx';
 
 const CARD_W = 160;
 const CARD_H = 130;
@@ -47,6 +48,8 @@ export function SpecialMoveCard({
   anchorX = 20,
   anchorY = 28,
   spriteScale = DEFAULT_spriteScale,
+  outline = true,
+  outlineColor = '#000000',
   // Card centre. Defaults to the in-game position (y=74), which is deliberately
   // up in the HUD band because the HUD is chrome the card is meant to cover.
   // Surfaces with no HUD (the inline splash) pass a lower cy so the card doesn't
@@ -134,6 +137,7 @@ export function SpecialMoveCard({
 
         <g clipPath={`url(#${clipId})`} shapeRendering="crispEdges">
           <g transform={`translate(${spriteX}, ${spriteY})`}>
+            {outline && <SpriteOutline pixels={pixels} scale={spriteScale} color={outlineColor} />}
             {spritePixels}
           </g>
         </g>

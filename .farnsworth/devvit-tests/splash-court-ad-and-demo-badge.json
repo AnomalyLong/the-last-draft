@@ -1,0 +1,246 @@
+{
+ "name": "splash court: the CHALLENGE OTHER REDDITORS ad sits 20 CLIENT px inside the container's visible left edge (measured, not a viewBox constant), and the DEMO MODE badge is a left-aligned plated label mounted only while a choice panel is up",
+ "description": "Covers two additions to SplashCourt (the 'court' inline splash, DEFAULT_SPLASH) and the latest changes to them. (1) THE AD: the framed-avatar 'CHALLENGE / OTHER REDDITORS!' mini-ad, shared with SplashScreen.jsx (the 'classic' variant) via SplashChallengeAd.jsx. Its left margin is now specified in CLIENT PIXELS FROM THE CONTAINER'S VISIBLE LEFT EDGE (20px) and the component MEASURES the container to hit it - see SplashChallengeAd's edgeMargin. A viewBox x cannot express that requirement: the inline svg is xMidYMid meet and the splash deliberately bleeds court PAST the viewBox, so on a height-limited container (measured 674x471 at dpr 1.25 -> 539x377 CSS, fit 1.0828) about 49 CSS px of court is drawn OUTSIDE the viewBox on each side and viewBox x=0 sits that far inside the visible edge - the old x=15 looked like 65 CSS px. On a width-limited container (374x758) the opposite holds: viewBox x=0 IS the visible edge and negative x is clipped. So the margin assertion below is made in CLIENT px against the svg's own bounding rect, which is surface-independent, and the viewBox-unit assertions that would now vary by container have been relaxed accordingly. The court variant passes frameX/frameY/scale/edgeMargin explicitly so classic's defaults are untouched. (2) THE BADGE: a 'DEMO MODE' label above the choices, gated on the picker being up, now LEFT-ALIGNED to the choice panel's own left edge and carrying a semi-transparent backing plate. Both are mounted in Frame's SCREEN-SPACE section, alongside the title and CTA, NOT inside the translate(-cameraX) group - that distinction is the whole risk of the ad change and is what the stability assertion below exists to catch, because a wrongly-placed ad still looks correct in a single screenshot and only reveals itself as the camera pans. Geometry is read in viewBox units via getScreenCTM (not getBoundingClientRect), since the inline svg is xMidYMid meet and letterboxes inside its container, so client rects are not viewBox coords. Runs in App Desktop/Mobile via App.jsx's DEV-only ?mode=inline override, because Post View is not a WebContentsView and the runner cannot attach to it. TAP TO DRAFT: the CTA string changed from 'TAP TO PLAY' to 'TAP TO DRAFT' in both splash variants; no assertion here selects the CTA by text (only by data-testid='splash-cta'), so assertions 11/12 are unaffected. DEMO BADGE HINT: the badge is now 'DEMO MODE' + a '- TAP TO DRAFT YOUR TEAM' clause beside it, both in the same white (#e8e8e8; the clause was briefly dimmer), which widened the plate from 61 to 211 units (x 54..265, still inside the 300-wide panel) while leaving every vertical number identical - cap height is still 7 because the clause is all-caps plus a hyphen (row 6 of 12) with no descenders. plate-covers-ink was rewritten to test the UNION of both text runs: it took the label box alone, which the widened plate would have satisfied no matter how far the hint overflowed. HINT COLOUR: the clause is now the same white as the label rather than a dimmer blue-grey. That is a pure fill change with zero geometric consequence, so assertion 24 was added - it is the only check in the file that would notice.",
+ "steps": [
+  {
+   "action": "eval",
+   "expression": "(() => { try { const cur = location.search || ''; if (!/mode=inline/.test(cur)) sessionStorage.setItem('__origSearch', cur); } catch (e) {} location.search = '?mode=inline&t=' + Date.now(); return 'navigating to inline'; })()",
+   "_comment": "Mounts SplashCourt inside a normal webview. Cache-busting t= forces a fresh module load so this run sees the new bundle, not an HMR-stale one. Stashes the pre-existing query string so the last step can restore it rather than blanking the preview's own ?view=mobile."
+  },
+  {
+   "action": "sleep",
+   "ms": 700,
+   "_comment": "Settle only. Must stay well under SplashChallengeAd's 3000ms slide delay so the sampler below can witness the ad in its pre-slide off-screen position."
+  },
+  {
+   "action": "waitFor",
+   "selector": "[data-testid='splash-court'][data-attract='live']",
+   "timeout": 20000
+  },
+  {
+   "action": "waitFor",
+   "selector": "[data-testid='splash-challenge-ad']",
+   "timeout": 10000,
+   "_comment": "ASSERTION 1 (implicit): the ad is mounted on the COURT variant at all. Before it was extracted this selector existed only on the classic splash and this step alone would time out. Note there is deliberately NO equivalent waitFor for the badge any more - the badge is conditional, so waiting for it here would assert the opposite of the requirement."
+  },
+  {
+   "action": "eval",
+   "expression": "(() => { if (window.__iv) clearInterval(window.__iv); window.__toVB = (el) => { const svg = el.ownerSVGElement; const m = svg.getScreenCTM().inverse().multiply(el.getScreenCTM()); const b = el.getBBox(); const pts = [[b.x,b.y],[b.x+b.width,b.y],[b.x,b.y+b.height],[b.x+b.width,b.y+b.height]].map(([x,y]) => { const p = svg.createSVGPoint(); p.x = x; p.y = y; return p.matrixTransform(m); }); const xs = pts.map(p => p.x), ys = pts.map(p => p.y); return { left: Math.min.apply(null, xs), right: Math.max.apply(null, xs), top: Math.min.apply(null, ys), bottom: Math.max.apply(null, ys) }; }; window.__adBox = () => { const fr = document.querySelector(\"[data-testid='splash-ad-frame']\"); if (!fr) return null; const b = window.__toVB(fr); const svg = fr.ownerSVGElement; const m = svg.getScreenCTM().inverse().multiply(fr.getScreenCTM()); const k = Math.sqrt(Math.abs(m.a * m.d - m.b * m.c)); const pad = (parseFloat(fr.getAttribute('stroke-width')) || 0) * 0.5 * k; return { left: b.left - pad, right: b.right + pad, top: b.top - pad, bottom: b.bottom + pad }; }; window.__adClient = () => { const fr = document.querySelector(\"[data-testid='splash-ad-frame']\"); if (!fr) return null; const svg = fr.ownerSVGElement; const a = fr.getBoundingClientRect(), s = svg.getBoundingClientRect(); return { margin: Math.round((a.left - s.left)*100)/100, svgW: Math.round(s.width), svgH: Math.round(s.height), dpr: window.devicePixelRatio }; }; window.__s = { t0: performance.now(), early: null, adLefts: [], playerLefts: [], samples: 0, mismatch: 0, ctaMismatch: 0, bothOn: 0, bothOff: 0, partialFade: 0, fullFade: 0 }; window.__iv = setInterval(() => { const s = window.__s; const q = (t) => document.querySelector(\"[data-testid='\" + t + \"']\"); const badge = q('splash-demo-mode'); const picker = q('splash-play-picker') || q('splash-defense-picker'); const cta = q('splash-cta'); const on = !!picker, bOn = !!badge; if (on !== bOn) s.mismatch++; else if (on) { s.bothOn++; const o = parseFloat(badge.getAttribute('opacity')); if (o < 0.99) s.partialFade++; else s.fullFade++; } else s.bothOff++; if (on === !!cta) s.ctaMismatch++; const ad = q('splash-challenge-ad'); if (!ad) return; s.samples++; let r = null; try { r = window.__toVB(ad); } catch (e) { return; } if (s.early === null) s.early = { left: Math.round(r.left), right: Math.round(r.right) }; if (performance.now() - s.t0 > 5200) { s.adLefts.push(r.left); const p = q('splash-player-1'); if (p) { try { s.playerLefts.push(window.__toVB(p).left); } catch (e) {} } } }, 50); return 'sampler armed'; })()",
+   "_comment": "Page-side 50ms sampler doing two jobs. GEOMETRY: getScreenCTM composed with the svg root's inverse converts each element's own user space into viewBox units, which is what all the numbers below are in; getBBox alone would be wrong for the ad because it excludes the element's OWN translate/scale, which is precisely the slide being measured. `early` captures the ad before its 3000ms slide delay; adLefts/playerLefts only start after 5200ms (delay 3000 + duration 800 + margin) so they sample the SETTLED ad while the camera is still panning. GATING: every tick also records whether a picker and the badge agree, whether the CTA is correctly inverse, and whether the badge was ever caught mid-fade - none of which can be read from a single frame. __adClient measures the requirement DIRECTLY in client px: the stroked frame rect's own getBoundingClientRect (which for SVG includes stroke in Chromium, so it is already the visible outer edge) minus the root svg's bounding rect left. That is the one number that means the same thing on every container aspect. __adBox returns the ad's VISIBLE outer edge: the stroked frame rect expanded by half its stroke width (getBBox is geometry-only and excludes stroke), with that half-stroke converted to viewBox units off the element's own CTM rather than hardcoding the group's 1.25 scale."
+  },
+  {
+   "action": "sleep",
+   "ms": 14000,
+   "_comment": "Long enough to span a full home possession (play gate 3000 + flash 700) AND the gaps either side of it, so the sampler sees the badge both mounted and unmounted."
+  },
+  {
+   "action": "screenshot",
+   "path": "/tmp/splash-court-ad-settled.png",
+   "_comment": "Ad settled in its new position, 15px in from the left edge."
+  },
+  {
+   "action": "while",
+   "max": 400,
+   "until": "(() => !!document.querySelector(\"[data-testid='splash-play-picker']\"))()",
+   "steps": [
+    {
+     "action": "sleep",
+     "ms": 100
+    }
+   ],
+   "_comment": "Wait for a home possession's play gate to open. The badge alignment, plate and sizing assertions are only meaningful while the picker is actually mounted, so none can be measured from a static frame."
+  },
+  {
+   "action": "sleep",
+   "ms": 400,
+   "_comment": "Let the badge's 12-tick entrance finish before measuring opacity, so probe-badge-fade-complete reads the settled value rather than racing the ramp. Geometry is unaffected - opacity does not move a bbox."
+  },
+  {
+   "action": "eval",
+   "expression": "(() => { const demo = document.querySelector(\"[data-testid='splash-demo-mode']\"); const ink = demo && demo.querySelector(\"[data-text='DEMO MODE']\"); const plate = document.querySelector(\"[data-testid='splash-demo-plate']\"); const pk = document.querySelector(\"[data-testid='splash-play-picker']\"); const ad = document.querySelector(\"[data-testid='splash-challenge-ad']\"); const hdr = pk && pk.querySelector(\"[data-text='CALL A PLAY']\"); const hint = demo && demo.querySelector(\"[data-text='- TAP TO DRAFT YOUR TEAM']\"); const cards = ['standard','pickroll','iso'].map(k => pk && pk.querySelector(\"[data-testid='play-\" + k + \"']\")).filter(Boolean); const R = (el) => { try { const b = window.__toVB(el); return { left: Math.round(b.left*10)/10, right: Math.round(b.right*10)/10, top: Math.round(b.top*10)/10, bottom: Math.round(b.bottom*10)/10 }; } catch (e) { return null; } }; const F = (g) => { if (!g) return null; const rs = g.querySelectorAll('rect'); return rs.length ? (rs[rs.length-1].getAttribute('fill') || '').toLowerCase() : null; }; const pr = pk ? Array.prototype.slice.call(pk.querySelectorAll('rect')).filter(r => Math.round(parseFloat(r.getAttribute('width'))) === 300) : []; const prL = pr.map(R).filter(Boolean).map(b => b.left); const prR = pr.map(R).filter(Boolean).map(b => b.right); window.__cap = { demo: demo ? R(demo) : null, ink: ink ? R(ink) : null, plate: plate ? R(plate) : null, plateOp: plate ? parseFloat(plate.getAttribute('opacity')) : null, demoRects: demo ? demo.querySelectorAll(':scope > rect').length : null, demoOp: demo ? parseFloat(demo.getAttribute('opacity')) : null, ad: ad ? R(ad) : null, adClient: window.__adClient(), anchored: ad ? ad.getAttribute('data-anchored') : null, adFrame: (() => { const b = window.__adBox(); return b ? { left: Math.round(b.left*10)/10, right: Math.round(b.right*10)/10, top: Math.round(b.top*10)/10, bottom: Math.round(b.bottom*10)/10 } : null; })(), hdr: hdr ? R(hdr) : null, cardTop: cards.length ? Math.min.apply(null, cards.map(c => R(c).top)) : null, panelLeft: prL.length ? Math.min.apply(null, prL) : null, panelRight: prR.length ? Math.max.apply(null, prR) : null, hint: hint ? R(hint) : null, hintText: hint ? hint.getAttribute('data-text') : null, labelFill: F(ink), hintFill: F(hint) }; return JSON.stringify(window.__cap); })()",
+   "into": "geometryWhileChoicesUp",
+   "_comment": "Badge group, badge INK, badge plate, ad, picker header, the picker's own panel body and the three cards measured in the SAME frame and the same units, so every comparison below is direct with no cross-frame drift. Two things are new here. (a) The ink is measured separately from the group, because the group box now includes the plate - comparing the group against the header would compare a 13-unit plate to a 7-unit word and the size assertion would be meaningless. PixelText puts data-text on its own <g>, which is what makes that split possible. (b) panelLeft is read from the picker's LIVE panel body rather than hardcoded: both pickers draw several rects of exactly DLG_W=300 (body, shadow at +4), so filtering on width 300 and taking the minimum yields dlgX itself. That makes the alignment assertion track the real panel instead of a copied constant."
+  },
+  {
+   "action": "screenshot",
+   "path": "/tmp/splash-court-badge-over-picker.png",
+   "_comment": "Badge, its plate and the three choice cards visible together - the composition the alignment and plate assertions describe."
+  },
+  {
+   "action": "eval",
+   "expression": "(() => { const ids = ['probe-ad-slid-in','probe-ad-left-margin','probe-ad-anchored','probe-ad-no-card-overlap','probe-ad-clears-card-y','probe-ad-below-title','probe-ad-onscreen','probe-ad-screen-space','probe-camera-moved','probe-badge-gated','probe-badge-seen-both','probe-cta-inverse','probe-badge-fades-in','probe-badge-fade-complete','probe-badge-above-choices','probe-badge-clears-aura','probe-badge-left-aligned','probe-badge-matches-header','probe-badge-not-oversized','probe-badge-plate-transparent','probe-badge-plate-covers-ink','probe-badge-plate-tight','probe-badge-hint-present','probe-badge-hint-baseline','probe-badge-hint-grid','probe-badge-within-panel','probe-badge-hint-white']; ids.forEach(i => document.querySelectorAll('#' + i).forEach(n => n.remove())); const mk = id => { const d = document.createElement('div'); d.id = id; document.body.appendChild(d); }; const s = window.__s, c = window.__cap, out = {}; const rng = (a) => a.length ? Math.max.apply(null, a) - Math.min.apply(null, a) : null; const hits = (a, b) => !!a && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top; out.early = s.early; out.settledSamples = s.adLefts.length; out.adLeftRange = s.adLefts.length ? Math.round(rng(s.adLefts)*100)/100 : null; out.adLeftSettled = s.adLefts.length ? Math.round(s.adLefts[s.adLefts.length-1]*10)/10 : null; out.playerLeftRange = s.playerLefts.length ? Math.round(rng(s.playerLefts)*10)/10 : null; out.sync = { mismatch: s.mismatch, ctaMismatch: s.ctaMismatch, bothOn: s.bothOn, bothOff: s.bothOff, partialFade: s.partialFade, fullFade: s.fullFade }; out.demo = c.demo; out.ink = c.ink; out.plate = c.plate; out.plateOp = c.plateOp; out.demoRects = c.demoRects; out.demoOp = c.demoOp; out.adFrame = c.adFrame; out.adClient = c.adClient; out.anchored = c.anchored; out.hdr = c.hdr; out.cardTop = c.cardTop; out.panelLeft = c.panelLeft; out.panelRight = c.panelRight; out.hint = c.hint; out.hintText = c.hintText; out.labelFill = c.labelFill; out.hintFill = c.hintFill; const CARD = { left: 124, right: 284, top: 55, bottom: 185 }; const inkH = c.ink ? Math.round((c.ink.bottom - c.ink.top)*10)/10 : null; const hdrH = c.hdr ? Math.round((c.hdr.bottom - c.hdr.top)*10)/10 : null; const plateH = c.plate ? Math.round((c.plate.bottom - c.plate.top)*10)/10 : null; out.inkH = inkH; out.hdrH = hdrH; out.plateH = plateH; out.adCardOverlap = hits(c.adFrame, CARD); const HINT_DX = (('DEMO MODE').length + 1) * 6 * 1; out.hintDx = (c.hint && c.ink) ? Math.round((c.hint.left - c.ink.left)*10)/10 : null; out.hintDxWant = HINT_DX; out.textBox = (c.hint && c.ink) ? { left: Math.min(c.ink.left, c.hint.left), right: Math.max(c.ink.right, c.hint.right), top: Math.min(c.ink.top, c.hint.top), bottom: Math.max(c.ink.bottom, c.hint.bottom) } : c.ink; out.badgeW = c.demo ? Math.round((c.demo.right - c.demo.left)*10)/10 : null; out.badgeLeftDelta = (c.demo && c.panelLeft !== null) ? Math.round((c.demo.left - c.panelLeft)*10)/10 : null; if (s.early && s.early.left < -100) mk('probe-ad-slid-in'); if (c.adClient && Math.abs(c.adClient.margin - 20) <= 1) mk('probe-ad-left-margin'); if (c.anchored === '1') mk('probe-ad-anchored'); if (c.adFrame && !hits(c.adFrame, CARD)) mk('probe-ad-no-card-overlap'); if (c.adFrame && c.adFrame.bottom <= 55) mk('probe-ad-clears-card-y'); if (c.adFrame && c.adFrame.top >= 26) mk('probe-ad-below-title'); if (c.adFrame && c.adFrame.right <= 408 && c.adClient && c.adClient.margin >= 0) mk('probe-ad-onscreen'); if (out.adLeftRange !== null && out.adLeftRange < 0.5) mk('probe-ad-screen-space'); if (out.playerLeftRange !== null && out.playerLeftRange > 5) mk('probe-camera-moved'); if (s.mismatch === 0) mk('probe-badge-gated'); if (s.bothOn > 0 && s.bothOff > 0) mk('probe-badge-seen-both'); if (s.ctaMismatch === 0) mk('probe-cta-inverse'); if (s.partialFade > 0) mk('probe-badge-fades-in'); if (c.demoOp === 1) mk('probe-badge-fade-complete'); if (c.demo && c.cardTop !== null && c.demo.bottom <= c.cardTop) mk('probe-badge-above-choices'); if (c.demo && c.demo.bottom <= 224) mk('probe-badge-clears-aura'); if (c.demo && c.panelLeft !== null && Math.abs(c.demo.left - c.panelLeft) <= 0.5) mk('probe-badge-left-aligned'); if (inkH !== null && hdrH !== null && Math.abs((inkH - 2) - hdrH) <= 0.5) mk('probe-badge-matches-header'); if (inkH !== null && inkH <= 12) mk('probe-badge-not-oversized'); if (c.plateOp !== null && c.plateOp > 0 && c.plateOp < 1) mk('probe-badge-plate-transparent'); if (c.plate && out.textBox && c.plate.left <= out.textBox.left && c.plate.right >= out.textBox.right && c.plate.top <= out.textBox.top && c.plate.bottom >= out.textBox.bottom) mk('probe-badge-plate-covers-ink'); if (plateH !== null && inkH !== null && plateH <= inkH + 8) mk('probe-badge-plate-tight'); if (c.hintText === '- TAP TO DRAFT YOUR TEAM') mk('probe-badge-hint-present'); if (c.hint && c.ink && Math.abs(c.hint.top - c.ink.top) <= 0.5 && Math.abs(c.hint.bottom - c.ink.bottom) <= 0.5) mk('probe-badge-hint-baseline'); if (out.hintDx !== null && Math.abs(out.hintDx - HINT_DX) <= 0.5) mk('probe-badge-hint-grid'); if (c.demo && c.panelRight !== null && c.demo.right <= c.panelRight + 0.5) mk('probe-badge-within-panel'); if (c.hintFill && c.labelFill && c.hintFill === c.labelFill && c.hintFill === '#e8e8e8') mk('probe-badge-hint-white'); return JSON.stringify(out); })()",
+   "into": "assertions"
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-ad-slid-in",
+   "timeout": 4000,
+   "_comment": "ASSERTION 2: before its 3000ms delay the ad sits at left < -100 viewBox units, i.e. genuinely parked off-screen (slideStartX is -250). Proves the entrance animation still runs after the reposition rather than the ad simply being painted in place."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-ad-left-margin",
+   "timeout": 4000,
+   "_comment": "ASSERTION 3: settled, the ad's visible left edge is 20 CLIENT PIXELS inside the root svg's own left edge (tolerance +/-1). Measured in client px ON PURPOSE - this is the only unit in which the requirement is well defined. The previous form of this assertion ('viewBox left == 15') was measuring a number that maps to a DIFFERENT on-screen margin on every container aspect: at 674x471 the svg is height-limited, so ~49 CSS px of court renders outside the viewBox on each side and viewBox 15 read as 65 CSS px from the visible edge, while at 374x758 it is width-limited and viewBox 15 reads as 14. Neither is wrong; the constant simply cannot satisfy both. The component now measures the container (getScreenCTM on the ad's PARENT, plus the svg's border box, which is the visible extent since a root svg is overflow:hidden) and translates itself, so this holds on any aspect."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-ad-anchored",
+   "timeout": 4000,
+   "_comment": "ASSERTION 3b: the ad reports data-anchored='1', i.e. the MEASURED path actually ran. Without this the suite is satisfiable by the fallback: when getScreenCTM is unavailable the component silently uses AD_X, which is deliberately the same 20 expressed in viewport units and therefore lands within a couple of px of the measured position on a phone-shaped tile - close enough to pass assertion 3's tolerance there while being ~45px wrong on a wide tile. This separates 'the number is right' from 'the mechanism that is supposed to produce it ran'."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-ad-no-card-overlap",
+   "timeout": 4000,
+   "_comment": "ASSERTION 4: the ad's visible box does not intersect the SpecialMoveCard's box (x 124..284, y 55..185 - 160 wide, 130 tall, centred on ZOOM_W/2=204 at SPLASH_CARD_CY=120). This REPLACES the old 'ad right edge < 124' check, which the 15px shift breaks: the ad now spans x 15..131.9 and genuinely does overlap the card's x band. The old assertion was a one-axis proxy for 'these two do not collide', and with the ad no longer flush left the proxy is wrong while the property it stood for still holds - so the check is now the actual 2-D intersection. Kept as a separate assertion from the y-clearance below so a regression reports as 'they collide' rather than only as 'the y number moved'."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-ad-clears-card-y",
+   "timeout": 4000,
+   "_comment": "ASSERTION 5: the ad's bottom edge clears y=55, the top of the move card. This is now the ONLY axis separating the two - before the 15px shift they were also clear horizontally, so this had a redundant partner. Nudging AD_Y down, or growing the ad's height, now collides with the card immediately and this is the assertion that catches it."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-ad-below-title",
+   "timeout": 4000,
+   "_comment": "ASSERTION 6: the ad's top edge stays at or below y=26, the bottom of the title's thick outline (PixelTextC 'THE LAST DRAFT' at y=10, scale 2, 7 cap rows -> ink 10..24 plus one outline cell). The usable vertical window between title and move card is only ~24 units tall and the ad is ~24 tall, so this pins the top end of it."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-ad-onscreen",
+   "timeout": 4000,
+   "_comment": "ASSERTION 7: the ad stays on screen at both ends - its right edge is within the 408-wide viewBox, AND its client margin is non-negative so it is not pushed off the visible left edge. The left half of this is new and matters more than it used to: the ad's viewBox left is no longer a constant and IS legitimately negative on a height-limited container (it sits in the bled court outside the viewBox), so a viewBox-based left bound would now be wrong. The client-px bound is the one that still means 'not clipped'."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-camera-moved",
+   "timeout": 4000,
+   "_comment": "ASSERTION 8a: over the settled sampling window home PG's on-screen x moved more than 5 viewBox units. This is the guard that stops the next assertion passing vacuously - 'the ad did not move' proves nothing across a window in which nothing else moved either."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-ad-screen-space",
+   "timeout": 4000,
+   "_comment": "ASSERTION 8b: across that same window the ad's left edge varied by less than 0.5 viewBox units, i.e. it is pinned to the viewport. Mounting it one level up - inside Frame's translate(-cameraX) group - is the natural mistake, still looks right in any single screenshot, and would fail here because the ad would pan with the court."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-gated",
+   "timeout": 4000,
+   "_comment": "ASSERTION 9: across every 50ms sample of the whole run, the DEMO MODE badge was present if and only if a picker (play OR defense) was present - zero disagreements. The badge labels the choices, so it may not outlive them. Both derive from the same pickerUp boolean in one Frame render, so anything above zero means they have been decoupled."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-seen-both",
+   "timeout": 4000,
+   "_comment": "ASSERTION 10: the sampler observed the badge BOTH mounted and unmounted during the run. Without this, assertion 9 passes trivially on a window where no picker ever opened (badge absent throughout, zero mismatches) - or on a badge deleted outright."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-cta-inverse",
+   "timeout": 4000,
+   "_comment": "ASSERTION 11: 'TAP TO PLAY' was present on exactly the samples where a picker was not, i.e. badge and CTA swap cleanly and never both occupy the tile."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-fades-in",
+   "timeout": 4000,
+   "_comment": "ASSERTION 12: at least one sample caught the badge mounted with opacity < 0.99, i.e. it ramps in rather than popping. Both pickers fade their whole <g> over min(tick/12, 1) rAF ticks; the badge copies that curve so it arrives WITH the panel. Note the plate is inside that group, so it fades with the word rather than snapping in behind it."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-fade-complete",
+   "timeout": 4000,
+   "_comment": "ASSERTION 13: ~400ms after the picker opens the badge group has reached opacity exactly 1 and stops there. Pairs with assertion 12 to pin a ramp that both starts below 1 and finishes at it. This reads the GROUP's opacity, which is separate from the plate's own 0.62 fill opacity asserted below - the plate ends up at 0.62 of full, by design."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-above-choices",
+   "timeout": 4000,
+   "_comment": "ASSERTION 14: the badge's bottom edge is at or above the topmost choice card's top edge, measured in the same frame while the picker is up. This is the literal requirement - the label sits above the choices, not across them. Now measured on the group, so the PLATE is what has to clear, not just the text."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-clears-aura",
+   "timeout": 4000,
+   "_comment": "ASSERTION 15: the badge's bottom edge also clears y=224, the top of PlayPickerOverlay's outer golden aura - which starts 8px above the DLG_Y=232 panel body and is the real top of the choices. Stricter than assertion 14. DEMO_BOX_Y is derived backwards from this line: 224 - 2 gap - 13 plate height = 209, so the plate ends at 222. Adding the plate ate into this margin (the ink alone used to end at 222 with the plate absent), which is why DEMO_BOX_Y is now derived from the plate rather than the ink."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-left-aligned",
+   "timeout": 4000,
+   "_comment": "ASSERTION 16: the badge's left edge coincides (within 0.5) with the choice panel's own left edge, read LIVE off the picker's DLG_W=300 body rect rather than a hardcoded 54. This REPLACES the old 'centred on ZOOM_W/2=204' assertion, which the change directly inverts. What is aligned is the PLATE, not the glyphs - with a backing box present the box edge is the visible edge, and aligning the text instead would leave the plate hanging 4px further left. Both pickers compute dlgX identically, so this holds for the defense panel too."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-matches-header",
+   "timeout": 4000,
+   "_comment": "ASSERTION 17: the badge's INK cap height equals the picker's own 'CALL A PLAY' header cap height. Both are the monogram font at scale 1, whose uppercase glyphs occupy 7 rows, so both measure 7 - the badge's ink box is 2 taller because it carries a 1px outline the header (sitting on a dark header bar) does not, hence the -2. Now measured on the inner data-text group rather than the badge group, because the plate would otherwise inflate the badge to 13 and make this compare a box to a word."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-not-oversized",
+   "timeout": 4000,
+   "_comment": "ASSERTION 18: absolute ceiling of 12 viewBox units on the badge ink's height. Assertion 17 is a relative check and would still pass if BOTH the badge and the header were scaled up together; this one independently rejects the original scale-2 thick-outline badge, which measured 18."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-plate-transparent",
+   "timeout": 4000,
+   "_comment": "ASSERTION 19: the plate's fill opacity is strictly between 0 and 1 - it is a TRANSPARENT backing, which is the requirement. A solid plate would read as a hard black box sitting on the court art, and would pass every geometric assertion here; only this one rejects it. 0.62, the same value Frame's plate() uses for the title and CTA, so the three agree."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-plate-covers-ink",
+   "timeout": 4000,
+   "_comment": "ASSERTION 20: the plate's box contains the text's box on all four sides. The plate is positioned from PICKER_X and the text is inset from it by DEMO_PAD_X, so the two are derived from a shared origin rather than independently placed - this catches the case where one is edited and the other is not, leaving the word hanging off its own background."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-plate-tight",
+   "timeout": 4000,
+   "_comment": "ASSERTION 21: the plate is no more than 8 units taller than the ink it backs (actual: 13 vs 9). This is the assertion that keeps the plate from regressing to Frame's shared plate(), which spans y-6 .. y+20 = 26 units regardless of the text it backs - a box three times the height of a scale-1 word, and the reason the badge had no plate at all until now. It replaces the previous 'the badge has no direct rect child' check, which asserted the exact opposite of what is now wanted; the underlying concern (an oversized plate) is preserved as a bound instead of a prohibition."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-hint-present",
+   "timeout": 2000,
+   "_comment": "ASSERTION 20: the hint clause '- TAP TO DRAFT YOUR TEAM' is actually rendered beside the label. Selected by its own data-text, which only exists because the hint is a SECOND PixelText rather than a longer combined string - that is also what keeps [data-text='DEMO MODE'] resolving to the label alone, so assertions 15/16 (matches-header, not-oversized) still measure the badge word and not the whole bar."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-hint-baseline",
+   "timeout": 2000,
+   "_comment": "ASSERTION 21: the hint shares the label's baseline - top and bottom within 0.5 units. Two separate PixelText runs could trivially drift vertically and nothing else here would notice, because every other badge measurement is taken from the plate or from the label alone."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-hint-grid",
+   "timeout": 2000,
+   "_comment": "ASSERTION 22: the hint starts exactly (len('DEMO MODE') + 1) * CELL_W * scale = 60 units right of the label. This is the real risk of splitting the text into two runs: pixelTextPixels lays glyphs at charX = x + ci * CELL_W * scale, so ONLY a whole-cell offset reproduces the spacing a single combined string would have had. An off-by-one here reads as a wrong-sized word gap that no geometric bound would reject."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-within-panel",
+   "timeout": 2000,
+   "_comment": "ASSERTION 23: the widened badge still ends inside the choice panel it labels - measured against the panel's own 300-wide body rect, not a hardcoded 354. The badge grew from 61 to 211 units when the hint was added; left-alignment alone no longer implies it fits, which it did when the badge was a single short word."
+  },
+  {
+   "action": "waitFor",
+   "selector": "#probe-badge-hint-white",
+   "timeout": 2000,
+   "_comment": "ASSERTION 24: the hint renders in the SAME white as the label (#e8e8e8), read off the last <rect> of each PixelText run - PixelText emits its outline rects first and its fill rects last, so the final rect is the fill. Nothing in this suite asserted colour at all before, which meant the hint's fill was free to be anything: the previous dimmer #a8c0d8 and the current white produce byte-identical geometry, so every other assertion here passes either way. Asserts EQUALITY with the label rather than just the literal, so a future restyle of the badge that moves the label off #e8e8e8 fails here instead of silently leaving the two runs two-tone."
+  },
+  {
+   "action": "eval",
+   "expression": "(() => { if (window.__iv) clearInterval(window.__iv); ['probe-ad-slid-in','probe-ad-left-margin','probe-ad-anchored','probe-ad-no-card-overlap','probe-ad-clears-card-y','probe-ad-below-title','probe-ad-onscreen','probe-ad-screen-space','probe-camera-moved','probe-badge-gated','probe-badge-seen-both','probe-cta-inverse','probe-badge-fades-in','probe-badge-fade-complete','probe-badge-above-choices','probe-badge-clears-aura','probe-badge-left-aligned','probe-badge-matches-header','probe-badge-not-oversized','probe-badge-plate-transparent','probe-badge-plate-covers-ink','probe-badge-plate-tight','probe-badge-hint-present','probe-badge-hint-baseline','probe-badge-hint-grid','probe-badge-within-panel','probe-badge-hint-white'].forEach(i => document.querySelectorAll('#' + i).forEach(n => n.remove())); delete window.__s; delete window.__iv; delete window.__cap; delete window.__toVB; delete window.__adBox; return 'cleaned'; })()"
+  },
+  {
+   "action": "eval",
+   "expression": "(() => { let s = ''; try { s = sessionStorage.getItem('__origSearch') || ''; sessionStorage.removeItem('__origSearch'); } catch (e) {} location.href = location.origin + location.pathname + s; return 'restored search: ' + (s || '(empty)'); })()",
+   "_comment": "?mode=inline survives reloads, so leaving it set would silently boot later app-view tests into the splash."
+  }
+ ]
+}

@@ -60,7 +60,8 @@ export function ScorePopup({ text, cameraX, viewW = ZOOM_W }) {
   const startY = Math.round(TOTAL_H / 2 - (MONOGRAM_GLYPH_H * SCALE) / 2);
 
   return (
-    <g opacity={opacity} shapeRendering="crispEdges"
+    <g data-testid="score-popup" data-text={text}
+      opacity={opacity} shapeRendering="crispEdges"
       transform={`translate(${startX} ${startY - yOff})`}>
       {layers.outline}
       {layers.fill}

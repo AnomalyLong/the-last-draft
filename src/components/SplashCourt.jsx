@@ -14,10 +14,13 @@ import { Ball } from './Ball.jsx';
 import { ShotBall } from './ShotBall.jsx';
 import { SpecialPassBall } from './SpecialPassBall.jsx';
 import { Shadow } from './Shadow.jsx';
-import { PixelTextC } from './PixelText.jsx';
+import { PixelText, PixelTextC } from './PixelText.jsx';
 import { SpecialMoveCards } from './SpecialMoveCards.jsx';
 import { PLAYS, PlayPickerOverlay } from './PlayPickerOverlay.jsx';
 import { DEFENSES, DefensePickerOverlay } from './DefensePickerOverlay.jsx';
+import { SplashChallengeAd } from './SplashChallengeAd.jsx';
+import { ScorePopup } from './ScorePopup.jsx';
+import { HypePopup } from './HypePopup.jsx';
 import { MONOGRAM_CELL_W } from '../sprites/monogram.js';
 
 // ── SplashCourt — inline (feed) splash showing the debug-court sandbox ────────
@@ -179,7 +182,7 @@ export const DEF_GATE_MS = 3000;
 // the dwell is that the tile shows the cards where a player sees them.
 //
 // So the CTA yields instead of the cards. Painting it ON TOP of the panel was
-// tried first and looked worse than the original overlap: "TAP TO PLAY" lands
+// tried first and looked worse than the original overlap: "TAP TO DRAFT" lands
 // straight across the cards' own body text ("Motion Offense", "1-on-1 Matchup",
 // "SELECT"), and its backing plate reads as a smear over the middle card.
 // Hiding it for the 3s dwell is the only option where nothing moves and nothing
@@ -225,7 +228,139 @@ const AWAY_ROSTER = withDerivedPalette(AWAY_TEAM.players).map(grantAbilities);
 const RESTART_MS = 1200;
 
 const TITLE = 'THE LAST DRAFT';
-const CTA   = 'TAP TO PLAY';
+const CTA   = 'TAP TO DRAFT';
+
+// ── AD_MARGIN / AD_Y — placement of the shared CHALLENGE OTHER REDDITORS! ad ─
+// Passed explicitly rather than changed in SplashChallengeAd's defaults: the
+// 'classic' splash mounts the same component with no props and is NOT moving,
+// so the defaults stay where classic wants them and the court variant overrides.
+//
+// THE MARGIN IS IN CLIENT PIXELS FROM THE VISIBLE LEFT EDGE, not viewBox units,
+// and the ad measures the container to hit it — see SplashChallengeAd's
+// edgeMargin. This is not over-engineering; a viewBox constant genuinely cannot
+// express the requirement. The inline <svg> is xMidYMid meet and the splash
+// deliberately bleeds its backdrop and court PAST the viewBox so a wide tile
+// reads as more court instead of black bars. Consequence: on a height-limited
+// container (measured: 674x471 → scale 1.3534, content 552 wide) about 61px of
+// field is drawn OUTSIDE the viewBox on each side, so viewBox x=0 sits 61px in
+// from what the eye reads as the edge, and the ad's old x=15 looked like 82px.
+// On a width-limited container (374x758) the opposite holds: viewBox x=0 IS the
+// visible edge and anything negative is clipped. One constant cannot be 20px on
+// both — hence the measurement.
+//
+// AD_X remains the FALLBACK for when getScreenCTM is unavailable (JSDOM, a
+// detached tree). It is expressed the old way — a viewport-unit margin divided
+// back out of the group's 1.25 scale, plus the 0.75 half-stroke so the number
+// positioned is the border's visible OUTER edge — and is deliberately the same
+// 20, so the unmeasured path lands within a couple of px of the measured one on
+// a phone-shaped tile rather than jumping somewhere unrelated.
+const AD_SCALE  = 1.25;
+const AD_MARGIN = 20;                                  // CLIENT px, visible left edge → border outer edge
+const AD_X = AD_MARGIN / AD_SCALE + 0.75;              // 16.75 local — fallback only
+const AD_Y = 24;
+
+// ── DEMO badge ───────────────────────────────────────────────────────────────
+// Badge marking the tile as an attract loop rather than a live game. Sized to
+// match the picker's own "CALL A PLAY" header — scale 1 — so it reads as a label
+// belonging to the panel rather than a second title.
+//
+// BACKING PLATE. Semi-transparent (#05080f at 0.62), the same fill Frame's
+// plate() uses for the title and CTA, so the court art still reads through it.
+// This is NOT Frame's plate(): that one spans y-6 .. y+20 regardless of the text
+// it backs, which around a 7px-tall scale-1 word is a box far bigger than its
+// contents — the reason the badge had no plate at all until now. This one is
+// derived from the outlined ink box plus a fixed pad, so it hugs the word.
+//
+// LEFT-ALIGNED to the choice panel. Both pickers place their dialog at
+// dlgX = cameraX + round((ZOOM_W - DLG_W) / 2), and the splash renders them at
+// cameraX 0, so that is 54 for either panel. The PLATE's left edge is what is
+// aligned, not the text's — with a backing box present the box edge is the
+// visible edge, and aligning the glyphs instead would leave the plate hanging
+// 4px into the margin. The text is inset within it by DEMO_PAD_X.
+//
+// VERTICAL. Sits directly above the choices: both pickers hardcode
+// DLG_Y = TOTAL_H - round(TOTAL_H/3) = 232 in VIEWPORT space (not camera space),
+// and PlayPickerOverlay draws an outer aura starting 8px above that, so 224 is
+// the real top of the choices. DEMO_BOX_Y is derived backwards from that line so
+// the PLATE (not the ink) is what clears it by DEMO_GAP.
+//
+// Ink height is derived from the OUTLINED box, not the glyph cell.
+// MONOGRAM_GLYPH_H is 9, but 2 of those rows exist only for descenders (g j p q
+// y) and 'DEMO MODE' has none — the caps occupy 7 rows, plus one outline cell
+// above and below.
+//
+// Ink WIDTH drops one cell: MONOGRAM_CELL_W is 6 = 5px glyph + 1px gap, so a
+// naive length * CELL_W counts a trailing gap after the final E that is not ink.
+// Left in, the word would sit 1px left of centre inside its own plate — which at
+// scale 1 is visible.
+//
+// MOUNTED ONLY WHILE A PICKER IS UP (see Frame's pickerUp). It is a label for
+// the choices, so it appears and leaves with them. It carries the picker's OWN
+// entrance curve rather than popping — see DEMO_FADE_TICKS.
+const DEMO_LABEL   = 'DEMO MODE';
+const DEMO_HINT    = '- TAP TO DRAFT YOUR TEAM';                // sits beside the label, same baseline
+const DEMO_SCALE   = 1;                                       // == PlayPickerOverlay's 'CALL A PLAY'
+const PICKER_W     = 300;                                     // DLG_W — identical in both pickers
+const PICKER_X     = Math.round((ZOOM_W - PICKER_W) / 2);     // 54 — dlgX at the splash's cameraX 0
+const PICKER_TOP   = TOTAL_H - Math.round(TOTAL_H / 3) - 8;   // 224 — aura, not panel body (232)
+const DEMO_CAP_H   = 7;                                       // uppercase ink rows (GLYPH_H 9 incl. descenders)
+const DEMO_GAP     = 2;                                       // breathing room above the aura
+const DEMO_PAD_X   = 3;                                       // plate inset, left and right of the outline
+const DEMO_PAD_Y   = 2;                                       // plate inset, above and below the outline
+const DEMO_TEXT_LEN = DEMO_LABEL.length + 1 + DEMO_HINT.length;                      // 34 — incl. joining space
+const DEMO_INK_W   = DEMO_TEXT_LEN * MONOGRAM_CELL_W * DEMO_SCALE - DEMO_SCALE;      // 203 — less trailing gap
+const DEMO_BOX_W   = DEMO_INK_W + (2 + DEMO_PAD_X * 2) * DEMO_SCALE;                 // 211 — + outline + pad
+const DEMO_BOX_H   = (DEMO_CAP_H + 2) * DEMO_SCALE + DEMO_PAD_Y * 2;                 // 13
+const DEMO_BOX_Y   = PICKER_TOP - DEMO_GAP - DEMO_BOX_H;                             // 209 — plate 209..222
+const DEMO_X       = PICKER_X + (DEMO_PAD_X + 1) * DEMO_SCALE;                       // 58 — ink left (outline 57)
+const DEMO_Y       = DEMO_BOX_Y + (DEMO_PAD_Y + 1) * DEMO_SCALE;                     // 212 — ink 212..219
+// The hint is a SECOND PixelText, not a longer string, so the existing
+// [data-text='DEMO MODE'] selector keeps resolving to the label alone. Offsetting
+// by whole cells (label + one space) puts it on exactly the grid a single
+// combined string would have produced — pixelTextPixels lays every glyph out at
+// charX = x + ci * CELL_W * scale, so a whole-cell offset is bit-identical.
+const DEMO_HINT_X  = DEMO_X + (DEMO_LABEL.length + 1) * MONOGRAM_CELL_W * DEMO_SCALE; // 118
+const DEMO_LABEL_FILL    = '#e8e8e8';
+// Hint is the SAME white as the label -- aliased, not repeated, so the two runs
+// cannot drift apart into a two-tone bar. Note #e8e8e8 is this splash's white
+// (the scoreline uses it too), not pure #ffffff: at scale 1 over the court art
+// pure white reads hotter than the yellow title it sits under.
+const DEMO_HINT_FILL     = DEMO_LABEL_FILL;
+const DEMO_PLATE_FILL    = '#05080f';                         // == Frame's plate()
+const DEMO_PLATE_OPACITY = 0.62;
+// Both pickers fade their whole <g> in over `min(tick / 12, 1)` rAF ticks and
+// then unmount hard with no exit animation. The badge copies that exactly, so
+// it arrives with the panel instead of snapping in a frame ahead of it. The
+// loop stops once settled — this runs on every possession and there is no
+// reason to hold a rAF open for the remaining ~3.5s of the dwell.
+const DEMO_FADE_TICKS = 12;
+
+function DemoBadge() {
+  const [tick, setTick] = React.useState(0);
+  React.useEffect(() => {
+    let raf, n = 0;
+    const loop = () => {
+      n += 1;
+      setTick(n);
+      if (n < DEMO_FADE_TICKS) raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const fadeIn = Math.min(tick / DEMO_FADE_TICKS, 1);
+  return (
+    <g data-testid="splash-demo-mode" data-fade={fadeIn === 1 ? '1' : '0'} opacity={fadeIn}>
+      <rect data-testid="splash-demo-plate"
+        x={PICKER_X} y={DEMO_BOX_Y} width={DEMO_BOX_W} height={DEMO_BOX_H} rx={2}
+        fill={DEMO_PLATE_FILL} opacity={DEMO_PLATE_OPACITY} shapeRendering="crispEdges" />
+      <PixelText text={DEMO_LABEL} x={DEMO_X} y={DEMO_Y} scale={DEMO_SCALE}
+        fill={DEMO_LABEL_FILL} outline="#0a1828" />
+      <PixelText text={DEMO_HINT} x={DEMO_HINT_X} y={DEMO_Y} scale={DEMO_SCALE}
+        fill={DEMO_HINT_FILL} outline="#0a1828" />
+    </g>
+  );
+}
+
 const plateW = (text, scale) => text.length * MONOGRAM_CELL_W * scale + 16;
 
 // ── Court + players layer ────────────────────────────────────────────────────
@@ -320,7 +455,31 @@ function CourtLayer({ players, shot, netSwish, netDunk, netMiss, playerAlpha }) 
 // the game's own smoothed camera value; GameScene applies it by moving the
 // viewBox, which we can't do from inside App's shared <svg>, so we translate the
 // field by -cameraX instead. Same result.
-function Frame({ cameraX, scoreline, overlay, hideCta = false, children }) {
+//
+// scorePopup / hypePopup — mirrors GameScene's own score-celebration text
+// ("2 POINTS", "BOOMSHAKALAKA", ...). useGame() computes both regardless of who
+// mounts it, so the attract loop already HAS them; GameScene was simply the
+// only renderer wired up. Rendered here (screen space, cameraX FIXED AT 0, not
+// game.cameraX) rather than inside the camera-following `children` group:
+// ScorePopup/HypePopup each self-center as `cameraX + (viewW - textW) / 2`,
+// which is only correct when the coordinate system they're placed in has its
+// origin at the visible viewport's left edge. In GameScene that's true because
+// the <svg>'s OWN viewBox is `${cameraX} 0 ...` (the camera IS the viewBox
+// origin), so passing the same cameraX re-derives "centered on screen". Here
+// the outer <svg> (App.jsx) has a fixed viewBox `0 0 ZOOM_W TOTAL_H` and it is
+// the INNER `children` group that carries `translate(-cameraX, 0)` — so the
+// screen-space origin this Frame renders everything else in (title, CTA, ad,
+// demo badge) is already 0, and that's what centers the popups on the visible
+// tile instead of on the (currently off-screen) world origin.
+//
+// Ordered identically to GameScene: score/hype text paints AFTER the court
+// (so it's never hidden under a player) but BEFORE the overlay's special-move
+// cards, matching GameScene mounting SpecialMoveCards after its own popups —
+// on a DUNK MASTER dunk the card and "BOOMSHAKALAKA" can occupy overlapping
+// vertical space (pre-existing in the real game too: CARD_CY 74 spans 9..139,
+// HypePopup's band is 98..134 at max scale), and this keeps the card on top
+// exactly like the game it's mirroring.
+function Frame({ cameraX, scoreline, overlay, pickerUp = false, scorePopup = null, hypePopup = null, children }) {
   const [pulse, setPulse] = React.useState(1);
   React.useEffect(() => {
     let raf;
@@ -372,6 +531,11 @@ function Frame({ cameraX, scoreline, overlay, hideCta = false, children }) {
       <rect x={-BLEED} y={TOTAL_H - BOT_BAR} width={ZOOM_W + BLEED * 2} height={BOT_BAR} fill="#111" />
       {barTop && <rect x={-BLEED} y={0} width={ZOOM_W + BLEED * 2} height={TOP_BAR} fill="#111" />}
 
+      {/* Score-celebration text — screen space, cameraX fixed at 0 (see the
+          function comment above for why 0 and not game.cameraX). */}
+      {scorePopup && <ScorePopup text={scorePopup} cameraX={0} viewW={ZOOM_W} />}
+      {hypePopup && <HypePopup key={hypePopup.id} text={hypePopup.text} color={hypePopup.color} cameraX={0} viewW={ZOOM_W} />}
+
       {plate(TITLE, 2, layout.titleY)}
       <PixelTextC text={TITLE} cx={ZOOM_W / 2} y={layout.titleY} scale={2}
         fill="#ffe060" outline="#0a1828" thick />
@@ -384,8 +548,18 @@ function Frame({ cameraX, scoreline, overlay, hideCta = false, children }) {
         </>
       )}
 
+      {/* Mini-ad, shared verbatim with the 'classic' splash. Screen space: it
+          must NOT go in the camera group above or it slides off with the
+          court. Anchored AD_MARGIN client px inside the real left edge, which
+          is NOT a fixed viewBox x — see AD_MARGIN / AD_Y. */}
+      <SplashChallengeAd frameX={AD_X} frameY={AD_Y} scale={AD_SCALE} edgeMargin={AD_MARGIN} />
+
+      {/* Demo-mode badge — labels the choices, so it lives and dies with the
+          picker panel rather than being always-on. See DEMO_Y. */}
+      {pickerUp && <DemoBadge />}
+
       {/* Suppressed entirely while the play picker is up — see the note up top. */}
-      {!hideCta && cta}
+      {!pickerUp && cta}
 
       {/* Screen space, OUTSIDE the camera group and after the text — mirrors
           GameScene rendering its cards after the HUD so they paint on top. */}
@@ -510,7 +684,8 @@ function SplashCourtLive() {
 
   return (
     <Frame cameraX={game.cameraX} scoreline={scoreline}
-      hideCta={!!game.playPickState || !!game.defensePickState}
+      pickerUp={!!game.playPickState || !!game.defensePickState}
+      scorePopup={game.scorePopup} hypePopup={game.hypePopup}
       overlay={<>
         {/* The real picker, purely as a display. pointerEvents:none matters:
             App.jsx puts onClick={tryExpand} on the whole inline container, and

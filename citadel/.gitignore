@@ -1,0 +1,3 @@
+# Proxy inventory: may contain credentials. Never commit it.
+proxies.json
+proxies.json.migrated

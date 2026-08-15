@@ -1,7 +1,8 @@
 import React from 'react';
 import { SHOT_FRAMES } from '../sprites/index.js';
+import { SpriteOutline } from './SpriteOutline.jsx';
 
-export function SpecialPassBall({ shot, scale = 1 }) {
+export function SpecialPassBall({ shot, scale = 1, outline = true, outlineColor = '#000000' }) {
   const [frameIdx, setFrameIdx] = React.useState(0);
   const rafRef = React.useRef(null);
   React.useEffect(() => {
@@ -33,6 +34,11 @@ export function SpecialPassBall({ shot, scale = 1 }) {
           <rect key={i} x={x * scale} y={y * scale} width={scale} height={scale} fill={fill} />
         ))}
       </g>
+      {/* Outside the glow group on purpose. Inside it, the feColorMatrix would
+          tint the outline green (black maps to G=0.5) and feGaussianBlur would
+          soften it — breaking "fully opaque, no anti-aliasing". Drawn last so it
+          stays a crisp black ring, with the glow radiating out beyond it. */}
+      {outline && <SpriteOutline pixels={pixels} scale={scale} color={outlineColor} />}
     </g>
   );
 }

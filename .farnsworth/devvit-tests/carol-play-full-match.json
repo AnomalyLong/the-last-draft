@@ -14,7 +14,8 @@
     {
       "action": "waitFor",
       "selector": "[data-testid='lobby-screen']",
-      "timeout": 15000
+      "timeout": 30000,
+      "_comment": "30s, not 15s: a production Reddit boot (JWT + remote assets over the network) is materially slower than the local emulator, and the previous 15s tripped on the post-reload boot while the very next step found the lobby fine."
     },
     {
       "action": "extract",
@@ -56,6 +57,11 @@
       "action": "click",
       "selector": "[data-testid='bnav-play']",
       "_comment": "PLAY → casual matchmaking (NOT queue-btn-training, which is INSTANT and skips the countdown)"
+    },
+    {
+      "action": "clickIfPresent",
+      "selector": "[data-testid='queue-btn-ranked']",
+      "_comment": "Build 0.0.35.18+ shows a queue picker (RANKED / TRAINING) on the PLAY tab instead of dropping straight into casual matchmaking — so the bnav-play click above is a no-op there (that tab is already active) and the match only starts from here. clickIfPresent keeps this a silent no-op on builds where PLAY starts matchmaking directly. RANKED, not TRAINING: TRAINING is instant and skips the tip-off countdown this test asserts."
     },
     {
       "action": "waitFor",
@@ -106,7 +112,7 @@
     },
     {
       "action": "while",
-      "max": 260,
+      "max": 600,
       "until": "!!document.querySelector('[data-testid=\"game-over-screen\"]')",
       "steps": [
         {

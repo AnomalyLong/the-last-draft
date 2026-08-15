@@ -1,7 +1,8 @@
 import React from 'react';
 import { SHOT_FRAMES } from '../sprites/index.js';
+import { SpriteOutline } from './SpriteOutline.jsx';
 
-export function ShotBall({ shot, scale = 1 }) {
+export function ShotBall({ shot, scale = 1, outline = true, outlineColor = '#000000' }) {
   const [frameIdx, setFrameIdx] = React.useState(0);
   const rafRef = React.useRef(null);
   React.useEffect(() => {
@@ -17,6 +18,7 @@ export function ShotBall({ shot, scale = 1 }) {
   const S = 7 * scale;
   return (
     <g transform={`translate(${shot.cx - S / 2}, ${shot.cy - S / 2})`} shapeRendering="crispEdges">
+      {outline && <SpriteOutline pixels={pixels} scale={scale} color={outlineColor} />}
       {pixels.map(([x, y, fill], i) => (
         <rect key={i} x={x * scale} y={y * scale} width={scale} height={scale} fill={fill} />
       ))}

@@ -1,0 +1,105 @@
+{
+  "name": "splash court: score-celebration text (BOOMSHAKALAKA etc.) renders in the inline feed tile, in screen space",
+  "description": "useGame() always computes scorePopup ('2 POINTS'/'3 POINTS') and hypePopup ({id,text,color}, e.g. HYPE_DUNK's BOOMSHAKALAKA/POSTERIZED/...) on every made basket, regardless of who mounts the hook. GameScene was the only renderer wired up to them; SplashCourt.jsx (the inline feed attract loop) ran the same sim but never rendered either popup. Frame now renders both via <ScorePopup>/<HypePopup> with cameraX FIXED AT 0 (not game.cameraX) because the outer <svg> here has a fixed viewBox and it's the INNER field group that carries translate(-cameraX,0) - passing game.cameraX would double-apply the pan. This test proves: (1) both popups actually appear during the attract loop, (2) a HYPE_DUNK-pool phrase specifically appears (the literal ask - BOOMSHAKALAKA is one of six in that pool, rolled randomly, so any is acceptable proof the dunk path fires), (3) both stay horizontally centered on the VISIBLE screen (x~204, viewBox units) regardless of where the world camera currently is, and (4) the camera demonstrably DID move during the sampling window, so (3) isn't just a lucky still moment. GEOMETRY NOTE: both popups' root <g> carries its OWN translate(startX, startY) (ScorePopup) or a compound translate/scale/rotate (HypePopup) - getBBox() on that <g> returns geometry in the group's LOCAL space, i.e. BEFORE its own transform, so a naive getBBox reading returns roughly half the text width, not the real screen position. Geometry here goes through the same getScreenCTM-composition helper as splash-court-ad-and-demo-badge (svg.getScreenCTM().inverse().multiply(el.getScreenCTM())), which correctly folds in the element's own transform. Runs in App Desktop/Mobile via the DEV-only ?mode=inline override, same as the sibling splash-court tests.",
+  "steps": [
+    {
+      "action": "eval",
+      "expression": "(() => { location.search = '?mode=inline&t=' + Date.now(); return 'navigating to inline'; })()",
+      "_comment": "Mounts the same inline branch (SplashCourt) inside a normal webview. Cache-busting t= forces a fresh module load and a fresh ability roll (ABILITIES_PER_PLAYER=2 is what makes dunks/BOOMSHAKALAKA reachable at all)."
+    },
+    {
+      "action": "sleep",
+      "ms": 2500
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid='splash-court'][data-attract='live']",
+      "timeout": 20000,
+      "_comment": "ATTRACT='static' has no sim, so every assertion below would be vacuous."
+    },
+    {
+      "action": "waitFor",
+      "selector": "[data-testid^='splash-player-']",
+      "timeout": 10000
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/splash-celebrate-01-tipoff.png"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { window.__toVB = (el) => { const svg = el.ownerSVGElement; const m = svg.getScreenCTM().inverse().multiply(el.getScreenCTM()); const b = el.getBBox(); const pts = [[b.x,b.y],[b.x+b.width,b.y],[b.x,b.y+b.height],[b.x+b.width,b.y+b.height]].map(([x,y]) => { const p = svg.createSVGPoint(); p.x = x; p.y = y; return p.matrixTransform(m); }); const xs = pts.map(p => p.x); return { left: Math.min.apply(null, xs), right: Math.max.apply(null, xs) }; }; return 'helper armed'; })()",
+      "_comment": "Same technique as splash-court-ad-and-demo-badge: getScreenCTM composed with the root svg's inverse folds the element's OWN transform in, unlike a bare getBBox()."
+    },
+    {
+      "action": "while",
+      "max": 400,
+      "until": "(() => { const HYPE_DUNK = ['BOOMSHAKALAKA','POSTERIZED','JAMS IT HOME','OH MY','WITH AUTHORITY','THROW IT DOWN']; window.__hype = window.__hype || {}; window.__hypeGeom = window.__hypeGeom || {}; window.__score = window.__score || {}; window.__scoreGeom = window.__scoreGeom || {}; window.__camX = window.__camX || []; const hp = document.querySelector(\"[data-testid='hype-popup']\"); if (hp) { const t = hp.getAttribute('data-text'); window.__hype[t] = (window.__hype[t] || 0) + 1; if (!window.__hypeGeom[t]) { let r = null; try { r = window.__toVB(hp); } catch (e) {} window.__hypeGeom[t] = r ? Math.round((r.left + r.right) / 2) : null; } } const sp = document.querySelector(\"[data-testid='score-popup']\"); if (sp) { const t = sp.getAttribute('data-text'); window.__score[t] = (window.__score[t] || 0) + 1; if (!window.__scoreGeom[t]) { let r = null; try { r = window.__toVB(sp); } catch (e) {} window.__scoreGeom[t] = r ? Math.round((r.left + r.right) / 2) : null; } } const court = document.querySelector(\"[data-testid='splash-court']\"); const camG = court ? court.children[1] : null; const tf = camG ? camG.getAttribute('transform') || '' : ''; const m = /translate\\(\\s*(-?[0-9.]+)/.exec(tf); if (m) window.__camX.push(parseFloat(m[1])); const dunkSeen = Object.keys(window.__hype).some(t => HYPE_DUNK.includes(t)); return dunkSeen && Object.keys(window.__score).length > 0; })()",
+      "steps": [
+        { "action": "sleep", "ms": 200 }
+      ],
+      "_comment": "Poll every 200ms for up to 80s, accumulating every hype/score text seen (+ the real screen-space center-x of its first sighting, via __toVB) and the camera group's live translate() x. Exits early once a HYPE_DUNK-pool phrase AND at least one score popup have both been observed; otherwise runs the full 80s window so the camera has plenty of opportunity to actually pan."
+    },
+    {
+      "action": "screenshot",
+      "path": "/tmp/splash-celebrate-02-caught.png",
+      "_comment": "Taken immediately after the loop exits, while a popup may still be fading (holdMs+fadeMs is 1500-1700ms, so this is a best-effort catch, not guaranteed)."
+    },
+    {
+      "action": "extract",
+      "expression": "JSON.stringify({ hype: window.__hype || {}, hypeGeom: window.__hypeGeom || {}, score: window.__score || {}, scoreGeom: window.__scoreGeom || {}, camXCount: (window.__camX || []).length, camXRange: window.__camX && window.__camX.length ? Math.max(...window.__camX) - Math.min(...window.__camX) : 0 })",
+      "into": "celebration"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { const HYPE_DUNK = ['BOOMSHAKALAKA','POSTERIZED','JAMS IT HOME','OH MY','WITH AUTHORITY','THROW IT DOWN']; document.querySelectorAll('#probe-hype-seen,#probe-hype-dunk,#probe-score-seen,#probe-hype-centered,#probe-score-centered,#probe-camera-moved').forEach(n => n.remove()); const mk = id => { const d = document.createElement('div'); d.id = id; document.body.appendChild(d); }; const hype = window.__hype || {}; const hypeGeom = window.__hypeGeom || {}; const score = window.__score || {}; const scoreGeom = window.__scoreGeom || {}; const camX = window.__camX || []; const hypeTexts = Object.keys(hype); const scoreTexts = Object.keys(score); if (hypeTexts.length > 0) mk('probe-hype-seen'); if (hypeTexts.some(t => HYPE_DUNK.includes(t))) mk('probe-hype-dunk'); if (scoreTexts.length > 0) mk('probe-score-seen'); const CENTER = 204, TOL = 10; const hypeCentered = hypeTexts.length > 0 && hypeTexts.every(t => hypeGeom[t] !== null && Math.abs(hypeGeom[t] - CENTER) <= TOL); if (hypeCentered) mk('probe-hype-centered'); const scoreCentered = scoreTexts.length > 0 && scoreTexts.every(t => scoreGeom[t] !== null && Math.abs(scoreGeom[t] - CENTER) <= TOL); if (scoreCentered) mk('probe-score-centered'); const camRange = camX.length ? Math.max(...camX) - Math.min(...camX) : 0; if (camRange > 20) mk('probe-camera-moved'); return JSON.stringify({ hypeTexts, scoreTexts, hypeGeom, scoreGeom, camRange }); })()",
+      "into": "celebrationAssertion"
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-hype-seen",
+      "timeout": 4000,
+      "_comment": "ASSERTION 1: at least one hype-celebration text ('SWISH', 'BOOMSHAKALAKA', ...) rendered during the attract loop - this is the core ask, previously entirely absent from the inline splash."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-hype-dunk",
+      "timeout": 4000,
+      "_comment": "ASSERTION 2: specifically a HYPE_DUNK-pool phrase appeared (BOOMSHAKALAKA is one of 6 rolled at random) - proves the literal thing asked for, not just some other hype line."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-score-seen",
+      "timeout": 4000,
+      "_comment": "ASSERTION 3: the '_ POINTS' popup also rendered - it fires alongside every hype line and was equally unrendered before this change."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-hype-centered",
+      "timeout": 4000,
+      "_comment": "ASSERTION 4: every hype sighting's real screen-space center-x sits within 10 viewBox units of ZOOM_W/2 (204) - proves it's rendered in FIXED screen space (cameraX=0 passed to HypePopup), not drifting with wherever the world camera happens to be. Measured via the getScreenCTM helper, not a bare getBBox (see the file-level note)."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-score-centered",
+      "timeout": 4000,
+      "_comment": "ASSERTION 5: same screen-space centering check for the score popup."
+    },
+    {
+      "action": "waitFor",
+      "selector": "#probe-camera-moved",
+      "timeout": 4000,
+      "_comment": "ASSERTION 6: the camera group's own translate(-cameraX,0) actually varied by more than 20 units across the sampling window - without this, assertions 4/5 would also pass trivially if the camera never moved (e.g. stuck at the tip-off) and would prove nothing about screen-space vs world-space placement."
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { document.querySelectorAll('#probe-hype-seen,#probe-hype-dunk,#probe-score-seen,#probe-hype-centered,#probe-score-centered,#probe-camera-moved').forEach(n => n.remove()); delete window.__hype; delete window.__hypeGeom; delete window.__score; delete window.__scoreGeom; delete window.__camX; delete window.__toVB; return 'cleaned'; })()"
+    },
+    {
+      "action": "eval",
+      "expression": "(() => { location.href = location.origin + location.pathname; return 'cleared ?mode=inline'; })()",
+      "_comment": "The query string survives reloads, so leaving it set would silently boot later app-view tests into the splash."
+    }
+  ]
+}
+

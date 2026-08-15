@@ -3,6 +3,7 @@ import { ZOOM_W, TOTAL_H, JERSEY_HOME, JERSEY_AWAY, resolvePalette } from '../co
 import { Player } from './Player.jsx';
 import { Ball } from './Ball.jsx';
 import { PixelText, PixelTextC } from './PixelText.jsx';
+import { SplashChallengeAd } from './SplashChallengeAd.jsx';
 
 // ── Letterbox the 16:9 reference inside our 408×348 viewport ─────────────
 // Reference image is 2752×1536 ≈ 1.79:1. To preserve composition we render
@@ -216,7 +217,7 @@ const BUBBLES = [
 ];
 
 export function SplashScreen() {
-  // pulse for TAP TO PLAY + ms-tick for bubble hover
+  // pulse for TAP TO DRAFT + ms-tick for bubble hover
   const [pulse, setPulse] = React.useState(1);
   const [hoverTick, setHoverTick] = React.useState(0);
   React.useEffect(() => {
@@ -357,56 +358,13 @@ export function SplashScreen() {
       {bubblesFront.map(renderBubble)}
 
       {/* ── Left-side mini-ad: framed avatar + "Challenge Other Redditors!" ── */}
-      {(() => {
-        const frameX = 3;
-        const frameY = 74;
-        const frameW = 92;
-        const frameH = 18;
-        const rx     = 3;
-        const avatarCx = frameX + 9;
-        const avatarCy = frameY + frameH / 2;
-        const avatarR  = 7;
-        const textX    = avatarCx + avatarR + 4;
-        // Slide in from off-screen left after a 3s delay. Start far enough out
-        // that even Reddit desktop's wider letterbox can't reveal it before
-        // the slide begins.
-        const SLIDE_DELAY    = 3000;
-        const SLIDE_DURATION = 800;
-        const SLIDE_START_X  = -250;                                // ~2.7× the frame width past the viewBox edge
-        const slideT = Math.max(0, Math.min(1, (hoverTick - SLIDE_DELAY) / SLIDE_DURATION));
-        const eased  = 1 - Math.pow(1 - slideT, 3);                 // easeOutCubic
-        const slideX = SLIDE_START_X * (1 - eased);
-        return (
-          <g transform={`translate(${slideX}, 0) scale(1.25)`}>
-            {/* BballTip-style frame */}
-            <rect x={frameX} y={frameY} width={frameW} height={frameH} rx={rx}
-              fill="#0c1018" shapeRendering="crispEdges" />
-            <rect x={frameX} y={frameY} width={frameW} height={frameH} rx={rx}
-              fill="none" stroke="#ffffff" strokeWidth={1.5} />
+      {/* Shared with SplashCourt (the 'court' variant) — see SplashChallengeAd.jsx. */}
+      <SplashChallengeAd />
 
-            <defs>
-              <clipPath id="splash-ad-avatar-clip">
-                <circle cx={avatarCx} cy={avatarCy} r={avatarR - 1} />
-              </clipPath>
-            </defs>
-            <circle cx={avatarCx} cy={avatarCy} r={avatarR}
-              fill="#0a1828" stroke="#ffe060" strokeWidth={1} />
-            <image href="/jxts5wo9u41e1.png"
-              x={avatarCx - 9} y={avatarCy - 9}
-              width={18} height={23}
-              clipPath="url(#splash-ad-avatar-clip)"
-              preserveAspectRatio="xMidYMid meet"
-              style={{ imageRendering: 'pixelated' }} />
-            <text x={textX} y={avatarCy - 1} style={{ fontFamily: 'var(--f-mono)' }} fontSize={6} fontWeight="bold" fill="#fff">CHALLENGE</text>
-            <text x={textX} y={avatarCy + 6} style={{ fontFamily: 'var(--f-mono)' }} fontSize={6} fontWeight="bold" fill="#ffe060">OTHER REDDITORS!</text>
-          </g>
-        );
-      })()}
-
-      {/* ── Tap to play prompt — sits in the bottom letterbox bar ── */}
+      {/* ── Tap to draft prompt — sits in the bottom letterbox bar ── */}
       <g opacity={pulse}>
         <PixelTextC
-          text="TAP TO PLAY"
+          text="TAP TO DRAFT"
           cx={ZOOM_W / 2}
           y={CONTENT_TOP + CONTENT_H + Math.round((TOTAL_H - CONTENT_TOP - CONTENT_H - 14) / 2)}
           scale={2}

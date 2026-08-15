@@ -1,7 +1,8 @@
 import React from 'react';
 import { BALL_FRAMES } from '../sprites/index.js';
+import { SpriteOutline } from './SpriteOutline.jsx';
 
-export const Ball = React.memo(function Ball({ cx, cy, scale = 1, lift = 0, syncToRun = false, phaseOffset = 0 }) {
+export const Ball = React.memo(function Ball({ cx, cy, scale = 1, lift = 0, syncToRun = false, phaseOffset = 0, outline = true, outlineColor = '#000000' }) {
   const [frame, setFrame] = React.useState('up');
   const [yOff, setYOff] = React.useState(0);
   const rafRef = React.useRef(null);
@@ -42,6 +43,7 @@ export const Ball = React.memo(function Ball({ cx, cy, scale = 1, lift = 0, sync
   const S = 7 * scale;
   return (
     <g transform={`translate(${cx - S / 2}, ${cy - S / 2 + yOff})`} shapeRendering="crispEdges">
+      {outline && <SpriteOutline pixels={pixels} scale={scale} color={outlineColor} />}
       {pixels.map(([x, y, fill], i) => (
         <rect key={i} x={x * scale} y={y * scale} width={scale} height={scale} fill={fill} />
       ))}

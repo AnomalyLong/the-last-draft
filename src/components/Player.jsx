@@ -1,5 +1,6 @@
 import React from 'react';
 import { JERSEY_HOME, JERSEY_BASE, JERSEY_DARK_BASE, SKIN_PIXEL, HAIR_PIXEL, BEARD_PIXEL, SHOOT_JUMP_OFFSETS, BLOCK_JUMP_OFFSETS, JUMP_BALL_JUMP_OFFSETS } from '../constants.js';
+import { SpriteOutline } from './SpriteOutline.jsx';
 import { SPRITE_PIXELS, IDLE_FRAMES, RUN_FRAMES, RUN_BALL_FRAMES, SHOOT_CHAR_FRAMES, DUNK_FRAMES, DUNK_BALL_OFFSETS, DUNKSPIN_FRAMES, DUNKSPIN_BALL_OFFSETS, BALL_FRAMES, BLOCK_JUMP_FRAMES, IRON_BLOCK_FRAMES, JUMP_BALL_FRAMES, STEAL_FRAMES, PICKPOCKET_FRAMES, SPIN_MOVE_FRAMES, DASH_FRAMES, FADEAWAY_FRAMES, STAGGER_FRAMES } from '../sprites/index.js';
 
 // multiply an "#rrggbb" colour by a 0..1 factor to derive shadow tones
@@ -14,7 +15,7 @@ function darken(hex, k) {
 
 // Memoized: during movement frames only players whose props actually changed
 // re-render — the other standing players are skipped entirely.
-export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor, hairColor, beardColor, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isSpinDunking = false, isBlocking = false, isIronBlocking = false, isJumpBall = false, isStealing = false, isPickPocketing = false, isSpinning = false, isDashing = false, isFadingAway = false, isStaggering = false, facingRight = false }) {
+export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColor = JERSEY_HOME, skinColor, hairColor, beardColor, hasBall = false, isMoving = false, isShooting = false, isDunking = false, isSpinDunking = false, isBlocking = false, isIronBlocking = false, isJumpBall = false, isStealing = false, isPickPocketing = false, isSpinning = false, isDashing = false, isFadingAway = false, isStaggering = false, facingRight = false, outline = true, outlineColor = '#000000' }) {
   const [frameIdx, setFrameIdx] = React.useState(0);
   const rafRef = React.useRef(null);
 
@@ -163,13 +164,39 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     return <rect key={i} x={x * scale} y={y * scale} width={scale} height={scale} fill={c} />;
   });
 
+  // 1px rounded outline: 4-connected dilation of the frame's filled pixels.
+  // Painted first so it sits UNDER the sprite and never alters sprite pixels.
+  const renderSprite = (pixels) => (
+    <>
+      {outline && <SpriteOutline pixels={pixels} scale={scale} color={outlineColor} />}
+      {applyColors(pixels)}
+    </>
+  );
+
+  // The dunk / spin-dunk ball is drawn INSIDE the already-scaled sprite group at
+  // 1-unit pitch (that `+ 0.5) * scale - 3.5` centres the 7x7 ball on the hand
+  // offset), so its outline needs the same 1-unit pitch, not `scale`.
+  const renderDunkBall = (bOff) => {
+    const ox = (bOff[0] + 0.5) * scale - 3.5;
+    const oy = (bOff[1] + 0.5) * scale - 3.5;
+    return (
+      <>
+        {outline && <SpriteOutline pixels={BALL_FRAMES.up} scale={1} size={1}
+          ox={ox} oy={oy} color={outlineColor} />}
+        {BALL_FRAMES.up.map(([x, y, fill], i) => (
+          <rect key={`b${i}`} x={ox + x} y={oy + y} width={1} height={1} fill={fill} />
+        ))}
+      </>
+    );
+  };
+
   if (isJumpBall) {
     const fi = Math.min(frameIdx, JUMP_BALL_FRAMES.length - 1);
     const pixels = JUMP_BALL_FRAMES[fi] || JUMP_BALL_FRAMES[0];
     const jumpY = JUMP_BALL_JUMP_OFFSETS[fi] ?? 0;
     return (
       <g transform={`translate(${cx - 7 * scale}, ${cy - 17 * scale - jumpY})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
+        {renderSprite(pixels)}
       </g>
     );
   }
@@ -180,13 +207,8 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const bOff = DUNK_BALL_OFFSETS[fi];
     return (
       <g transform={`translate(${cx - 7 * scale}, ${cy - 17 * scale})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
-        {bOff && BALL_FRAMES.up.map(([x, y, fill], i) => (
-          <rect key={`b${i}`}
-            x={(bOff[0] + 0.5) * scale - 3.5 + x}
-            y={(bOff[1] + 0.5) * scale - 3.5 + y}
-            width={1} height={1} fill={fill} />
-        ))}
+        {renderSprite(pixels)}
+        {bOff && renderDunkBall(bOff)}
       </g>
     );
   }
@@ -197,13 +219,8 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const bOff = DUNKSPIN_BALL_OFFSETS[fi];
     return (
       <g transform={`translate(${cx - 7 * scale}, ${cy - 19 * scale})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
-        {bOff && BALL_FRAMES.up.map(([x, y, fill], i) => (
-          <rect key={`b${i}`}
-            x={(bOff[0] + 0.5) * scale - 3.5 + x}
-            y={(bOff[1] + 0.5) * scale - 3.5 + y}
-            width={1} height={1} fill={fill} />
-        ))}
+        {renderSprite(pixels)}
+        {bOff && renderDunkBall(bOff)}
       </g>
     );
   }
@@ -213,7 +230,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const jumpY = SHOOT_JUMP_OFFSETS[frameIdx] ?? 0;
     return (
       <g transform={`translate(${cx - 24.9 * scale}, ${cy - 27.5 * scale - jumpY})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
+        {renderSprite(pixels)}
       </g>
     );
   }
@@ -223,7 +240,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const pixels = STAGGER_FRAMES[fi] || STAGGER_FRAMES[0];
     return (
       <g transform={`translate(${cx - 7 * scale}, ${cy - 10 * scale})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
+        {renderSprite(pixels)}
       </g>
     );
   }
@@ -233,7 +250,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const pixels = SPIN_MOVE_FRAMES[fi] || SPIN_MOVE_FRAMES[0];
     return (
       <g transform={`translate(${cx - 21 * scale}, ${cy - 28 * scale})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
+        {renderSprite(pixels)}
       </g>
     );
   }
@@ -243,7 +260,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const pixels = DASH_FRAMES[fi] || DASH_FRAMES[0];
     return (
       <g transform={`translate(${cx - 9 * scale}, ${cy - 17 * scale})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
+        {renderSprite(pixels)}
       </g>
     );
   }
@@ -253,7 +270,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const pixels = FADEAWAY_FRAMES[fi] || FADEAWAY_FRAMES[0];
     return (
       <g transform={`translate(${cx - 9 * scale}, ${cy - 19 * scale})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
+        {renderSprite(pixels)}
       </g>
     );
   }
@@ -263,7 +280,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const pixels = PICKPOCKET_FRAMES[fi] || PICKPOCKET_FRAMES[0];
     return (
       <g transform={`translate(${cx - 9 * scale}, ${cy - 17 * scale})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
+        {renderSprite(pixels)}
       </g>
     );
   }
@@ -273,7 +290,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const pixels = STEAL_FRAMES[fi] || STEAL_FRAMES[0];
     return (
       <g transform={`translate(${cx - 9 * scale}, ${cy - 17 * scale})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
+        {renderSprite(pixels)}
       </g>
     );
   }
@@ -284,7 +301,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const jumpY = BLOCK_JUMP_OFFSETS[fi] ?? 0;
     return (
       <g transform={`translate(${cx - 6 * scale}, ${cy - 17 * scale - jumpY})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
+        {renderSprite(pixels)}
       </g>
     );
   }
@@ -294,7 +311,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const jumpY = BLOCK_JUMP_OFFSETS[frameIdx] ?? 0;
     return (
       <g transform={`translate(${cx - 6 * scale}, ${cy - 17 * scale - jumpY})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
+        {renderSprite(pixels)}
       </g>
     );
   }
@@ -303,7 +320,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const pixels = RUN_BALL_FRAMES[frameIdx] || RUN_BALL_FRAMES[0];
     return (
       <g transform={`translate(${cx - 7 * scale}, ${cy - 9 * scale})`} shapeRendering="crispEdges">
-        {applyColors(pixels)}
+        {renderSprite(pixels)}
       </g>
     );
   }
@@ -312,7 +329,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
     const SW = 13 * scale, SH = 17 * scale;
     return (
       <g transform={`translate(${cx - SW / 2}, ${cy - SH / 2})`} shapeRendering="crispEdges">
-        {applyColors(SPRITE_PIXELS)}
+        {renderSprite(SPRITE_PIXELS)}
       </g>
     );
   }
@@ -323,7 +340,7 @@ export const Player = React.memo(function Player({ cx, cy, scale = 4, jerseyColo
   const SH = (isMoving ? 18 : 16) * scale;
   return (
     <g transform={`translate(${cx - SW / 2}, ${cy - SH / 2})`} shapeRendering="crispEdges">
-      {applyColors(pixels)}
+      {renderSprite(pixels)}
     </g>
   );
 });
