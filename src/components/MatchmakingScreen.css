@@ -1547,7 +1547,11 @@ body.is-mobile .matchmaking-screen .launch-bar {
   position: absolute;
   top: auto;
   left: 50%;
-  bottom: 14px;
+  /* Clear the phone OS gesture/nav bar, same as .bnav in lobby.css.
+     --fw-bottom-gutter is published by viewportGutter.js; it resolves to 0 on
+     desktop and in Farnsworth, so the 14px offset is unchanged there. env() is
+     kept as the fallback for the case where the JS never runs. */
+  bottom: calc(14px + var(--fw-bottom-gutter, env(safe-area-inset-bottom, 0px)));
   transform: translateX(-50%);
   padding: 8px 18px;
   gap: 12px;
