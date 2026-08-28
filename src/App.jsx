@@ -40,7 +40,7 @@ function toAwayPlayers(roster = []) {
 }
 
 import { getInlineSplash, subscribeSplash, applyGlobalSplash } from './splashConfig.js';
-import { TitleScreen, SplashScreen, SplashCourt, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FeaturedEventsScreen, BattlePassScreen, FtueIntroVideo } from './components/index.js';
+import { TitleScreen, SplashScreen, SplashCourt, DraftScreen, DraftHubScreen, LoadingScreen, OptionsScreen, GameScene, CollectionScreen, DebugConsole, AdminOverlay, MatchmakingScreen, LobbyScreen, FeaturedEventsScreen, BattlePassScreen, FtueIntroVideo, TeamSetupScreen } from './components/index.js';
 import { TitleStrip } from './components/TitleStrip.jsx';
 import { SoundChoiceModal } from './components/SoundChoiceModal.jsx';
 
@@ -56,9 +56,6 @@ function ScreenWithStrip({ credits, energy, maxEnergy, onEvents, muted, onToggle
   );
 }
 import ChallengeCardHost from './components/ChallengeCardHost.jsx';
-import TeamSetupView from '../lobby/team-setup.jsx';
-import '../lobby/team-setup.css';
-import '../lobby/mobile-team-setup.css';
 import { titleMusic, bgMusic, bounceBall, applyAllVolumes, setMuted } from './sound/basketball.js';
 import { audioSettings } from './sound/audioSettings.js';
 import { useGame } from './useGame.js';
@@ -755,7 +752,7 @@ export default function App() {
       )}
 
       {!isInline && scene === 'teamSelect' && (
-        <TeamSetupView
+        <TeamSetupScreen
           initialName={homeTeamName === 'HOME' ? '' : homeTeamName}
           onBack={() => setScene(homeRoster.length ? 'draftHub' : 'title')}
           onContinue={({ name }) => {

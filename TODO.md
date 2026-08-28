@@ -1,61 +1,5 @@
 # The Last Draft — Backend Wiring TODOs
 
-## Collection Screen Replacement ← DO THIS NEXT
-
-Replace `CollectionScreen2` (SVG) with the new HTML/CSS collection design from `lobby/collection.jsx`.
-
-### Context
-- `src/App.jsx:222-229` renders `<CollectionScreen2>` when `scene === 'collection'`
-- `lobby/collection.jsx` is the new design — HTML/CSS prototype, **not** SVG
-- `LobbyScreen.jsx` and other game screens are HTML/CSS, so this is fine
-
-### What the new design does differently
-- **No `pos` on players** — position comes from a separate lineup map `{ PG: id, SG: id, … }`
-- **`rarity` is a string** — `'common' | 'rare' | 'epic' | 'legendary'` (not a number)
-- **OVR is computed** via `calcOvr(player, pos)` using `OVR_WEIGHTS` per slot, never stored
-- **Squad bar shows lineup slots** (PG/SG/SF/PF/C) — clicking a slot selects the player in it
-- **Detail panel** shows: level, XP, rarity badge, 4 stats with `+N` bonuses, all abilities
-- **Actions** in detail panel: 5 position buttons (SET / SWAP / REMOVE) + AUCTION button
-- **Abilities**: `ability` (initial) + `abilities[]` (from level-ups), each with name/desc/rarity color
-
-### Steps to complete
-
-1. **Create `src/components/CollectionScreenNew.jsx`** — port `lobby/collection.jsx` from
-   `window.CollectionView` globals to a proper ES module export. Key changes:
-   - Replace `const { useState } = React` globals → `import React from 'react'`
-   - Replace `window.ROSTER` / `window.DEFAULT_LINEUP` mock data with props:
-     `export function CollectionScreenNew({ roster = [], lineup = {}, username = '', credits = 0, onBack, onAuction })`
-   - Import `ABILITIES` from `src/abilities.js` for reference (ability data comes from player objects)
-   - The `ROSTER` mock and `DEFAULT_LINEUP` const can stay as fallback/dev defaults at the top
-
-2. **Wire up in `App.jsx`**:
-   - Import `CollectionScreenNew` instead of `CollectionScreen2`
-   - Pass `roster` and `lineup` separately — roster from `trpc.user.roster`, lineup from `trpc.user.lineup`
-   - Both are already fetched in the init effect (line 64-89); store `rawRoster` and `rawLineup` as state
-   - Pass `username={username}` and `credits={serverCredits}`
-
-3. **Update `dev-tools/stories/Collection2Story.jsx`**:
-   - Rename to `CollectionNewStory.jsx` (or update in-place)
-   - Replace `SAMPLE_ROSTER` with real-shaped mock data (no `pos`/`ovr`/`round` on players):
-     ```js
-     { id, owner, name, level, xp, source, rarity, spd, dex, jmp, acc, ability, abilities, statBonuses }
-     ```
-   - Add a mock `LINEUP = { PG: id, SG: id, ... }` and pass both as props
-   - Update `Shell.jsx` nav label if renamed
-
-4. **CSS**: `lobby/collection.css`, `lobby/collection-grid.css`, `lobby/mobile-collection.css` need to be
-   copied or symlinked into `src/` and imported by the new component (or import directly via relative path).
-
-### Reference files
-- New design: `lobby/collection.jsx` — source of truth for components + data model
-- CSS: `lobby/collection.css`, `lobby/collection-grid.css`, `lobby/mobile-collection.css`
-- Data shape: `src/server/core/player.ts` → `PlayerData` type
-- Position/lineup: `src/server/core/player.ts` → `getUserLineup` returns `{ PG: id, SG: id, … }`
-- App wiring: `src/App.jsx:64-89` (roster+lineup load) and `:222-229` (collection scene)
-- Old component (delete after): `src/components/CollectionScreen2.jsx`, `src/components/CollectionScreen.jsx`
-
----
-
 ## Pending
 
 - [ ] **Energy system UI** — `game.start` deducts energy server-side but the client has no energy display and doesn't handle the "not enough energy" error. Add energy display and block game start if energy is 0.
@@ -109,6 +53,27 @@ currently **100% client-simulated** and only replay-verified for credits:
 ---
 
 ## Done
+
+- [x] **Collection Screen Replacement** — `src/components/CollectionScreen.jsx` is the finished
+      HTML/CSS port (squad bar, detail panel, player bands, send-player modal, lifetime record,
+      sound effects, real `trpc.user.setLineup`/`trpc.player.send` wiring). `CollectionScreen2`
+      (the old SVG screen) is gone from the codebase entirely. The old prototype this was built
+      from, `lobby/collection.jsx`, is now dead reference material — nothing imports it.
+
+- [x] **lobby/ restructure (Aug 21)** — `lobby/` started as a static HTML/CSS mockup, but several
+      of its files had been wired directly into the live `src/` build via relative imports,
+      creating drift between two source trees. Migrated everything actually reachable from the
+      app into `src/components/`: `team-setup.jsx` → `TeamSetupScreen.jsx` (+ its two CSS files,
+      dead `PALETTES`/global-React fallback code removed), `challenge-card.jsx` → `ChallengeCard.jsx`,
+      `bid-card.jsx` → `BidCard.jsx` (+ its `idle.gif`), and the three collection CSS files
+      (`collection.css`/`collection-grid.css`/`mobile-collection.css`) → co-located with
+      `CollectionScreen.jsx`. `post.css` (shared card chrome) became `src/components/PostCard.css`
+      with its required CSS vars scoped to `.post-state` instead of `:root`, so it can't leak into
+      the app's live team-theme colors. `lobby/` still holds superseded/orphaned prototype files
+      (`lobby.jsx`, `battle-pass.jsx`, `court.jsx`, `draft.jsx`, `auction.jsx`, `collection.jsx`,
+      `app.jsx`, the standalone `Matchmaking VS.html` demo, `image-slot.js`, `deck-stage.js`,
+      `tweaks-panel.jsx`) that nothing in `src/` or `story/` imports — safe to delete in a follow-up
+      but left alone here since it wasn't live.
 
 - [x] **Player persistence** — `draft.free` / `draft.credit` now accept stats + ability; `mintPlayer` stores them in Redis. `DraftScreen` calls `draft.free` for each of the 5 drafted players on START GAME, then calls `user.setLineupSlot` for each position. Roster returned to `App.jsx` includes `serverId`. New users start with 5 free drafts.
 

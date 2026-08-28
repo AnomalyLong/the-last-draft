@@ -1,6 +1,23 @@
 /* ────────────────────────────────────────────────
    Post view — shareable square Reddit-style post
+   Shared chrome for BidCard and ChallengeCard.
    ──────────────────────────────────────────────── */
+
+/* Scoped fallback tokens — NOT :root. --c-left/--c-right/etc. double as the
+   app's live team-theme vars elsewhere (see TeamSetupScreen), so defining
+   them globally here would leak into the rest of the app. Scoping to
+   .post-state (the card's own root class) keeps these cards visually fixed
+   regardless of the surrounding page, while still letting a host
+   (ChallengeCardHost) override via inline style with higher specificity. */
+.post-state {
+  --c-left: #19e6c4;
+  --c-right: #ff2d6f;
+  --c-ink: #eaf6f3;
+  --c-ink-dim: rgba(234, 246, 243, 0.62);
+  --f-head: "Orbitron", "Chakra Petch", system-ui, sans-serif;
+  --f-jp: "Noto Sans JP", "Rajdhani", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", "Share Tech Mono", ui-monospace, monospace;
+}
 
 [data-state="post"] .title-block,
 [data-state="post"] .center-pillar,

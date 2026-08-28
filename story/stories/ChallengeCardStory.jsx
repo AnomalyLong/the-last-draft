@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { PhoneFrameExpanded, DEVICES } from '../PhoneFrame.jsx';
 import { CrtOverlay } from '../StoryFrame.jsx';
-import ChallengeCard from '@src/../lobby/challenge-card.jsx';
-import '@src/../lobby/styles.css';
-import '@src/../lobby/post.css';
+import { ChallengeCard } from '@src/components/index.js';
 
 const DESKTOP_PRESETS = [
   { label: '628×548 (Reddit)', w: 628, h: 548 },

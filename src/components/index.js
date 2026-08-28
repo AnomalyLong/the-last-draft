@@ -38,3 +38,6 @@ export { default as FeaturedEventsScreen } from './FeaturedEventsScreen.jsx';
 export { default as BattlePassScreen } from './BattlePassScreen.jsx';
 export { FtueIntroVideo } from './FtueIntroVideo.jsx';
 export { SoundChoiceModal } from './SoundChoiceModal.jsx';
+export { TeamSetupScreen } from './TeamSetupScreen.jsx';
+export { default as ChallengeCard } from './ChallengeCard.jsx';
+export { default as BidCard } from './BidCard.jsx';

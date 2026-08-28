@@ -1,8 +1,9 @@
 import React from 'react';
-import { IDLE_FRAMES } from '../src/sprites/index.js';
+import './PostCard.css';
+import { IDLE_FRAMES } from '../sprites/index.js';
 import {
   JERSEY_BASE, JERSEY_HOME, SKIN_PIXEL, HAIR_PIXEL, BEARD_PIXEL, resolvePalette,
-} from '../src/constants.js';
+} from '../constants.js';
 
 // Challenge Me Card — Reddit-style shareable card where a user invites others
 // to challenge their team. Same shell as BidCard but the right column scrolls
@@ -94,7 +95,7 @@ const DEFAULT_OWNER = {
   record: { wins: 24, losses: 11 },
 };
 
-const NATIVE_SIZE = 880; // matches the .post-card width in post.css
+const NATIVE_SIZE = 880; // matches the .post-card width in PostCard.css
 const PADDING    = 8;
 
 export default function ChallengeCard({

@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { PhoneFrameExpanded, DEVICES } from '../PhoneFrame.jsx';
 import { CrtOverlay } from '../StoryFrame.jsx';
-import BidCard from '@src/../lobby/bid-card.jsx';
-import '@src/../lobby/styles.css';
-import '@src/../lobby/post.css';
+import { BidCard } from '@src/components/index.js';
 
 // Common Reddit post viewport + a couple of common laptop/phone presets.
 const DESKTOP_PRESETS = [

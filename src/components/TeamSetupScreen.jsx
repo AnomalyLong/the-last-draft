@@ -1,13 +1,11 @@
 /* Team Setup — name + color + emblem before draft */
 
-// Resolve React from either ES-module import (Vite stories) or the global the
-// legacy standalone lobby loads via <script>. Same for PALETTES/applyPalette.
-import * as ReactNS from 'react';
-const _g = /** @type {any} */ (globalThis);
-const _React = _g.React || ReactNS;
-const { useState: useStateTS, useEffect: useEffectTS, useRef: useRefTS } = _React;
+import React, { useState, useEffect, useRef } from 'react';
+import './TeamSetupScreen.css';
+import './TeamSetupScreen.mobile.css';
 
-// Palettes the team can wear (must match PALETTES in app.jsx)
+// Palettes the team can wear (must match the palette ids used elsewhere,
+// e.g. teamPalette.js / SKIN_PALETTES).
 const TEAM_COLORS = [
   { id: "cyanMagenta", name: "VOLT TEAL",    primary: "#19e6c4", glow: "#5bf2d4" },
   { id: "blueOrange",  name: "AZURE BLUE",   primary: "#3ea6ff", glow: "#7fc7ff" },
@@ -72,30 +70,26 @@ function ColorSwatch({ c, active, locked, onClick }) {
 const UNLOCKED_COLOR  = "blueOrange";
 const UNLOCKED_EMBLEM = "diamond";
 
-function TeamSetupView({ initialName = "", onBack, onContinue }) {
-  const [name, setName] = useStateTS(initialName);
+export function TeamSetupScreen({ initialName = "", onBack, onContinue }) {
+  const [name, setName] = useState(initialName);
   // Color and emblem are locked for now — always the unlocked defaults.
-  const [color, setColor] = useStateTS(UNLOCKED_COLOR);
-  const [emblem, setEmblem] = useStateTS(UNLOCKED_EMBLEM);
+  const [color, setColor] = useState(UNLOCKED_COLOR);
+  const [emblem, setEmblem] = useState(UNLOCKED_EMBLEM);
   // Step-by-step flow: name → color → emblem → submit
-  const [step, setStep] = useStateTS('name');
-  const inputRef = useRefTS(null);
+  const [step, setStep] = useState('name');
+  const inputRef = useRef(null);
 
   // Live-apply chosen color to CSS vars so dossier preview + chrome update in real time.
-  // We set --c-left directly so all 8 swatches work, not just the 4 in PALETTES.
-  useEffectTS(() => {
+  // We set --c-left directly so all 8 swatches work, not just the ones with a
+  // matching palette elsewhere in the app.
+  useEffect(() => {
     const c = TEAM_COLORS.find(x => x.id === color) || TEAM_COLORS[0];
     const r = document.documentElement;
     r.style.setProperty("--c-left", c.primary);
     r.style.setProperty("--c-left-glow", c.glow);
-    // Also sync the full palette if one exists for this color (keeps VS screen consistent).
-    const palette = (_g.PALETTES && _g.PALETTES[color]) || null;
-    if (palette && typeof _g.applyPalette === "function") {
-      _g.applyPalette(palette);
-    }
   }, [color]);
 
-  useEffectTS(() => {
+  useEffect(() => {
     inputRef.current && inputRef.current.focus();
   }, []);
 
@@ -281,7 +275,3 @@ function TeamSetupView({ initialName = "", onBack, onContinue }) {
     </div>
   );
 }
-
-_g.TeamSetupView = TeamSetupView;
-export default TeamSetupView;
-export { TeamSetupView };

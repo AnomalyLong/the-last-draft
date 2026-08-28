@@ -1,17 +1,18 @@
 import React from 'react';
-import ChallengeCard from '../../lobby/challenge-card.jsx';
-import '../../lobby/post.css';
+import ChallengeCard from './ChallengeCard.jsx';
 
 // Bridges the server `post.getChallenge` payload to the presentational
-// ChallengeCard (which lives in lobby/ and is also used by the dev-tools
-// story with its own mock data). Two jobs:
-//   1. Supply the CSS variables ChallengeCard's post.css relies on, WITHOUT
-//      importing lobby/styles.css (that file has global `*`/`body` resets that
-//      would bleed into the rest of the app).
+// ChallengeCard (also used by the dev-tools story with its own mock data).
+// Two jobs:
+//   1. Supply the CSS variables ChallengeCard's PostCard.css relies on as an
+//      explicit override. PostCard.css already scopes fallback values to
+//      `.post-state` so the card looks right with no host at all (e.g. in
+//      Storybook) — this inline style just pins the *production* card to
+//      fixed values regardless of the app's live team-theme vars (--c-left
+//      etc. get reassigned elsewhere for team colors; the post card must not
+//      follow that).
 //   2. Adapt the game-shaped roster (pos/spd/dex/... from buildRosterForUser)
 //      into the card-shaped roster (position/tier/color/overall/stats/abilities).
-
-// CSS vars copied from lobby/styles.css :root — only the ones post.css reads.
 const CARD_VARS = {
   '--c-left': '#19e6c4',
   '--c-right': '#ff2d6f',
@@ -22,7 +23,7 @@ const CARD_VARS = {
   '--f-mono': '"JetBrains Mono", "Share Tech Mono", ui-monospace, monospace',
 };
 
-// rarity → display tier + accent color (matches challenge-card.jsx DEFAULT_ROSTER).
+// rarity → display tier + accent color (matches ChallengeCard.jsx DEFAULT_ROSTER).
 const RARITY = {
   ultra_rare: { tier: 'ultra rare', color: '#ffd97a' },
   super_rare: { tier: 'super rare', color: '#a78bfa' },

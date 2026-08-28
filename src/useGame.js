@@ -168,6 +168,24 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const HYPE_DUNK     = ['BOOMSHAKALAKA', 'POSTERIZED', 'JAMS IT HOME', 'OH MY', 'WITH AUTHORITY', 'THROW IT DOWN'];
   const HYPE_MISS     = ['CLANK', 'BRICK', 'AIRBALL', 'OFF THE RIM', 'NO GOOD', 'ROLLS OFF', 'IRON'];
   const HYPE_BLOCK    = ['REJECTED', 'DENIED', 'NOT IN MY HOUSE', 'SWATTED', 'BLOCK PARTY'];
+  // Fired when the user picks the defense that counters the AI's play. Praises
+  // the read (the coach) rather than an athletic play, so it stays distinct
+  // from HYPE_BLOCK, which can also fire on the same possession.
+  const HYPE_DEFENSE  = ['NICE COACHING', 'GREAT CALL', 'READ THE PLAY', 'SAW IT COMING', 'SCOUTED', 'OUTCOACHED', 'CALLED IT'];
+
+  // The DEFENSE BONUS popup and the hype banner share the top-center zone, so
+  // the announcer waits for the popup to clear (1700ms) instead of stacking on
+  // top of it. If a live play — block, miss, dunk — has claimed the announcer
+  // in the meantime, the coaching compliment is dropped: what just happened on
+  // the floor always outranks praise for the call that set it up.
+  const DEFENSE_HYPE_DELAY_MS = 1750;
+  const showCoachingHype = () => {
+    const idAtSchedule = hypeIdRef.current;
+    setTimeout(() => {
+      if (hypeIdRef.current !== idAtSchedule) return;
+      showHype(HYPE_DEFENSE, '#00ff88');
+    }, DEFENSE_HYPE_DELAY_MS);
+  };
   const [quarter, setQuarter] = useState(1);   // 1–4
   const [time, setTime] = useState(60);          // seconds (1-minute quarters)
   const [levelUpState, setLevelUpState] = useState(null); // { player, abilities } | null
@@ -2220,6 +2238,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
           quarterStatsRef.current.home.defenses += 1;
           addLog(`DEFENSE BONUS! +${DEFENSE_BONUS_CREDITS} credits`);
           showDefenseBonus();
+          showCoachingHype();
           onPlayEventRef.current?.({ type: 'defense', team: 'home', t: Date.now() });
         }
 

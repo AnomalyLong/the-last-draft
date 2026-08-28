@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import '../../lobby/collection.css';
-import '../../lobby/collection-grid.css';
-import '../../lobby/mobile-collection.css';
+import './CollectionScreen.css';
+import './CollectionScreen.grid.css';
+import './CollectionScreen.mobile.css';
 import { IDLE_FRAMES } from '../sprites/idle.js';
 import { JERSEY_BASE, SKIN_PIXEL, HAIR_PIXEL, BEARD_PIXEL, resolvePalette } from '../constants.js';
 import { trpc } from '../trpc';

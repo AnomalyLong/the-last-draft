@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { PhoneFrameExpanded, DEVICES } from '../PhoneFrame.jsx';
 import { CrtOverlay } from '../StoryFrame.jsx';
-import TeamSetupView from '../../lobby/team-setup.jsx';
-import '../../lobby/team-setup.css';
-import '../../lobby/mobile-team-setup.css';
+import { TeamSetupScreen } from '@src/components/index.js';
 
 const DESKTOP_PRESETS = [
   { label: '628×548 (Reddit)', w: 628, h: 548 },
@@ -98,7 +96,7 @@ export default function TeamSelectStory() {
       {/* Preview */}
       {mobile ? (
         <PhoneFrameExpanded device={DEVICES[deviceKey]}>
-          <TeamSetupView
+          <TeamSetupScreen
             onBack={() => push('onBack')}
             onContinue={(squad) => push(`onContinue(${JSON.stringify(squad)})`)}
           />
@@ -114,7 +112,7 @@ export default function TeamSelectStory() {
           background: '#02060a',
           flexShrink: 0,
         }}>
-          <TeamSetupView
+          <TeamSetupScreen
             onBack={() => push('onBack')}
             onContinue={(squad) => push(`onContinue(${JSON.stringify(squad)})`)}
           />

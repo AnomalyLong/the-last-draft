@@ -307,14 +307,24 @@ function Roster({ side, players, revealed }) {
 
 // ── Searching overlay (radar + log + progress) ──────────────────────────────
 
+// How long the "searching" animation runs before an opponent is revealed —
+// purely cosmetic pacing (no server round-trip happens during this phase).
+// Was 5s; sped up per product request. Bump this one constant to retune.
+const SEARCH_DURATION = 1.8; // seconds
+
+// Tip-off countdown shown during the 'vs' phase (TIP-OFF IN N). Was 5s.
+const TIP_OFF_SECONDS = 3;
+
+// Log line timestamps are fractions of SEARCH_DURATION (0-1) rather than
+// absolute ms, so retiming the whole sequence is a one-line change above.
 const SEARCH_LOGS = [
-  { t: 0,    txt: '▸ SCOUTING ARENA: <b>HARDWOOD</b>' },
-  { t: 800,  txt: '▸ MATCHING TIER: <b>OVR 60-75</b>' },
-  { t: 1600, txt: '▸ PING CHECK < <b>40ms</b>' },
-  { t: 2400, txt: '▸ COURT: <b>CENTER STAGE</b>' },
-  { t: 3200, txt: '▸ SCANNING <b>14 TEAMS</b>' },
-  { t: 4000, txt: '▸ CANDIDATES: <b>003</b>' },
-  { t: 4800, txt: '▸ RIVAL LOCKED' },
+  { t: 0.00, txt: '▸ SCOUTING ARENA: <b>HARDWOOD</b>' },
+  { t: 0.16, txt: '▸ MATCHING TIER: <b>OVR 60-75</b>' },
+  { t: 0.32, txt: '▸ PING CHECK < <b>40ms</b>' },
+  { t: 0.48, txt: '▸ COURT: <b>CENTER STAGE</b>' },
+  { t: 0.64, txt: '▸ SCANNING <b>14 TEAMS</b>' },
+  { t: 0.80, txt: '▸ CANDIDATES: <b>003</b>' },
+  { t: 0.96, txt: '▸ RIVAL LOCKED' },
 ];
 
 function SearchingView({ elapsed, progress }) {
@@ -346,7 +356,7 @@ function SearchingView({ elapsed, progress }) {
       </div>
 
       <div className="search-log">
-        {SEARCH_LOGS.filter(l => elapsed * 1000 >= l.t).map((l, i) => (
+        {SEARCH_LOGS.filter(l => elapsed >= l.t * SEARCH_DURATION).map((l, i) => (
           <div key={i} className="l" dangerouslySetInnerHTML={{ __html: l.txt }}></div>
         ))}
       </div>
@@ -360,7 +370,7 @@ function SearchingView({ elapsed, progress }) {
             QUEUE · <b>CASUAL</b>
           </span>
           <span>
-            EST <b>{Math.max(0, Math.ceil(5 - elapsed))}s</b>
+            EST <b>{Math.max(0, Math.ceil(SEARCH_DURATION - elapsed))}s</b>
           </span>
           <span>
             PING <b>32ms</b>
@@ -376,7 +386,7 @@ function SearchingView({ elapsed, progress }) {
 export function MatchmakingScreen({ homeRoster, homeTeamName, homeUsername, awayTeam, onReady, isMobile: isMobileProp }) {
   const [phase, setPhase] = useState('searching'); // 'searching' | 'found' | 'vs' | 'ready'
   const [elapsed, setElapsed] = useState(0);
-  const [countdown, setCountdown] = useState(5);
+  const [countdown, setCountdown] = useState(TIP_OFF_SECONDS);
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
 
@@ -388,7 +398,7 @@ export function MatchmakingScreen({ homeRoster, homeTeamName, homeUsername, away
     const tick = (now) => {
       const e = (now - start) / 1000;
       setElapsed(e);
-      if (e >= 5) {
+      if (e >= SEARCH_DURATION) {
         setPhase('found');
         return;
       }
@@ -405,10 +415,10 @@ export function MatchmakingScreen({ homeRoster, homeTeamName, homeUsername, away
     return () => clearTimeout(id);
   }, [phase]);
 
-  // VS countdown: 5..0 then fire onReady
+  // VS countdown: TIP_OFF_SECONDS..0 then fire onReady
   useEffect(() => {
     if (phase !== 'vs') return;
-    setCountdown(5);
+    setCountdown(TIP_OFF_SECONDS);
     const id = setInterval(() => {
       setCountdown(c => {
         if (c <= 1) {
@@ -422,7 +432,7 @@ export function MatchmakingScreen({ homeRoster, homeTeamName, homeUsername, away
     return () => clearInterval(id);
   }, [phase]);
 
-  const progress = Math.min(1, elapsed / 5);
+  const progress = Math.min(1, elapsed / SEARCH_DURATION);
   const opponentRevealed = phase === 'found' || phase === 'vs' || phase === 'ready';
 
   const homeTeam = {

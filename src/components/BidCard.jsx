@@ -1,4 +1,5 @@
 import React from 'react';
+import './PostCard.css';
 import idleGif from './assets/idle.gif';
 
 // Bid Card — Reddit-style shareable card for an auction. Will be reused as a
@@ -47,7 +48,7 @@ const DEFAULT_TOP_BIDDERS = [
   { rank: 3, user: 'u/HoopLord_TT',  bid: 16800, medal: '#cd7f32' },
 ];
 
-const NATIVE_SIZE = 880; // matches the .post-card width in post.css
+const NATIVE_SIZE = 880; // matches the .post-card width in PostCard.css
 const PADDING    = 8;   // small gap between card edge and wrapper edge
 
 export default function BidCard({
