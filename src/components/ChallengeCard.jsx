@@ -102,7 +102,7 @@ export default function ChallengeCard({
   roster = DEFAULT_ROSTER,
   challenges = DEFAULT_CHALLENGES,
   owner = DEFAULT_OWNER,
-  postDate = new Date(2026, 4, 16),
+  postDate = new Date(), // sash shows the date the post is made
   onBack,
   onChallenge,
   showBackButton = false,

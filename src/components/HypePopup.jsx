@@ -26,7 +26,20 @@ function bounceY(t) {
   return -Math.cos(t * Math.PI * 3) * decay * 18;
 }
 
-export function HypePopup({ text, color = '#ff3344', cameraX = 0, viewW = ZOOM_W }) {
+// Coaching variant ("NICE COACHING" etc.): the text slides DOWN the screen —
+// banner drops in from above the visible zone and lands noticeably lower than
+// the standard hype line, settling where it stays until it sinks out.
+const COACH_DROP_MS  = 480;
+const COACH_LAND_Y   = 62;   // how far BELOW the standard hype line it lands
+const COACH_DROP_FROM = -230;
+const COACH_HOLD_MS  = 620;
+const COACH_EXIT_MS  = 340;
+const COACH_TOTAL_MS = COACH_DROP_MS + COACH_HOLD_MS + COACH_EXIT_MS;
+
+export function HypePopup({ text, color = '#ff3344', cameraX = 0, viewW = ZOOM_W, variant = 'default' }) {
+  const coaching = variant === 'coaching';
+  const totalMs  = coaching ? COACH_TOTAL_MS : TOTAL_MS;
+
   const [elapsed, setElapsed] = React.useState(0);
   const rafRef = React.useRef(null);
 
@@ -35,11 +48,11 @@ export function HypePopup({ text, color = '#ff3344', cameraX = 0, viewW = ZOOM_W
     const tick = (t) => {
       const e = t - start;
       setElapsed(e);
-      if (e < TOTAL_MS) rafRef.current = requestAnimationFrame(tick);
+      if (e < totalMs) rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [text]);
+  }, [text, totalMs]);
 
   // Shrink the scale until the phrase fits the *actual* visible width. On desktop
   // viewW === ZOOM_W and this always lands on MAX_SCALE, so nothing changes there.
@@ -71,31 +84,55 @@ export function HypePopup({ text, color = '#ff3344', cameraX = 0, viewW = ZOOM_W
     };
   }, [text, color, pxScale]);
 
-  // Phase 1: drop from above; 2: bounce; 3: hold + wiggle; 4: exit fade
   let yOff = 0;
   let opacity = 1;
   let scale = 1;
   let rot = 0;
 
-  if (elapsed < DROP_MS) {
-    const t = elapsed / DROP_MS;
-    const eased = 1 - (1 - t) * (1 - t); // ease-out
-    yOff = -120 * (1 - eased);
-    scale = 0.6 + 0.4 * eased;
-  } else if (elapsed < DROP_MS + BOUNCE_MS) {
-    const t = (elapsed - DROP_MS) / BOUNCE_MS;
-    yOff = bounceY(t);
-    scale = 1 + (1 - t) * 0.06;
-  } else if (elapsed < DROP_MS + BOUNCE_MS + HOLD_MS) {
-    yOff = 0;
-    const held = (elapsed - DROP_MS - BOUNCE_MS);
-    rot = Math.sin(held * 0.012) * 1.5;
-    scale = 1 + Math.sin(held * 0.018) * 0.03;
+  if (coaching) {
+    // Slide-down: banner falls from above the top edge straight to its lower
+    // landing spot with a single soft overshoot, holds, then sinks + fades out.
+    if (elapsed < COACH_DROP_MS) {
+      const t = elapsed / COACH_DROP_MS;
+      // ease-out with a small overshoot past the landing point
+      const overshoot = 1.18;
+      const eased = 1 - Math.pow(1 - t, 3);
+      const over  = eased > 1 ? 0 : Math.sin(t * Math.PI) * (overshoot - 1);
+      yOff = COACH_DROP_FROM * (1 - eased) + COACH_LAND_Y * (eased + over);
+      scale = 0.7 + 0.3 * eased;
+      opacity = Math.min(1, t * 3); // fast fade-in as it starts falling
+    } else if (elapsed < COACH_DROP_MS + COACH_HOLD_MS) {
+      yOff = COACH_LAND_Y;
+      const held = elapsed - COACH_DROP_MS;
+      scale = 1 + Math.sin(held * 0.014) * 0.025;
+    } else {
+      const t = (elapsed - COACH_DROP_MS - COACH_HOLD_MS) / COACH_EXIT_MS;
+      opacity = Math.max(0, 1 - t);
+      yOff = COACH_LAND_Y + t * 26; // keeps sinking as it leaves
+      scale = 1 + t * 0.12;
+    }
   } else {
-    const t = (elapsed - DROP_MS - BOUNCE_MS - HOLD_MS) / EXIT_MS;
-    opacity = Math.max(0, 1 - t);
-    scale = 1 + t * 0.3;
-    yOff = -t * 24;
+    // Phase 1: drop from above; 2: bounce; 3: hold + wiggle; 4: exit fade
+    if (elapsed < DROP_MS) {
+      const t = elapsed / DROP_MS;
+      const eased = 1 - (1 - t) * (1 - t); // ease-out
+      yOff = -120 * (1 - eased);
+      scale = 0.6 + 0.4 * eased;
+    } else if (elapsed < DROP_MS + BOUNCE_MS) {
+      const t = (elapsed - DROP_MS) / BOUNCE_MS;
+      yOff = bounceY(t);
+      scale = 1 + (1 - t) * 0.06;
+    } else if (elapsed < DROP_MS + BOUNCE_MS + HOLD_MS) {
+      yOff = 0;
+      const held = (elapsed - DROP_MS - BOUNCE_MS);
+      rot = Math.sin(held * 0.012) * 1.5;
+      scale = 1 + Math.sin(held * 0.018) * 0.03;
+    } else {
+      const t = (elapsed - DROP_MS - BOUNCE_MS - HOLD_MS) / EXIT_MS;
+      opacity = Math.max(0, 1 - t);
+      scale = 1 + t * 0.3;
+      yOff = -t * 24;
+    }
   }
 
   // Animated colored shadow offset — pulses in/out
@@ -115,6 +152,7 @@ export function HypePopup({ text, color = '#ff3344', cameraX = 0, viewW = ZOOM_W
     <g
       data-testid="hype-popup"
       data-text={text}
+      data-variant={variant}
       opacity={opacity}
       shapeRendering="crispEdges"
       transform={`translate(${baseX} ${baseY + yOff}) translate(${textW / 2} ${glyphH / 2}) scale(${scale}) rotate(${rot}) translate(${-textW / 2} ${-glyphH / 2})`}

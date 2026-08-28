@@ -260,7 +260,7 @@ export function GameScene({
         </g>
 
         {scorePopup && <ScorePopup text={scorePopup} cameraX={cameraX} viewW={viewW} />}
-        {hypePopup && <HypePopup key={hypePopup.id} text={hypePopup.text} color={hypePopup.color} cameraX={cameraX} viewW={viewW} />}
+        {hypePopup && <HypePopup key={hypePopup.id} text={hypePopup.text} color={hypePopup.color} variant={hypePopup.variant} cameraX={cameraX} viewW={viewW} />}
         {defenseBonus && <DefenseBonusPopup key={defenseBonus.id} credits={DEFENSE_BONUS_CREDITS} cameraX={cameraX} />}
         {xpFlyup    && <XpFlyup    key={xpFlyup.id}    fromCx={xpFlyup.fromCx}    fromCy={xpFlyup.fromCy}    toCx={xpFlyup.toCx}    toCy={xpFlyup.toCy}    amount={xpFlyup.amount} />}
         {stealFlyup && <StealFlyup key={stealFlyup.id}  fromCx={stealFlyup.fromCx} fromCy={stealFlyup.fromCy} toCx={stealFlyup.toCx} toCy={stealFlyup.toCy} color={stealFlyup.color} />}
@@ -285,7 +285,7 @@ export function GameScene({
             score / credits / buttons instead of being painted under them. */}
         <SpecialMoveCards players={players} cameraX={cameraX} withTestIds />
 
-        <QuarterBanner text={quarterAnnouncement} cameraX={cameraX} />
+        <QuarterBanner text={quarterAnnouncement} cameraX={cameraX} viewW={viewW} />
 
       </svg>
 

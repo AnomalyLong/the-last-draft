@@ -24,7 +24,7 @@ function PostView({ pilotId, onBack, onBid }) {
   const pilot = pilots.find(p => p.id === pilotId) || pilots[0];
   const posColor = POS_COLORS_PT[pilot.position] || "#19e6c4";
   const [timeLeft, setTimeLeft] = useStateP(2 * 3600 + 14 * 60 + 23);
-  const date = new Date(2026, 4, 16); // Sat May 16, 2026
+  const date = new Date(); // the date the post is made
   const day = ["SUN","MON","TUE","WED","THU","FRI","SAT"][date.getDay()];
   const dateLine = date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }).toUpperCase();
 

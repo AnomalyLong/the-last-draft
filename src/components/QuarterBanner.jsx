@@ -4,7 +4,7 @@ import { PixelTextC } from './PixelText.jsx';
 
 const BANNER_H = 36;
 
-export function QuarterBanner({ text, cameraX }) {
+export function QuarterBanner({ text, cameraX, viewW = ZOOM_W }) {
   const [opacity, setOpacity] = React.useState(0);
   const rafRef = React.useRef(null);
 
@@ -25,7 +25,9 @@ export function QuarterBanner({ text, cameraX }) {
   if (!text) return null;
 
   const bannerY = Math.round(TOTAL_H / 2 - BANNER_H / 2);
-  const cx = cameraX + ZOOM_W / 2;
+  // Center the text on the VISIBLE viewport: on mobile the viewBox is
+  // ZOOM_W/mobileZoom wide, so centering on ZOOM_W shifted text right.
+  const cx = cameraX + viewW / 2;
 
   return (
     <g opacity={opacity}>

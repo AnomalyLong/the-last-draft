@@ -534,7 +534,7 @@ function Frame({ cameraX, scoreline, overlay, pickerUp = false, scorePopup = nul
       {/* Score-celebration text — screen space, cameraX fixed at 0 (see the
           function comment above for why 0 and not game.cameraX). */}
       {scorePopup && <ScorePopup text={scorePopup} cameraX={0} viewW={ZOOM_W} />}
-      {hypePopup && <HypePopup key={hypePopup.id} text={hypePopup.text} color={hypePopup.color} cameraX={0} viewW={ZOOM_W} />}
+      {hypePopup && <HypePopup key={hypePopup.id} text={hypePopup.text} color={hypePopup.color} variant={hypePopup.variant} cameraX={0} viewW={ZOOM_W} />}
 
       {plate(TITLE, 2, layout.titleY)}
       <PixelTextC text={TITLE} cx={ZOOM_W / 2} y={layout.titleY} scale={2}

@@ -55,7 +55,7 @@ export default function BidCard({
   player = DEFAULT_PLAYER,
   topBidders = DEFAULT_TOP_BIDDERS,
   endsInSeconds = 2 * 3600 + 14 * 60 + 23,
-  postDate = new Date(2026, 4, 16), // Sat May 16, 2026
+  postDate = new Date(), // sash shows the date the post is made
   onBack,
   onBid,
   showBackButton = false,

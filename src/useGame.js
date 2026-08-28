@@ -140,12 +140,12 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
   const triggerMissNet  = (team) => bumpSide(setNetMiss, team);
   const [hypePopup, setHypePopup] = useState(null);
   const hypeIdRef = useRef(0);
-  const showHype = (textOrPool, color = '#ff3344') => {
+  const showHype = (textOrPool, color = '#ff3344', variant = 'default') => {
     const text = Array.isArray(textOrPool)
       ? textOrPool[Math.floor(Math.random() * textOrPool.length)]
       : textOrPool;
     const id = ++hypeIdRef.current;
-    setHypePopup({ id, text, color });
+    setHypePopup({ id, text, color, variant });
     setTimeout(() => setHypePopup(prev => prev?.id === id ? null : prev), 1700);
   };
 
@@ -183,7 +183,7 @@ export function useGame({ homeRoster = [], awayRoster = [], isFtue = false, onPl
     const idAtSchedule = hypeIdRef.current;
     setTimeout(() => {
       if (hypeIdRef.current !== idAtSchedule) return;
-      showHype(HYPE_DEFENSE, '#00ff88');
+      showHype(HYPE_DEFENSE, '#00c93c', 'coaching');
     }, DEFENSE_HYPE_DELAY_MS);
   };
   const [quarter, setQuarter] = useState(1);   // 1–4
